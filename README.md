@@ -507,6 +507,36 @@ if (bccomp($tradePrice, '0', 2) === 0) { return '0.00'; }
 
 ### 🚩 交接摘要：从哪继续读、从哪继续做
 
+> ### 🎯 迁移范围（第 41 轮用户指令）
+>
+> **只迁 C 端 `app/api` 接口。`app/adminapi`（238 个后台接口）不在范围内。**
+>
+> 这改变了进度分母：
+>
+> | 范围 | 接口数 | 已迁 | 完成度 |
+> |---|---|---|---|
+> | **C 端 `app/api`（本目标范围）** | **143 条路由**（89 GET / 54 POST） | **14** | **≈ 10%** |
+> | `app/adminapi` | 238 | 0 | **移出范围** |
+> | `open` / `third` / `index` | 9 | 0 | 移出范围 |
+>
+> C 端 `app/api/route` 的 16 个路由文件与已迁情况：
+>
+> | 路由文件 | 合计 | GET/POST | 已迁 |
+> |---|---|---|---|
+> | `market.php` | 44 | 31/13 | **11** |
+> | `user.php` | 21 | 10/11 | 1（`user/info`） |
+> | `open.php` | 13 | 9/4 | 0 |
+> | `account.php` | 12 | 5/7 | 0 |
+> | `ticket.php` | 11 | 7/4 | 0 |
+> | `article.php` | 9 | 9/0 | 0 |
+> | `whitelist.php` | 9 | 3/6 | 0 |
+> | `common.php` | 6 | 6/0 | 2（`common/config`、`common/trade/config`） |
+> | `index.php` | 5 | 5/0 | 0 |
+> | `Tao.php` | 4 | 1/3 | 0 |
+> | `security.php` / `sms.php` | 5 | 0/5 | 0 |
+> | `payment.php` / `search.php` / `upload.php` / `wallet.php` | 4 | 2/2 | 0 |
+>
+> **注意：已迁的 14 条全是 GET。C 端 54 条 POST（写操作，涉及下单/支付/兑换/划转）一条未做。**
 > ### ❗ 最高优先级原则（第 41 轮用户指令）
 >
 > **重构时全部按照原项目的逻辑，不要改动原来的代码逻辑。**
