@@ -244,3 +244,69 @@ catch 里也调了 `setError($e->getMessage())`。所以注册失败时**错误�
 
 错因：我按"调用方没 setError"下结论，**没去读被调函数**。
 教训：**凡涉及跨函数的行为，必须读到被调函数再下结论。**
+## 🔴 补查：`User::createUserSn()` 与 `xlu\Id::gen()`（20:00）
+
+### `createUserSn()` 就是 `Id::gen()`
+
+`app/common/model/user/User.php:339` —— 原本的"随机 8 位数字 + 查重"实现**已被整段注释掉**：
+
+```php
+public static function createUserSn($prefix = '', $length = 8)
+{
+    // ...原来的 mt_rand 实现整段被注释...
+    return Id::gen();          // ← 实际就是调这个
+}
+```
+
+所以 **`sn`（用户编号）与 `UserAccounts.id` 用的是同一个生成器**。
+
+### `xlu\Id::gen()` —— 一个基于 **Redis 的分布式 ID 生成器**
+
+`extend/xlu/Id.php`：
+
+```php
+public static function gen(int $offset = 0): int
+{
+    $redisCache = Cache::store('redis');
+    $key = 'id:gen';            // ← 注意：经 TP 缓存层，实际键是 la:id:gen
+    $prefixKey = 'id:prefix';   //                        la:id:prefix
+    try {
+        if (!$redisCache->has($key)) { $redisCache->delete($prefixKey); }
+        $prefix = $redisCache->get($prefixKey);
+        if (!$prefix) { $prefix = time() + $offset; $redisCache->set($prefixKey, $prefix); }
+        $suffix = $redisCache->inc($key);
+        if ($suffix >= 99995) {     // 5 位用尽 -> 换新的时间前缀
+            $redisCache->set($key, 0);
+            $redisCache->set($prefixKey, time() + $offset);
+        }
+        return intval(sprintf('%s%05d', $prefix, $suffix));
+    } catch (InvalidArgumentException $e) { return 0; }
+}
+```
+
+**生成规则**：`<秒级时间戳><5 位零填充的递增序号>`，拼成一个整数。
+
+举例：`1783678044` + `00001` → `178367804400001`（15 位）。
+**这与我在库里看到的 ID 形态一致**（如 `178056289901818`、`178609302407853`）。
+
+### 🔴 对迁移的关键影响
+
+**这是一个跨系统共享状态的组件，不是纯函数。**
+
+| 问题 | 说明 |
+|---|---|
+| **键空间** | 走 `Cache::store('redis')`，所以实际 Redis 键是 **`la:id:gen` / `la:id:prefix`**（TP 缓存前缀）。**我在第 17 轮列 Redis 键时见过这两个键**，当时没意识到它们是 ID 生成器 |
+| **Go 必须读同一把键** | 否则两套系统各自生成 ID → **要么冲突、要么（更糟）同一个 ID 被两边各用一次** |
+| **前缀是时间戳** | Go 侧要用**秒级** `time.Now().Unix()`，且必须与 PHP 同处一个时钟（同一台机器或 NTP 同步） |
+| **重置逻辑** | `suffix >= 99995` 时重置 —— Go 侧必须复刻，否则可能与 PHP 抢同一段序号 |
+| **并发** | 靠 Redis `INCR` 的原子性；Go 侧同样用 `INCR` 即可，**不要自己加锁** |
+
+### 迁移建议
+
+**不要重新实现，而是抽成一个共用的 `biz.IDGenerator` 端口**，`data` 层用裸 redis 客户端
+对 `la:id:gen` / `la:id:prefix` 做 `INCR` / `GET` / `SET`，**与 PHP 共用同一把键**。
+
+⚠️ 这属于"基础设施必需"而非"业务逻辑改动"，不违反"不改动原项目逻辑"的指令 ——
+但**键名必须与 PHP 完全一致**，写错一个字符会导致 ID 重复（这是数据损坏级的问题）。
+
+**实现前必须做**：拿 PHP 生成的 ID 序列与 Go 生成的序列**交叉验证**（交替调用，确认无重复、单调）。
