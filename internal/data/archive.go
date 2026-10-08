@@ -120,3 +120,64 @@ func (r *archiveRepo) FindArchive(ctx context.Context, id int64) (*biz.ArchiveRo
 		PlatformID:   row.PlatformID,
 	}, nil
 }
+
+// FindSaleArchive 对应 SaleLogic::getArchive 的查询。
+//
+// ⚠️ 与上面的 FindArchive **只差两列**（少了 collection_id 和 platform_id），
+// 但两者是不同函数、不同缓存机制、不同 TTL。抄的时候别"顺手统一"。
+//
+//	SELECT `app_archive`.`id`,`app_archive`.`name`,`app_archive`.`images`,
+//	       `app_archive`.`issuer`, app.name platform_name
+//	FROM `x_app_archive` `app_archive`
+//	INNER JOIN `x_app` `app` ON `app`.`id`=`app_archive`.`app_id`
+//	WHERE `app_archive`.`id` = ? AND `app_archive`.`state` = '1' LIMIT 1
+func (r *archiveRepo) FindSaleArchive(ctx context.Context, id int64) (*biz.SaleArchiveRow, error) {
+	var row struct {
+		ID           int64   `gorm:"column:id"`
+		Name         string  `gorm:"column:name"`
+		Images       *string `gorm:"column:images"`
+		Issuer       string  `gorm:"column:issuer"`
+		PlatformName string  `gorm:"column:platform_name"`
+	}
+	err := r.db.WithContext(ctx).
+		Table(r.prefix+"app_archive AS app_archive").
+		Select("app_archive.id, app_archive.name, app_archive.images, app_archive.issuer, "+
+			"app.name AS platform_name").
+		Joins("INNER JOIN "+r.prefix+"app AS app ON app.id = app_archive.app_id").
+		Where("app_archive.id = ? AND app_archive.state = ?", id, 1).
+		Take(&row).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &biz.SaleArchiveRow{
+		ID:           row.ID,
+		Name:         row.Name,
+		Images:       row.Images,
+		Issuer:       row.Issuer,
+		PlatformName: row.PlatformName,
+	}, nil
+}
+
+// FindSalesArchiveID 对应 MarketListSales::where(['id'=>$id])->field('id,archive_id')。
+// x_market_list_sales 没有 delete_time 列，不需要软删除过滤。
+func (r *archiveRepo) FindSalesArchiveID(ctx context.Context, salesID int64) (int64, bool, error) {
+	var row struct {
+		ArchiveID int64 `gorm:"column:archive_id"`
+	}
+	err := r.db.WithContext(ctx).
+		Table(r.prefix+"market_list_sales").
+		Select("archive_id").
+		Where("id = ?", salesID).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return row.ArchiveID, true, nil
+}

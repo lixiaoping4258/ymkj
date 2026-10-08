@@ -208,3 +208,60 @@ func (s *MarketService) PurchaseInfo(
 	}
 	return reply, nil
 }
+
+// SaleInfo 对应 SaleController::saleInfo。
+//
+// 原实现：
+//
+//	$params = (new AppArchiveSaleInfoValidate())->get()->goCheck();
+//	$data = MarketListSalesLogic::findSales($params['id']);
+//	if (empty($data)) { return $this->fail(MarketListSalesLogic::getError()); }   // 未找到艺术品信息
+//	$archive = SaleLogic::getArchive($data['archive_id']);
+//	if ($archive === false) { return $this->fail(SaleLogic::getError()); }        // 未找到档案信息
+//	return $this->data($archive);
+func (s *MarketService) SaleInfo(
+	ctx context.Context, in *v1.SaleInfoRequest,
+) (*v1.SaleInfoReply, error) {
+	idStr := strings.TrimSpace(in.GetId())
+	if idStr == "" {
+		return nil, httpx.Fail("ID不能为空")
+	}
+	salesID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return nil, httpx.Fail("未找到艺术品信息")
+	}
+
+	// 第一步：由秒转列表 id 找 archive_id（找不到是"未找到艺术品信息"）
+	archiveID, found, err := s.archive.FindSalesArchiveID(ctx, salesID)
+	if err != nil {
+		return nil, bizFail(err)
+	}
+	if !found {
+		return nil, httpx.Fail("未找到艺术品信息")
+	}
+
+	// 第二步：取档案封面（找不到是"未找到档案信息"，是另一条错误信息）
+	row, err := s.archive.GetSaleArchive(ctx, archiveID)
+	if err != nil {
+		return nil, bizFail(err)
+	}
+	if row == nil {
+		return nil, httpx.Fail("未找到档案信息")
+	}
+
+	reply := &v1.SaleInfoReply{}
+	if v, ok := row["id"].(int64); ok {
+		reply.Id = v
+	}
+	if v, ok := row["name"].(string); ok {
+		reply.Name = v
+	}
+	reply.Images = pbconv.ToValue(row["images"])
+	if v, ok := row["issuer"].(string); ok {
+		reply.Issuer = v
+	}
+	if v, ok := row["platform_name"].(string); ok {
+		reply.PlatformName = v
+	}
+	return reply, nil
+}

@@ -26,6 +26,7 @@ const (
 	MarketService_SaleIndex_FullMethodName         = "/xtravel.v1.MarketService/SaleIndex"
 	MarketService_StockLookAll_FullMethodName      = "/xtravel.v1.MarketService/StockLookAll"
 	MarketService_PurchaseInfo_FullMethodName      = "/xtravel.v1.MarketService/PurchaseInfo"
+	MarketService_SaleInfo_FullMethodName          = "/xtravel.v1.MarketService/SaleInfo"
 )
 
 // MarketServiceClient is the client API for MarketService service.
@@ -86,6 +87,19 @@ type MarketServiceClient interface {
 	//
 	//	**需要登录**；结果按 archive id 缓存 600 秒
 	PurchaseInfo(ctx context.Context, in *PurchaseInfoRequest, opts ...grpc.CallOption) (*PurchaseInfoReply, error)
+	// 秒转藏品封面
+	// 原: SaleController::saleInfo -> MarketListSalesLogic::findSales + SaleLogic::getArchive
+	//
+	//	**需要登录**
+	//
+	// ⚠️ 与 PurchaseInfo 不是同一个函数，尽管缓存键看起来一样：
+	//
+	//	本例走 SaleLogic::getArchive，用 TP 的 cache()（物理键 la:archive:{id}），
+	//	**只有 5 个字段**（没有 collection_id / platform_id），TTL 3600s；
+	//	PurchaseInfo 走 MarketListPurchaseLogic::getArchive，用 RedisLockService
+	//	（物理键 archive:{id}），有 7 个字段，TTL 600s。
+	//	两者物理键不同所以不会互相覆盖，但字段集不同 —— 不要"顺手统一"。
+	SaleInfo(ctx context.Context, in *SaleInfoRequest, opts ...grpc.CallOption) (*SaleInfoReply, error)
 }
 
 type marketServiceClient struct {
@@ -166,6 +180,16 @@ func (c *marketServiceClient) PurchaseInfo(ctx context.Context, in *PurchaseInfo
 	return out, nil
 }
 
+func (c *marketServiceClient) SaleInfo(ctx context.Context, in *SaleInfoRequest, opts ...grpc.CallOption) (*SaleInfoReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaleInfoReply)
+	err := c.cc.Invoke(ctx, MarketService_SaleInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketServiceServer is the server API for MarketService service.
 // All implementations must embed UnimplementedMarketServiceServer
 // for forward compatibility.
@@ -224,6 +248,19 @@ type MarketServiceServer interface {
 	//
 	//	**需要登录**；结果按 archive id 缓存 600 秒
 	PurchaseInfo(context.Context, *PurchaseInfoRequest) (*PurchaseInfoReply, error)
+	// 秒转藏品封面
+	// 原: SaleController::saleInfo -> MarketListSalesLogic::findSales + SaleLogic::getArchive
+	//
+	//	**需要登录**
+	//
+	// ⚠️ 与 PurchaseInfo 不是同一个函数，尽管缓存键看起来一样：
+	//
+	//	本例走 SaleLogic::getArchive，用 TP 的 cache()（物理键 la:archive:{id}），
+	//	**只有 5 个字段**（没有 collection_id / platform_id），TTL 3600s；
+	//	PurchaseInfo 走 MarketListPurchaseLogic::getArchive，用 RedisLockService
+	//	（物理键 archive:{id}），有 7 个字段，TTL 600s。
+	//	两者物理键不同所以不会互相覆盖，但字段集不同 —— 不要"顺手统一"。
+	SaleInfo(context.Context, *SaleInfoRequest) (*SaleInfoReply, error)
 	mustEmbedUnimplementedMarketServiceServer()
 }
 
@@ -254,6 +291,9 @@ func (UnimplementedMarketServiceServer) StockLookAll(context.Context, *StockLook
 }
 func (UnimplementedMarketServiceServer) PurchaseInfo(context.Context, *PurchaseInfoRequest) (*PurchaseInfoReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method PurchaseInfo not implemented")
+}
+func (UnimplementedMarketServiceServer) SaleInfo(context.Context, *SaleInfoRequest) (*SaleInfoReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaleInfo not implemented")
 }
 func (UnimplementedMarketServiceServer) mustEmbedUnimplementedMarketServiceServer() {}
 func (UnimplementedMarketServiceServer) testEmbeddedByValue()                       {}
@@ -402,6 +442,24 @@ func _MarketService_PurchaseInfo_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketService_SaleInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaleInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).SaleInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_SaleInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).SaleInfo(ctx, req.(*SaleInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketService_ServiceDesc is the grpc.ServiceDesc for MarketService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -436,6 +494,10 @@ var MarketService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PurchaseInfo",
 			Handler:    _MarketService_PurchaseInfo_Handler,
+		},
+		{
+			MethodName: "SaleInfo",
+			Handler:    _MarketService_SaleInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

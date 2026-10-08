@@ -25,6 +25,7 @@ const OperationMarketServiceGetSaleCategories = "/xtravel.v1.MarketService/GetSa
 const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseIndex"
 const OperationMarketServicePurchaseInfo = "/xtravel.v1.MarketService/PurchaseInfo"
 const OperationMarketServiceSaleIndex = "/xtravel.v1.MarketService/SaleIndex"
+const OperationMarketServiceSaleInfo = "/xtravel.v1.MarketService/SaleInfo"
 const OperationMarketServiceStockLookAll = "/xtravel.v1.MarketService/StockLookAll"
 
 type MarketServiceHTTPServer interface {
@@ -61,6 +62,17 @@ type MarketServiceHTTPServer interface {
 	//      SaleFaceLists 没有，所以**不带 sort 参数时 SQL 里根本没有 ORDER BY**
 	//   2. 行后处理只做 images 的 json 解码，没有 "0 转 --" 那套
 	SaleIndex(context.Context, *SaleIndexRequest) (*RawData, error)
+	// SaleInfo 秒转藏品封面
+	// 原: SaleController::saleInfo -> MarketListSalesLogic::findSales + SaleLogic::getArchive
+	//     **需要登录**
+	//
+	// ⚠️ 与 PurchaseInfo 不是同一个函数，尽管缓存键看起来一样：
+	//    本例走 SaleLogic::getArchive，用 TP 的 cache()（物理键 la:archive:{id}），
+	//    **只有 5 个字段**（没有 collection_id / platform_id），TTL 3600s；
+	//    PurchaseInfo 走 MarketListPurchaseLogic::getArchive，用 RedisLockService
+	//    （物理键 archive:{id}），有 7 个字段，TTL 600s。
+	//    两者物理键不同所以不会互相覆盖，但字段集不同 —— 不要"顺手统一"。
+	SaleInfo(context.Context, *SaleInfoRequest) (*SaleInfoReply, error)
 	// StockLookAll 库存汇总（可释放数量 + 是否有释放任务在处理中）
 	// 原: PurchaseController::lookAll -> GoodsLogic::lookAll
 	//     **需要登录**；结果缓存 10 秒
@@ -79,6 +91,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/sales", _MarketService_SaleIndex0_HTTP_Handler(srv))
 	r.GET("/v1/market/stock/lookall", _MarketService_StockLookAll0_HTTP_Handler(srv))
 	r.GET("/v1/market/purchase/info", _MarketService_PurchaseInfo0_HTTP_Handler(srv))
+	r.GET("/v1/market/sales/info", _MarketService_SaleInfo0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -214,6 +227,25 @@ func _MarketService_PurchaseInfo0_HTTP_Handler(srv MarketServiceHTTPServer) func
 	}
 }
 
+func _MarketService_SaleInfo0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in SaleInfoRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServiceSaleInfo)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.SaleInfo(ctx, req.(*SaleInfoRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*SaleInfoReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -248,6 +280,17 @@ type MarketServiceHTTPClient interface {
 	//      SaleFaceLists 没有，所以**不带 sort 参数时 SQL 里根本没有 ORDER BY**
 	//   2. 行后处理只做 images 的 json 解码，没有 "0 转 --" 那套
 	SaleIndex(ctx context.Context, req *SaleIndexRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// SaleInfo 秒转藏品封面
+	// 原: SaleController::saleInfo -> MarketListSalesLogic::findSales + SaleLogic::getArchive
+	//     **需要登录**
+	//
+	// ⚠️ 与 PurchaseInfo 不是同一个函数，尽管缓存键看起来一样：
+	//    本例走 SaleLogic::getArchive，用 TP 的 cache()（物理键 la:archive:{id}），
+	//    **只有 5 个字段**（没有 collection_id / platform_id），TTL 3600s；
+	//    PurchaseInfo 走 MarketListPurchaseLogic::getArchive，用 RedisLockService
+	//    （物理键 archive:{id}），有 7 个字段，TTL 600s。
+	//    两者物理键不同所以不会互相覆盖，但字段集不同 —— 不要"顺手统一"。
+	SaleInfo(ctx context.Context, req *SaleInfoRequest, opts ...http.CallOption) (rsp *SaleInfoReply, err error)
 	// StockLookAll 库存汇总（可释放数量 + 是否有释放任务在处理中）
 	// 原: PurchaseController::lookAll -> GoodsLogic::lookAll
 	//     **需要登录**；结果缓存 10 秒
@@ -367,6 +410,31 @@ func (c *MarketServiceHTTPClientImpl) SaleIndex(ctx context.Context, in *SaleInd
 	pattern := "/v1/market/sales"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServiceSaleIndex))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SaleInfo 秒转藏品封面
+// 原: SaleController::saleInfo -> MarketListSalesLogic::findSales + SaleLogic::getArchive
+//
+//	**需要登录**
+//
+// ⚠️ 与 PurchaseInfo 不是同一个函数，尽管缓存键看起来一样：
+//
+//	本例走 SaleLogic::getArchive，用 TP 的 cache()（物理键 la:archive:{id}），
+//	**只有 5 个字段**（没有 collection_id / platform_id），TTL 3600s；
+//	PurchaseInfo 走 MarketListPurchaseLogic::getArchive，用 RedisLockService
+//	（物理键 archive:{id}），有 7 个字段，TTL 600s。
+//	两者物理键不同所以不会互相覆盖，但字段集不同 —— 不要"顺手统一"。
+func (c *MarketServiceHTTPClientImpl) SaleInfo(ctx context.Context, in *SaleInfoRequest, opts ...http.CallOption) (*SaleInfoReply, error) {
+	var out SaleInfoReply
+	pattern := "/v1/market/sales/info"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServiceSaleInfo))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

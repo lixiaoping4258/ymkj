@@ -61,7 +61,7 @@ func wireApp(confServer *conf.Server, confData *conf.Data, app *conf.App, confLo
 	stockUsecase := biz.NewStockUsecase(stockRepo, cache, logger)
 	archiveRepo := data.NewArchiveRepo(db, confData)
 	rawCache := data.NewRawRedisCache(client)
-	archiveUsecase := biz.NewArchiveUsecase(archiveRepo, rawCache, logger)
+	archiveUsecase := biz.NewArchiveUsecase(archiveRepo, rawCache, cache, logger)
 	marketService := service.NewMarketService(marketUsecase, purchaseFaceUsecase, saleFaceUsecase, stockUsecase, archiveUsecase)
 	userSessionRepo := data.NewUserSessionRepo(db)
 	authConfig := data.NewAuthConfig(auth, logger)

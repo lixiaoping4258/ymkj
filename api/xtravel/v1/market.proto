@@ -81,6 +81,32 @@ service MarketService {
   rpc PurchaseInfo(PurchaseInfoRequest) returns (PurchaseInfoReply) {
     option (google.api.http) = {get: "/v1/market/purchase/info"};
   }
+
+  // 秒转藏品封面
+  // 原: SaleController::saleInfo -> MarketListSalesLogic::findSales + SaleLogic::getArchive
+  //     **需要登录**
+  //
+  // ⚠️ 与 PurchaseInfo 不是同一个函数，尽管缓存键看起来一样：
+  //    本例走 SaleLogic::getArchive，用 TP 的 cache()（物理键 la:archive:{id}），
+  //    **只有 5 个字段**（没有 collection_id / platform_id），TTL 3600s；
+  //    PurchaseInfo 走 MarketListPurchaseLogic::getArchive，用 RedisLockService
+  //    （物理键 archive:{id}），有 7 个字段，TTL 600s。
+  //    两者物理键不同所以不会互相覆盖，但字段集不同 —— 不要"顺手统一"。
+  rpc SaleInfo(SaleInfoRequest) returns (SaleInfoReply) {
+    option (google.api.http) = {get: "/v1/market/sales/info"};
+  }
+}
+
+message SaleInfoRequest {
+  string id = 1 [json_name = "id"];
+}
+
+message SaleInfoReply {
+  int64 id = 1 [json_name = "id"];
+  string name = 2 [json_name = "name"];
+  google.protobuf.Value images = 3 [json_name = "images"];
+  string issuer = 4 [json_name = "issuer"];
+  string platform_name = 5 [json_name = "platform_name"];
 }
 
 message PurchaseInfoRequest {
