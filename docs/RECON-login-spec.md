@@ -45,7 +45,8 @@ $isCreate = true;
 ```
 
 - 注册用的密码是 **`Id::uuid()`**（随机），不是用户输入——所以账号密码场景下第一次登录会建一个随机密码的账号
-- 注册失败时**只记日志、不设错误信息**（`setError` 没被调用），上层拿到的 msg 会是空的
+- 注册失败时 `login()` 只记日志（`Log::error`），但 **`register()` 内部已调用 `setError`**，
+  所以上层仍能拿到错误信息（详见下方"更正"一节）
 
 ### 分支 B：`UserAccounts` 有值
 
@@ -188,3 +189,58 @@ if ($default === 'local') { ... }
   的 `STORAGE_DEFAULT` 键
 - `$type == 'public_path'` 时返回 `public_path() . $uri`
 - **`local` 之外的分支（oss 等）未读完** —— 实现前要看完整，否则头像 URL 拼接会不一致
+## 附：`LoginLogic::register`（77 行，行 55-120）—— **多表写入，带事务**
+
+这是分支 A 的实现基础，也是**唯一涉及事务的地方**。
+
+```php
+public static function register(array $params, int $accountType = 1, string $mobile = ''): bool|array
+{
+    Db::startTrans();                       // ← 事务
+    try {
+        $userSn       = User::createUserSn();
+        $passwordSalt = Config::get('project.unique_identification');
+        $password     = create_password($params['password'], $passwordSalt);
+        $avatar       = ConfigService::get('default_image', 'user_avatar');
+        $data = ['sn'=>$userSn, 'avatar'=>$avatar, 'nickname'=>'用户'.$userSn,
+                 'password'=>$password, 'channel'=>$params['channel'], 'mobile'=>$mobile];
+        if ($accountType == 3 && isset($params['extData'])) {   // 第三方
+            $data['avatar']   = $params['extData']['avatar']   ?? $avatar;
+            $data['nickname'] = $params['extData']['nickname'] ?? ('用户'.$userSn);
+            $app_id = $params['extData']['app_id'];
+        } else { $app_id = 1; }
+        $user = User::create($data);
+        if (!$user) { Db::rollback(); self::setError('用户注册失败'); return false; }
+        $account = ['id'=>Id::gen(), 'user_id'=>$user->id, 'account'=>$params['account'],
+                    'app_id'=>$app_id, 'type'=>$accountType, 'create_time'=>TimeHelper::now()];
+        $result = UserAccounts::create($account);
+        if (!$result) { Db::rollback(); self::setError('用户注册失败'); return false; }
+        Db::commit();
+        return $account;                    // ← 返回的是 UserAccounts，不是 User
+    } catch (\Exception $e) {
+        Db::rollback(); self::setError($e->getMessage()); return false;
+    }
+}
+```
+
+### 实现要点
+
+| 点 | 说明 |
+|---|---|
+| **事务** | `User` + `UserAccounts` **两张表**必须同一事务；任一失败 rollback |
+| **返回值** | 返回的是 **`UserAccounts` 记录**，调用方取 `$result['user_id']` —— 别返回 User |
+| **生成 SN** | `User::createUserSn()`，**未查其算法**，实现前要看 |
+| **生成 ID** | `Id::gen()`（`xlu\Id`），用于 `UserAccounts.id` —— 可能是雪花/自定义 ID，**需确认** |
+| **默认昵称** | `'用户' . $userSn` |
+| **默认头像** | `ConfigService::get('default_image','user_avatar')` —— 注意与 `login()` 里的 `project.default_image.user_avatar` **是不同的配置键**，需分别确认 |
+| **第三方覆盖** | 仅 `accountType == 3` 时用 `extData` 覆盖头像/昵称，并取 `extData.app_id`；否则 `app_id = 1` |
+
+### ⚠️ 更正上一节的一处错误推断
+
+上一节我写的是"注册失败时不设错误信息（`setError` 没被调用），上层 msg 会是空的"。
+
+**这是错的。** 读 `register()` 源码后确认：两处失败分支**都调用了 `setError('用户注册失败')`**，
+catch 里也调了 `setError($e->getMessage())`。所以注册失败时**错误信息是有的**。
+
+错因：我按"调用方没 setError"下结论，**没去读被调函数**。
+教训：**凡涉及跨函数的行为，必须读到被调函数再下结论。**
