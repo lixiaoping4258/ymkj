@@ -1,6 +1,7 @@
 package data
 
 import (
+	"strings"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
@@ -25,10 +26,22 @@ var ProviderSet = wire.NewSet(
 	NewLocation,
 )
 
+// gormWriter 把 GORM 的 SQL 日志转接到 Kratos 的 logger。
+//
+// 不这么做的话 GORM 会直接往 stdout 打，日志格式和 Kratos 的
+// 结构化输出混在一起，采集和检索都难受。
+type gormWriter struct {
+	l *log.Helper
+}
+
+func (w gormWriter) Printf(format string, args ...interface{}) {
+	w.l.Infof(strings.TrimSuffix(format, "\n"), args...)
+}
+
 // NewDB 建 MySQL 连接。
 //
 // 表名策略必须和 ThinkPHP 对齐：
-//   - TablePrefix  = 原项目 database.php 的 prefix（默认 la_）
+//   - TablePrefix  = 原项目 .env 里 DATABASE.PREFIX（**是 x_，不是 database.php 的默认 la_**）
 //   - SingularTable = true，否则 GORM 会把 Config 复数成 configs
 func NewDB(c *conf.Data, logger log.Logger) (*gorm.DB, func(), error) {
 	l := log.NewHelper(logger)
@@ -38,15 +51,28 @@ func NewDB(c *conf.Data, logger log.Logger) (*gorm.DB, func(), error) {
 		prefix = c.Database.Prefix
 	}
 
+	// IgnoreRecordNotFoundError 必须开：本项目大量用「查不到记录」当作正常分支
+	// （比如交易日历没标今天 → 回退到按周几判断）。不开的话这些预期分支
+	// 会在 Warn 级别打出一堆 "record not found"，把真正的错误淹掉。
 	gcfg := &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
 			TablePrefix:   prefix,
 			SingularTable: true,
 		},
-		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
+		Logger: gormlogger.New(gormWriter{l: l}, gormlogger.Config{
+			SlowThreshold:             500 * time.Millisecond,
+			LogLevel:                  gormlogger.Warn,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  false,
+		}),
 	}
 	if c.Database != nil && c.Database.Debug {
-		gcfg.Logger = gormlogger.Default.LogMode(gormlogger.Info)
+		gcfg.Logger = gormlogger.New(gormWriter{l: l}, gormlogger.Config{
+			SlowThreshold:             200 * time.Millisecond,
+			LogLevel:                  gormlogger.Info,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  false,
+		})
 	}
 
 	source := ""
