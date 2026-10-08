@@ -145,9 +145,14 @@ func TestWhitelist_DisabledItemAllowed(t *testing.T) {
 	}
 }
 
-// 未知限制项 —— 原代码返回 true（拦截），Go 版按注释意图返回 false（放行）。
-// 这条测试锁住的是**有意的行为分歧**，见 biz/whitelist.go 的详细说明。
-func TestWhitelist_UnknownItemIsAllowed(t *testing.T) {
+// 未知限制项 —— **逐字还原原代码行为：返回 true（拦截）**。
+//
+// 原代码这里是 `return true`，而它上面的注释写的是"默认放行" —— 注释与代码相反。
+// 第 41 轮按"不改动原项目逻辑"的要求撤销了我此前"按注释意图放行"的实现。
+//
+// 这条测试锁住的是**原项目的字面行为**（含它的缺陷），不是我认为对的行为。
+// 后果：若某限制项被停用或从 x_whitelist_item 删除，挂它的路由会对所有人 403。
+func TestWhitelist_UnknownItemIsBlocked(t *testing.T) {
 	repo := &fakeWhitelistRepo{items: allItems(), hasUser: false}
 	uc := newWhitelistUsecase(repo)
 
@@ -155,8 +160,8 @@ func TestWhitelist_UnknownItemIsAllowed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("意外错误: %v", err)
 	}
-	if blocked {
-		t.Fatal("未知限制项应当放行（原代码这里返回 true，属笔误，见注释）")
+	if !blocked {
+		t.Fatal("未知限制项应当**拦截**（原代码 return true；注释虽写『放行』，但行为以代码为准）")
 	}
 }
 

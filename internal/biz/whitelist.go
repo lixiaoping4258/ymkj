@@ -165,12 +165,14 @@ func (uc *WhitelistUsecase) loadUserPermissions(ctx context.Context, userID uint
 // no_tea_trade / no_tao_trade）在 x_whitelist_item 里都存在且 status=1，
 // 走不到这个分支。已在 README 记为潜在缺陷。
 //
-// **Go 版按注释的意图实现（未知限制项 -> 放行）**，因为：
-//  1. 注释明确写了意图，代码大概率是笔误；
-//  2. 照搬字面行为会在「某天有人把限制项停用」时让整个接口对所有人 403，
-//     这个失败模式远比"少拦一次"严重。
+// ✅ 第 41 轮按"**不改动原项目逻辑**"的要求**改回原字面行为**：
+// 未知限制项 -> 返回 true（拦截）。
+// 我此前按注释意图实现成"放行"，那是一处有意的行为分歧，现已撤销。
+// 单测 `TestWhitelist_UnknownItemIsBlocked` 锁住当前行为。
 //
-// 这是一处**有意的行为分歧**，如果业务确认要保留原字面行为，改这一行即可。
+// ⚠️ 后果（知情保留）：若某天有人把某个限制项的 status 停用（或在 x_whitelist_item
+// 里删掉），挂该限制项的路由会对**所有人**返回 403 并提示"白名单用户-暂无该操作权限"。
+// 这是原实现的行为，不是迁移引入的。
 func (uc *WhitelistUsecase) CheckPermission(ctx context.Context, userID uint64, itemCode string) (bool, error) {
 	perms, err := uc.UserPermissions(ctx, userID)
 	if err != nil {
@@ -178,9 +180,9 @@ func (uc *WhitelistUsecase) CheckPermission(ctx context.Context, userID uint64, 
 	}
 	restricted, known := perms[itemCode]
 	if !known {
-		// 原代码 return true（拦截）；这里按注释意图放行
-		uc.log.WithContext(ctx).Debugf("白名单限制项未启用，按放行处理: %s", itemCode)
-		return false, nil
+		// 逐字还原原代码：return true（true 在调用方 = 拦截）
+		uc.log.WithContext(ctx).Debugf("白名单限制项未启用，按原代码行为拦截: %s", itemCode)
+		return true, nil
 	}
 	return restricted, nil
 }

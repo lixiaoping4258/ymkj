@@ -229,9 +229,15 @@ func TestSetUserInfo_ExpiredSessionIsInvalid(t *testing.T) {
 }
 
 // 这条锁住的是**与原实现的有意偏差**：
-// 原 PHP 在用户被软删除时会拼出 user_id=null 的「用户信息」并让鉴权通过，
-// Go 版必须拒绝。如果哪天有人"为了兼容"把它改回去，这个测试会失败。
-func TestSetUserInfo_SoftDeletedUserIsRejected(t *testing.T) {
+// ⚠️ 第 41 轮**反转了这条测试**。
+//
+// 原 PHP 在用户被软删除时会拼出 user_id=null 的「用户信息」并让鉴权通过。
+// 我此前实现为"拒绝"，并写了这个测试要求必须拒绝。
+// 按"不改动原项目逻辑"的要求已撤销那处收紧，所以本测试改为**锁住原行为**。
+//
+// ⚠️ 知情保留的安全后果：**账号被软删除后旧 token 仍能通过鉴权**。
+// 这是原项目行为，不是迁移引入的。见 README 第八节。
+func TestSetUserInfo_SoftDeletedUserFollowsOriginalPHP(t *testing.T) {
 	now := time.Now().Unix()
 	uc, sessions, users, cache := newUsecase(t, now)
 
@@ -246,11 +252,23 @@ func TestSetUserInfo_SoftDeletedUserIsRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("意外错误: %v", err)
 	}
-	if info != nil {
-		t.Fatalf("用户已删除时不应返回用户信息，实际 %+v", info)
+
+	// 原实现：$user 为空也照样拼一份结构出来 -> 非空数组为真 -> 鉴权通过。
+	// Go 侧对应 UserID 的零值 0（PHP 那边是 null）。
+	if info == nil {
+		t.Fatal("按原项目逻辑，用户行缺失时仍应返回（幽灵）用户信息并放行鉴权")
 	}
-	if cache.sets != 0 {
-		t.Fatal("拒绝时不应写缓存")
+	if info.UserID != 0 {
+		t.Fatalf("幽灵用户的 UserID 应为 0（对应 PHP 的 null），实际 %d", info.UserID)
+	}
+	if info.Token != "tok-ghost" {
+		t.Fatalf("token 应原样带上，实际 %q", info.Token)
+	}
+	if info.ExpireTime != now+1800 {
+		t.Fatalf("过期时间应取自会话，实际 %d", info.ExpireTime)
+	}
+	if cache.sets == 0 {
+		t.Fatal("按原实现应当写缓存（否则每次请求都会回源）")
 	}
 }
 

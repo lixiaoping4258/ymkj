@@ -170,10 +170,11 @@ func (uc *PurchaseStateUsecase) List(
 	for _, r := range rows {
 		stockNum, stockExists, serr := uc.repo.StockNum(ctx, r.ID)
 		if serr != nil {
-			// 原实现里 Redis 异常会被 controller catch 成 fail；
-			// 但库存只是展示用的一个字段，不该让整个列表失败 —— 记日志后走兜底。
-			uc.log.WithContext(ctx).Warnf("读取库存失败 purchase_id=%d: %v", r.ID, serr)
-			stockExists = false
+			// ✅ 第 41 轮按"不改动原项目逻辑"的要求改回原行为：
+			// 原实现里 getNum() 在 controller 的 try/catch 之内，
+			// Redis 异常会被 catch 住 -> 整个列表 fail($e->getMessage())。
+			// 我此前改成"记日志 + 走 bcsub 兜底"，那是一处有意的行为分歧，现已撤销。
+			return nil, serr
 		}
 		m := r.ToMap(stockNum, stockExists)
 		if state == MktPurchaseStateWanted {

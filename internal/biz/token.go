@@ -133,11 +133,19 @@ func (uc *UserTokenUsecase) GetUserInfo(ctx context.Context, token string) (*Use
 
 // SetUserInfo 对应 UserTokenCache::setUserInfo：从库里组装并写缓存。
 //
-// ⚠️ 与原实现的一处**有意偏差**：
-// 原代码在用户行不存在时（比如账号已软删除）会让 $user 为 null，
-// 然后 `$user->id` 触发 PHP 警告并得到 null，最终拼出一个 user_id=null 的
-// 「用户信息」并写入缓存 —— 因为非空数组为真，鉴权**照样通过**。
-// 这里改成返回 nil（视为 token 无效），宁可变严格也不要放行幽灵用户。
+// ✅ 第 41 轮按"不改动原项目逻辑"的要求，**撤销了我此前的一处行为收紧**。
+//
+// 原代码在用户行不存在时（例如账号已被软删除）会让 $user 为 null，
+// 随后 `$user->id` 触发 PHP 警告并得到 null，最终拼出一个各字段为 null 的
+// 「用户信息」数组写进缓存 —— 因为**非空数组为真**，鉴权**照样通过**。
+//
+// 我此前把这里改成返回 nil（视为 token 无效），理由是不放行"幽灵用户"。
+// 但那是一处有意偏离，与"不改动原逻辑"的要求冲突，故改回：
+// 用户行缺失时**照样发一份 UserInfo 并让鉴权通过**，与原实现一致。
+//
+// ⚠️ 知情保留的安全后果：**账号被软删除后，其旧 token 仍然能通过鉴权访问接口**
+// （直到 token 自然过期）。这是原项目的行为，不是迁移引入的。
+// 已同步记入 README 第八节。
 func (uc *UserTokenUsecase) SetUserInfo(ctx context.Context, token string) (*UserInfo, error) {
 	sess, err := uc.sessions.FindByToken(ctx, token)
 	if err != nil {
@@ -152,21 +160,36 @@ func (uc *UserTokenUsecase) SetUserInfo(ctx context.Context, token string) (*Use
 	if err != nil {
 		return nil, err
 	}
-	if u == nil {
-		uc.log.WithContext(ctx).Warnf("token 有效但用户不存在或已软删除: token=%s user_id=%d",
-			maskToken(token), sess.UserID)
-		return nil, nil
-	}
 
-	info := &UserInfo{
-		UserID:     u.ID,
-		Nickname:   u.Nickname,
-		Token:      token,
-		Sn:         u.Sn,
-		Mobile:     u.Mobile,
-		Avatar:     u.Avatar,
-		Terminal:   sess.Terminal,
-		ExpireTime: sess.ExpireTime,
+	// 逐字还原原实现：$user 为空时不返回 nil，而是继续拼一份全字段零值的
+	// 「用户信息」—— PHP 那边 $user->id 得到 null，Go 里对应 uint64 的零值 0。
+	// 这份结构**非空**，于是 WriteCache 照常写入，鉴权通过。
+	var info *UserInfo
+	if u == nil {
+		uc.log.WithContext(ctx).Warnf(
+			"token 有效但用户行不存在（账号可能已软删除），按原实现放行: token=%s user_id=%d",
+			maskToken(token), sess.UserID)
+		info = &UserInfo{
+			UserID:     0, // 对应 PHP 的 null
+			Nickname:   "",
+			Token:      token,
+			Sn:         0,
+			Mobile:     "",
+			Avatar:     "",
+			Terminal:   sess.Terminal,
+			ExpireTime: sess.ExpireTime,
+		}
+	} else {
+		info = &UserInfo{
+			UserID:     u.ID,
+			Nickname:   u.Nickname,
+			Token:      token,
+			Sn:         u.Sn,
+			Mobile:     u.Mobile,
+			Avatar:     u.Avatar,
+			Terminal:   sess.Terminal,
+			ExpireTime: sess.ExpireTime,
+		}
 	}
 
 	ttl := time.Until(time.Unix(sess.ExpireTime, 0))
