@@ -69,8 +69,8 @@ func TestSaleToMap_NoDashSubstitution(t *testing.T) {
 			m["low_price"], m["max_price"])
 	}
 	got := saleJSON(t, r.ToMap())
-	if string(got["low_price"]) != `""` || string(got["max_price"]) != `""` {
-		t.Fatalf("价格为 nil 时应输出空串，实际 %s / %s", got["low_price"], got["max_price"])
+	if string(got["low_price"]) != "null" || string(got["max_price"]) != "null" {
+		t.Fatalf("价格为 nil 时应输出 JSON null（PHP 对 NULL 列给 null），实际 %s / %s", got["low_price"], got["max_price"])
 	}
 	// 也不应该有 purchase_lists / integral 之类的键
 	for _, k := range []string{"purchase_lists", "integral", "max_unit_price"} {

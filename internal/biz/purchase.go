@@ -91,8 +91,8 @@ func (r PurchaseFaceRow) ToMap() map[string]any {
 		m["low_unit_price"] = "--"
 		m["max_unit_price"] = "--"
 	} else {
-		m["low_unit_price"] = derefStr(r.LowUnitPrice)
-		m["max_unit_price"] = derefStr(r.MaxUnitPrice)
+		m["low_unit_price"] = derefStrAny(r.LowUnitPrice)
+		m["max_unit_price"] = derefStrAny(r.MaxUnitPrice)
 	}
 	return m
 }
@@ -271,6 +271,25 @@ func decodeImages(s *string) any {
 func derefStr(p *string) string {
 	if p == nil {
 		return ""
+	}
+	return *p
+}
+
+// derefStrAny 与 derefStr 的区别：nil 时返回 **nil**（JSON null），而不是空串。
+//
+// 用于直接进入响应的字段。PHP 的 toArray() 对 NULL 列给的是 null，
+// json_encode 出来就是 null —— 输出空串是契约破坏。
+//
+// 为什么不干脆把 derefStr 也改掉：bcmath 的入参需要 string，那里 nil 要按
+// PHP 的 null 参与数值运算（当成 0），语义不同，不能合并。
+//
+// ⚠️ 对 NOT NULL 列用哪个都一样（nil 不可能出现）；对**可空列**只有这个是对的。
+// 已核实：x_market_list_purchase.low_unit_price 是 NULLABLE（这几个价格列里
+// 唯一可空的一个），其余 low/max_unit_price、low_price、max_price、unit_price
+// 都是 NOT NULL。当前数据里该列为 NULL 的有 0 行，属还没发作的潜在 bug。
+func derefStrAny(p *string) any {
+	if p == nil {
+		return nil
 	}
 	return *p
 }

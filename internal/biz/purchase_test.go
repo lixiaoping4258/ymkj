@@ -161,3 +161,29 @@ func TestFaceToMap_TimeFormatIsPHP(t *testing.T) {
 }
 
 var _ = time.Now
+
+// ⚠️ 本用例对应本轮发现的**潜在** bug：x_market_list_purchase.low_unit_price
+// 是 decimal(10,2) **NULLABLE** —— 这几个价格列里唯一可空的一个
+// （已核对 information_schema；max_unit_price / low_price / max_price /
+//
+//	unit_price 都是 NOT NULL）。
+//
+// 当前数据里该列为 NULL 的有 0 行，而且结果集里 3 行的 purchase_lists 全为 0
+// （都走 "--" 分支），所以这条路径**根本没被走到**，是个还没发作的 bug。
+//
+// PHP 对 NULL 列输出 null；原先用 derefStr 会输出空串。
+func TestFaceToMap_NullLowUnitPriceIsNull(t *testing.T) {
+	r := faceBaseRow()
+	n := int64(23) // 非 0，绕过 "--" 分支，让价格字段真正进入响应
+	r.PurchaseLists = &n
+	r.LowUnitPrice = nil
+	r.MaxUnitPrice = nil
+
+	got := faceJSON(t, r.ToMap())
+	if string(got["low_unit_price"]) != "null" {
+		t.Fatalf("low_unit_price 为 NULL 时应输出 JSON null，实际 %s（空串说明用了 derefStr）", got["low_unit_price"])
+	}
+	if string(got["max_unit_price"]) != "null" {
+		t.Fatalf("max_unit_price 为 NULL 时应输出 JSON null，实际 %s", got["max_unit_price"])
+	}
+}

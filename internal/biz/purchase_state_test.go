@@ -162,9 +162,9 @@ func TestToMap_NullableColumnsBecomeNull(t *testing.T) {
 			t.Errorf("%s 应为 JSON null，实际 %s", k, got[k])
 		}
 	}
-	// unit_price 走 derefStr -> 空串（PHP 输出 ""，不是 null）
-	if string(got["unit_price"]) != `""` {
-		t.Errorf("unit_price 为 nil 时应输出空串，实际 %s", got["unit_price"])
+	// unit_price 为 nil -> JSON null（PHP 对 NULL 列给 null）
+	if string(got["unit_price"]) != "null" {
+		t.Errorf("unit_price 为 nil 时应输出 null，实际 %s", got["unit_price"])
 	}
 	// 对照：有值的整数列必须是数字，不能带引号
 	if string(got["amount"]) != "5" {

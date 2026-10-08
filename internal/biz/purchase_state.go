@@ -93,7 +93,7 @@ func (r PurchaseStateRow) ToMap(stockNum int64, stockExists bool) map[string]any
 		"archive_id":     r.ArchiveID,
 		"amount":         r.Amount,
 		"receive_amount": r.ReceiveAmount,
-		"unit_price":     derefStr(r.UnitPrice),
+		"unit_price":     derefStrAny(r.UnitPrice),
 		"create_time":    formatDBTimeAny(r.CreateTime),
 		"grab_time":      formatDBTimeAny(r.GrabTime),
 		"name":           r.Name,
