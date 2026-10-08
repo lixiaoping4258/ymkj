@@ -39,6 +39,7 @@ var ProviderSet = wire.NewSet(
 	NewWhitelistRepo,
 	NewPurchaseFaceRepo,
 	NewSaleFaceRepo,
+	NewStockRepo,
 	NewAppFlags,
 )
 

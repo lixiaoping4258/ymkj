@@ -24,6 +24,7 @@ const (
 	MarketService_PurchaseIndex_FullMethodName     = "/xtravel.v1.MarketService/PurchaseIndex"
 	MarketService_GetSaleCategories_FullMethodName = "/xtravel.v1.MarketService/GetSaleCategories"
 	MarketService_SaleIndex_FullMethodName         = "/xtravel.v1.MarketService/SaleIndex"
+	MarketService_StockLookAll_FullMethodName      = "/xtravel.v1.MarketService/StockLookAll"
 )
 
 // MarketServiceClient is the client API for MarketService service.
@@ -70,6 +71,15 @@ type MarketServiceClient interface {
 	//     SaleFaceLists 没有，所以**不带 sort 参数时 SQL 里根本没有 ORDER BY**
 	//  2. 行后处理只做 images 的 json 解码，没有 "0 转 --" 那套
 	SaleIndex(ctx context.Context, in *SaleIndexRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 库存汇总（可释放数量 + 是否有释放任务在处理中）
+	// 原: PurchaseController::lookAll -> GoodsLogic::lookAll
+	//
+	//	**需要登录**；结果缓存 10 秒
+	//
+	// ⚠️ state 字段迁移期恒为 1：它依赖的"释放任务进行中"标记由 PHP 用
+	//
+	//	ThinkPHP 的 cache() 写入，键空间与 Go 侧隔离。详见 biz/stock.go。
+	StockLookAll(ctx context.Context, in *StockLookAllRequest, opts ...grpc.CallOption) (*StockLookAllReply, error)
 }
 
 type marketServiceClient struct {
@@ -130,6 +140,16 @@ func (c *marketServiceClient) SaleIndex(ctx context.Context, in *SaleIndexReques
 	return out, nil
 }
 
+func (c *marketServiceClient) StockLookAll(ctx context.Context, in *StockLookAllRequest, opts ...grpc.CallOption) (*StockLookAllReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StockLookAllReply)
+	err := c.cc.Invoke(ctx, MarketService_StockLookAll_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketServiceServer is the server API for MarketService service.
 // All implementations must embed UnimplementedMarketServiceServer
 // for forward compatibility.
@@ -174,6 +194,15 @@ type MarketServiceServer interface {
 	//     SaleFaceLists 没有，所以**不带 sort 参数时 SQL 里根本没有 ORDER BY**
 	//  2. 行后处理只做 images 的 json 解码，没有 "0 转 --" 那套
 	SaleIndex(context.Context, *SaleIndexRequest) (*RawData, error)
+	// 库存汇总（可释放数量 + 是否有释放任务在处理中）
+	// 原: PurchaseController::lookAll -> GoodsLogic::lookAll
+	//
+	//	**需要登录**；结果缓存 10 秒
+	//
+	// ⚠️ state 字段迁移期恒为 1：它依赖的"释放任务进行中"标记由 PHP 用
+	//
+	//	ThinkPHP 的 cache() 写入，键空间与 Go 侧隔离。详见 biz/stock.go。
+	StockLookAll(context.Context, *StockLookAllRequest) (*StockLookAllReply, error)
 	mustEmbedUnimplementedMarketServiceServer()
 }
 
@@ -198,6 +227,9 @@ func (UnimplementedMarketServiceServer) GetSaleCategories(context.Context, *GetS
 }
 func (UnimplementedMarketServiceServer) SaleIndex(context.Context, *SaleIndexRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaleIndex not implemented")
+}
+func (UnimplementedMarketServiceServer) StockLookAll(context.Context, *StockLookAllRequest) (*StockLookAllReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method StockLookAll not implemented")
 }
 func (UnimplementedMarketServiceServer) mustEmbedUnimplementedMarketServiceServer() {}
 func (UnimplementedMarketServiceServer) testEmbeddedByValue()                       {}
@@ -310,6 +342,24 @@ func _MarketService_SaleIndex_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketService_StockLookAll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StockLookAllRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).StockLookAll(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_StockLookAll_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).StockLookAll(ctx, req.(*StockLookAllRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketService_ServiceDesc is the grpc.ServiceDesc for MarketService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -336,6 +386,10 @@ var MarketService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SaleIndex",
 			Handler:    _MarketService_SaleIndex_Handler,
+		},
+		{
+			MethodName: "StockLookAll",
+			Handler:    _MarketService_StockLookAll_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

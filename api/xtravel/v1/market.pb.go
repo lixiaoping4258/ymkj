@@ -22,6 +22,95 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type StockLookAllRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StockLookAllRequest) Reset() {
+	*x = StockLookAllRequest{}
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StockLookAllRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StockLookAllRequest) ProtoMessage() {}
+
+func (x *StockLookAllRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StockLookAllRequest.ProtoReflect.Descriptor instead.
+func (*StockLookAllRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{0}
+}
+
+type StockLookAllReply struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 1 正常；0 表示有释放任务正在处理中（迁移期恒为 1，见上面的说明）
+	State         int32 `protobuf:"varint,1,opt,name=state,proto3" json:"state,omitempty"`
+	Num           int64 `protobuf:"varint,2,opt,name=num,proto3" json:"num,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StockLookAllReply) Reset() {
+	*x = StockLookAllReply{}
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StockLookAllReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StockLookAllReply) ProtoMessage() {}
+
+func (x *StockLookAllReply) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StockLookAllReply.ProtoReflect.Descriptor instead.
+func (*StockLookAllReply) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *StockLookAllReply) GetState() int32 {
+	if x != nil {
+		return x.State
+	}
+	return 0
+}
+
+func (x *StockLookAllReply) GetNum() int64 {
+	if x != nil {
+		return x.Num
+	}
+	return 0
+}
+
 type PurchaseIndexRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -30,7 +119,7 @@ type PurchaseIndexRequest struct {
 
 func (x *PurchaseIndexRequest) Reset() {
 	*x = PurchaseIndexRequest{}
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[0]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +131,7 @@ func (x *PurchaseIndexRequest) String() string {
 func (*PurchaseIndexRequest) ProtoMessage() {}
 
 func (x *PurchaseIndexRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[0]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +144,7 @@ func (x *PurchaseIndexRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PurchaseIndexRequest.ProtoReflect.Descriptor instead.
 func (*PurchaseIndexRequest) Descriptor() ([]byte, []int) {
-	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{0}
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{2}
 }
 
 type GetSaleCategoriesRequest struct {
@@ -66,7 +155,7 @@ type GetSaleCategoriesRequest struct {
 
 func (x *GetSaleCategoriesRequest) Reset() {
 	*x = GetSaleCategoriesRequest{}
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[1]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -78,7 +167,7 @@ func (x *GetSaleCategoriesRequest) String() string {
 func (*GetSaleCategoriesRequest) ProtoMessage() {}
 
 func (x *GetSaleCategoriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[1]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -91,7 +180,7 @@ func (x *GetSaleCategoriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSaleCategoriesRequest.ProtoReflect.Descriptor instead.
 func (*GetSaleCategoriesRequest) Descriptor() ([]byte, []int) {
-	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{1}
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{3}
 }
 
 type GetSaleCategoriesReply struct {
@@ -104,7 +193,7 @@ type GetSaleCategoriesReply struct {
 
 func (x *GetSaleCategoriesReply) Reset() {
 	*x = GetSaleCategoriesReply{}
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[2]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -116,7 +205,7 @@ func (x *GetSaleCategoriesReply) String() string {
 func (*GetSaleCategoriesReply) ProtoMessage() {}
 
 func (x *GetSaleCategoriesReply) ProtoReflect() protoreflect.Message {
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[2]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -129,7 +218,7 @@ func (x *GetSaleCategoriesReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSaleCategoriesReply.ProtoReflect.Descriptor instead.
 func (*GetSaleCategoriesReply) Descriptor() ([]byte, []int) {
-	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{2}
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GetSaleCategoriesReply) GetItems() []*SaleCategory {
@@ -150,7 +239,7 @@ type SaleCategory struct {
 
 func (x *SaleCategory) Reset() {
 	*x = SaleCategory{}
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[3]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -162,7 +251,7 @@ func (x *SaleCategory) String() string {
 func (*SaleCategory) ProtoMessage() {}
 
 func (x *SaleCategory) ProtoReflect() protoreflect.Message {
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[3]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -175,7 +264,7 @@ func (x *SaleCategory) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaleCategory.ProtoReflect.Descriptor instead.
 func (*SaleCategory) Descriptor() ([]byte, []int) {
-	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{3}
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SaleCategory) GetTitle() string {
@@ -200,7 +289,7 @@ type SaleIndexRequest struct {
 
 func (x *SaleIndexRequest) Reset() {
 	*x = SaleIndexRequest{}
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[4]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -212,7 +301,7 @@ func (x *SaleIndexRequest) String() string {
 func (*SaleIndexRequest) ProtoMessage() {}
 
 func (x *SaleIndexRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[4]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -225,7 +314,7 @@ func (x *SaleIndexRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaleIndexRequest.ProtoReflect.Descriptor instead.
 func (*SaleIndexRequest) Descriptor() ([]byte, []int) {
-	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{4}
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{6}
 }
 
 type GetPayWayRequest struct {
@@ -236,7 +325,7 @@ type GetPayWayRequest struct {
 
 func (x *GetPayWayRequest) Reset() {
 	*x = GetPayWayRequest{}
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[5]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -248,7 +337,7 @@ func (x *GetPayWayRequest) String() string {
 func (*GetPayWayRequest) ProtoMessage() {}
 
 func (x *GetPayWayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[5]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -261,7 +350,7 @@ func (x *GetPayWayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPayWayRequest.ProtoReflect.Descriptor instead.
 func (*GetPayWayRequest) Descriptor() ([]byte, []int) {
-	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{5}
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{7}
 }
 
 type GetPayWayReply struct {
@@ -278,7 +367,7 @@ type GetPayWayReply struct {
 
 func (x *GetPayWayReply) Reset() {
 	*x = GetPayWayReply{}
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[6]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -290,7 +379,7 @@ func (x *GetPayWayReply) String() string {
 func (*GetPayWayReply) ProtoMessage() {}
 
 func (x *GetPayWayReply) ProtoReflect() protoreflect.Message {
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[6]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -303,7 +392,7 @@ func (x *GetPayWayReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPayWayReply.ProtoReflect.Descriptor instead.
 func (*GetPayWayReply) Descriptor() ([]byte, []int) {
-	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{6}
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetPayWayReply) GetItems() []*PayWay {
@@ -326,7 +415,7 @@ type PayWay struct {
 
 func (x *PayWay) Reset() {
 	*x = PayWay{}
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[7]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -338,7 +427,7 @@ func (x *PayWay) String() string {
 func (*PayWay) ProtoMessage() {}
 
 func (x *PayWay) ProtoReflect() protoreflect.Message {
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[7]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -351,7 +440,7 @@ func (x *PayWay) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PayWay.ProtoReflect.Descriptor instead.
 func (*PayWay) Descriptor() ([]byte, []int) {
-	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{7}
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PayWay) GetPayWay() int32 {
@@ -376,7 +465,7 @@ type CheckExchangeRequest struct {
 
 func (x *CheckExchangeRequest) Reset() {
 	*x = CheckExchangeRequest{}
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[8]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -388,7 +477,7 @@ func (x *CheckExchangeRequest) String() string {
 func (*CheckExchangeRequest) ProtoMessage() {}
 
 func (x *CheckExchangeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[8]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -401,7 +490,7 @@ func (x *CheckExchangeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckExchangeRequest.ProtoReflect.Descriptor instead.
 func (*CheckExchangeRequest) Descriptor() ([]byte, []int) {
-	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{8}
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{10}
 }
 
 // 成功时原接口返回的是**空数组** []（`return $this->data([])`），
@@ -414,7 +503,7 @@ type CheckExchangeReply struct {
 
 func (x *CheckExchangeReply) Reset() {
 	*x = CheckExchangeReply{}
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[9]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -426,7 +515,7 @@ func (x *CheckExchangeReply) String() string {
 func (*CheckExchangeReply) ProtoMessage() {}
 
 func (x *CheckExchangeReply) ProtoReflect() protoreflect.Message {
-	mi := &file_api_xtravel_v1_market_proto_msgTypes[9]
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -439,7 +528,7 @@ func (x *CheckExchangeReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckExchangeReply.ProtoReflect.Descriptor instead.
 func (*CheckExchangeReply) Descriptor() ([]byte, []int) {
-	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{9}
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{11}
 }
 
 var File_api_xtravel_v1_market_proto protoreflect.FileDescriptor
@@ -447,7 +536,11 @@ var File_api_xtravel_v1_market_proto protoreflect.FileDescriptor
 const file_api_xtravel_v1_market_proto_rawDesc = "" +
 	"\n" +
 	"\x1bapi/xtravel/v1/market.proto\x12\n" +
-	"xtravel.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bapi/xtravel/v1/common.proto\"\x16\n" +
+	"xtravel.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bapi/xtravel/v1/common.proto\"\x15\n" +
+	"\x13StockLookAllRequest\";\n" +
+	"\x11StockLookAllReply\x12\x14\n" +
+	"\x05state\x18\x01 \x01(\x05R\x05state\x12\x10\n" +
+	"\x03num\x18\x02 \x01(\x03R\x03num\"\x16\n" +
 	"\x14PurchaseIndexRequest\"\x1a\n" +
 	"\x18GetSaleCategoriesRequest\"H\n" +
 	"\x16GetSaleCategoriesReply\x12.\n" +
@@ -463,13 +556,14 @@ const file_api_xtravel_v1_market_proto_rawDesc = "" +
 	"\apay_way\x18\x01 \x01(\x05R\apay_way\x12\x1a\n" +
 	"\bpay_name\x18\x02 \x01(\tR\bpay_name\"\x16\n" +
 	"\x14CheckExchangeRequest\"\x14\n" +
-	"\x12CheckExchangeReply2\xac\x04\n" +
+	"\x12CheckExchangeReply2\x9e\x05\n" +
 	"\rMarketService\x12a\n" +
 	"\tGetPayWay\x12\x1c.xtravel.v1.GetPayWayRequest\x1a\x1a.xtravel.v1.GetPayWayReply\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/market/pay_way\x12t\n" +
 	"\rCheckExchange\x12 .xtravel.v1.CheckExchangeRequest\x1a\x1e.xtravel.v1.CheckExchangeReply\"!\x82\xd3\xe4\x93\x02\x1b\x12\x19/v1/market/check/exchange\x12c\n" +
 	"\rPurchaseIndex\x12 .xtravel.v1.PurchaseIndexRequest\x1a\x13.xtravel.v1.RawData\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/market/purchase\x12\x82\x01\n" +
 	"\x11GetSaleCategories\x12$.xtravel.v1.GetSaleCategoriesRequest\x1a\".xtravel.v1.GetSaleCategoriesReply\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/market/sales/categories\x12X\n" +
-	"\tSaleIndex\x12\x1c.xtravel.v1.SaleIndexRequest\x1a\x13.xtravel.v1.RawData\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/market/salesB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
+	"\tSaleIndex\x12\x1c.xtravel.v1.SaleIndexRequest\x1a\x13.xtravel.v1.RawData\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/market/sales\x12p\n" +
+	"\fStockLookAll\x12\x1f.xtravel.v1.StockLookAllRequest\x1a\x1d.xtravel.v1.StockLookAllReply\" \x82\xd3\xe4\x93\x02\x1a\x12\x18/v1/market/stock/lookallB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
 
 var (
 	file_api_xtravel_v1_market_proto_rawDescOnce sync.Once
@@ -483,35 +577,39 @@ func file_api_xtravel_v1_market_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_market_proto_rawDescData
 }
 
-var file_api_xtravel_v1_market_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_api_xtravel_v1_market_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_api_xtravel_v1_market_proto_goTypes = []any{
-	(*PurchaseIndexRequest)(nil),     // 0: xtravel.v1.PurchaseIndexRequest
-	(*GetSaleCategoriesRequest)(nil), // 1: xtravel.v1.GetSaleCategoriesRequest
-	(*GetSaleCategoriesReply)(nil),   // 2: xtravel.v1.GetSaleCategoriesReply
-	(*SaleCategory)(nil),             // 3: xtravel.v1.SaleCategory
-	(*SaleIndexRequest)(nil),         // 4: xtravel.v1.SaleIndexRequest
-	(*GetPayWayRequest)(nil),         // 5: xtravel.v1.GetPayWayRequest
-	(*GetPayWayReply)(nil),           // 6: xtravel.v1.GetPayWayReply
-	(*PayWay)(nil),                   // 7: xtravel.v1.PayWay
-	(*CheckExchangeRequest)(nil),     // 8: xtravel.v1.CheckExchangeRequest
-	(*CheckExchangeReply)(nil),       // 9: xtravel.v1.CheckExchangeReply
-	(*RawData)(nil),                  // 10: xtravel.v1.RawData
+	(*StockLookAllRequest)(nil),      // 0: xtravel.v1.StockLookAllRequest
+	(*StockLookAllReply)(nil),        // 1: xtravel.v1.StockLookAllReply
+	(*PurchaseIndexRequest)(nil),     // 2: xtravel.v1.PurchaseIndexRequest
+	(*GetSaleCategoriesRequest)(nil), // 3: xtravel.v1.GetSaleCategoriesRequest
+	(*GetSaleCategoriesReply)(nil),   // 4: xtravel.v1.GetSaleCategoriesReply
+	(*SaleCategory)(nil),             // 5: xtravel.v1.SaleCategory
+	(*SaleIndexRequest)(nil),         // 6: xtravel.v1.SaleIndexRequest
+	(*GetPayWayRequest)(nil),         // 7: xtravel.v1.GetPayWayRequest
+	(*GetPayWayReply)(nil),           // 8: xtravel.v1.GetPayWayReply
+	(*PayWay)(nil),                   // 9: xtravel.v1.PayWay
+	(*CheckExchangeRequest)(nil),     // 10: xtravel.v1.CheckExchangeRequest
+	(*CheckExchangeReply)(nil),       // 11: xtravel.v1.CheckExchangeReply
+	(*RawData)(nil),                  // 12: xtravel.v1.RawData
 }
 var file_api_xtravel_v1_market_proto_depIdxs = []int32{
-	3,  // 0: xtravel.v1.GetSaleCategoriesReply.items:type_name -> xtravel.v1.SaleCategory
-	7,  // 1: xtravel.v1.GetPayWayReply.items:type_name -> xtravel.v1.PayWay
-	5,  // 2: xtravel.v1.MarketService.GetPayWay:input_type -> xtravel.v1.GetPayWayRequest
-	8,  // 3: xtravel.v1.MarketService.CheckExchange:input_type -> xtravel.v1.CheckExchangeRequest
-	0,  // 4: xtravel.v1.MarketService.PurchaseIndex:input_type -> xtravel.v1.PurchaseIndexRequest
-	1,  // 5: xtravel.v1.MarketService.GetSaleCategories:input_type -> xtravel.v1.GetSaleCategoriesRequest
-	4,  // 6: xtravel.v1.MarketService.SaleIndex:input_type -> xtravel.v1.SaleIndexRequest
-	6,  // 7: xtravel.v1.MarketService.GetPayWay:output_type -> xtravel.v1.GetPayWayReply
-	9,  // 8: xtravel.v1.MarketService.CheckExchange:output_type -> xtravel.v1.CheckExchangeReply
-	10, // 9: xtravel.v1.MarketService.PurchaseIndex:output_type -> xtravel.v1.RawData
-	2,  // 10: xtravel.v1.MarketService.GetSaleCategories:output_type -> xtravel.v1.GetSaleCategoriesReply
-	10, // 11: xtravel.v1.MarketService.SaleIndex:output_type -> xtravel.v1.RawData
-	7,  // [7:12] is the sub-list for method output_type
-	2,  // [2:7] is the sub-list for method input_type
+	5,  // 0: xtravel.v1.GetSaleCategoriesReply.items:type_name -> xtravel.v1.SaleCategory
+	9,  // 1: xtravel.v1.GetPayWayReply.items:type_name -> xtravel.v1.PayWay
+	7,  // 2: xtravel.v1.MarketService.GetPayWay:input_type -> xtravel.v1.GetPayWayRequest
+	10, // 3: xtravel.v1.MarketService.CheckExchange:input_type -> xtravel.v1.CheckExchangeRequest
+	2,  // 4: xtravel.v1.MarketService.PurchaseIndex:input_type -> xtravel.v1.PurchaseIndexRequest
+	3,  // 5: xtravel.v1.MarketService.GetSaleCategories:input_type -> xtravel.v1.GetSaleCategoriesRequest
+	6,  // 6: xtravel.v1.MarketService.SaleIndex:input_type -> xtravel.v1.SaleIndexRequest
+	0,  // 7: xtravel.v1.MarketService.StockLookAll:input_type -> xtravel.v1.StockLookAllRequest
+	8,  // 8: xtravel.v1.MarketService.GetPayWay:output_type -> xtravel.v1.GetPayWayReply
+	11, // 9: xtravel.v1.MarketService.CheckExchange:output_type -> xtravel.v1.CheckExchangeReply
+	12, // 10: xtravel.v1.MarketService.PurchaseIndex:output_type -> xtravel.v1.RawData
+	4,  // 11: xtravel.v1.MarketService.GetSaleCategories:output_type -> xtravel.v1.GetSaleCategoriesReply
+	12, // 12: xtravel.v1.MarketService.SaleIndex:output_type -> xtravel.v1.RawData
+	1,  // 13: xtravel.v1.MarketService.StockLookAll:output_type -> xtravel.v1.StockLookAllReply
+	8,  // [8:14] is the sub-list for method output_type
+	2,  // [2:8] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
 	2,  // [2:2] is the sub-list for extension extendee
 	0,  // [0:2] is the sub-list for field type_name
@@ -529,7 +627,7 @@ func file_api_xtravel_v1_market_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_market_proto_rawDesc), len(file_api_xtravel_v1_market_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -24,6 +24,7 @@ const OperationMarketServiceGetPayWay = "/xtravel.v1.MarketService/GetPayWay"
 const OperationMarketServiceGetSaleCategories = "/xtravel.v1.MarketService/GetSaleCategories"
 const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseIndex"
 const OperationMarketServiceSaleIndex = "/xtravel.v1.MarketService/SaleIndex"
+const OperationMarketServiceStockLookAll = "/xtravel.v1.MarketService/StockLookAll"
 
 type MarketServiceHTTPServer interface {
 	// CheckExchange 兑换前置校验
@@ -55,6 +56,13 @@ type MarketServiceHTTPServer interface {
 	//      SaleFaceLists 没有，所以**不带 sort 参数时 SQL 里根本没有 ORDER BY**
 	//   2. 行后处理只做 images 的 json 解码，没有 "0 转 --" 那套
 	SaleIndex(context.Context, *SaleIndexRequest) (*RawData, error)
+	// StockLookAll 库存汇总（可释放数量 + 是否有释放任务在处理中）
+	// 原: PurchaseController::lookAll -> GoodsLogic::lookAll
+	//     **需要登录**；结果缓存 10 秒
+	//
+	// ⚠️ state 字段迁移期恒为 1：它依赖的"释放任务进行中"标记由 PHP 用
+	//    ThinkPHP 的 cache() 写入，键空间与 Go 侧隔离。详见 biz/stock.go。
+	StockLookAll(context.Context, *StockLookAllRequest) (*StockLookAllReply, error)
 }
 
 func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer) {
@@ -64,6 +72,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/purchase", _MarketService_PurchaseIndex0_HTTP_Handler(srv))
 	r.GET("/v1/market/sales/categories", _MarketService_GetSaleCategories0_HTTP_Handler(srv))
 	r.GET("/v1/market/sales", _MarketService_SaleIndex0_HTTP_Handler(srv))
+	r.GET("/v1/market/stock/lookall", _MarketService_StockLookAll0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -161,6 +170,25 @@ func _MarketService_SaleIndex0_HTTP_Handler(srv MarketServiceHTTPServer) func(ct
 	}
 }
 
+func _MarketService_StockLookAll0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in StockLookAllRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServiceStockLookAll)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.StockLookAll(ctx, req.(*StockLookAllRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*StockLookAllReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -191,6 +219,13 @@ type MarketServiceHTTPClient interface {
 	//      SaleFaceLists 没有，所以**不带 sort 参数时 SQL 里根本没有 ORDER BY**
 	//   2. 行后处理只做 images 的 json 解码，没有 "0 转 --" 那套
 	SaleIndex(ctx context.Context, req *SaleIndexRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// StockLookAll 库存汇总（可释放数量 + 是否有释放任务在处理中）
+	// 原: PurchaseController::lookAll -> GoodsLogic::lookAll
+	//     **需要登录**；结果缓存 10 秒
+	//
+	// ⚠️ state 字段迁移期恒为 1：它依赖的"释放任务进行中"标记由 PHP 用
+	//    ThinkPHP 的 cache() 写入，键空间与 Go 侧隔离。详见 biz/stock.go。
+	StockLookAll(ctx context.Context, req *StockLookAllRequest, opts ...http.CallOption) (rsp *StockLookAllReply, err error)
 }
 
 type MarketServiceHTTPClientImpl struct {
@@ -286,6 +321,27 @@ func (c *MarketServiceHTTPClientImpl) SaleIndex(ctx context.Context, in *SaleInd
 	pattern := "/v1/market/sales"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServiceSaleIndex))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// StockLookAll 库存汇总（可释放数量 + 是否有释放任务在处理中）
+// 原: PurchaseController::lookAll -> GoodsLogic::lookAll
+//
+//	**需要登录**；结果缓存 10 秒
+//
+// ⚠️ state 字段迁移期恒为 1：它依赖的"释放任务进行中"标记由 PHP 用
+//
+//	ThinkPHP 的 cache() 写入，键空间与 Go 侧隔离。详见 biz/stock.go。
+func (c *MarketServiceHTTPClientImpl) StockLookAll(ctx context.Context, in *StockLookAllRequest, opts ...http.CallOption) (*StockLookAllReply, error) {
+	var out StockLookAllReply
+	pattern := "/v1/market/stock/lookall"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServiceStockLookAll))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

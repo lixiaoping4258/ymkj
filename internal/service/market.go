@@ -16,14 +16,16 @@ type MarketService struct {
 	market   *biz.MarketUsecase
 	purchase *biz.PurchaseFaceUsecase
 	sale     *biz.SaleFaceUsecase
+	stock    *biz.StockUsecase
 }
 
 func NewMarketService(
 	market *biz.MarketUsecase,
 	purchase *biz.PurchaseFaceUsecase,
 	sale *biz.SaleFaceUsecase,
+	stock *biz.StockUsecase,
 ) *MarketService {
-	return &MarketService{market: market, purchase: purchase, sale: sale}
+	return &MarketService{market: market, purchase: purchase, sale: sale, stock: stock}
 }
 
 // GetPayWay 对应 PurchaseController::payWay。
@@ -135,4 +137,13 @@ func (s *MarketService) SaleIndex(ctx context.Context, _ *v1.SaleIndexRequest) (
 		return nil, bizFail(err)
 	}
 	return &v1.RawData{Json: raw}, nil
+}
+
+// StockLookAll 对应 PurchaseController::lookAll。
+func (s *MarketService) StockLookAll(ctx context.Context, _ *v1.StockLookAllRequest) (*v1.StockLookAllReply, error) {
+	res, err := s.stock.LookAll(ctx, biz.UserIDFromContext(ctx))
+	if err != nil {
+		return nil, bizFail(err)
+	}
+	return &v1.StockLookAllReply{State: res.State, Num: res.Num}, nil
 }
