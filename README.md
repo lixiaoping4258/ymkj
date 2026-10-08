@@ -847,7 +847,57 @@ Go 版保持原样以兼容前端，但在 proto 里写了注释说明。
 
 ---
 
-## 九、环境相关
+## 九、待迁接口的侦察记录（省下一次重新读源码）
+
+这一节记录已经读过、但**还没到能动手实现**的接口。目的是让下一次接手的人
+不必从零开始读源码。所有事实都来自实际读代码 / 跑真机，不是推测。
+
+### `GET /v1/market/purchase/price_range`
+
+调用链：`PurchaseController::priceRange` → `GoodsLogic::priceRange($params)`
+→ `AppArchiveLogic::findAppArchives(intval($archive_id))`
+→ `PurchaseCreateLogic::getPriceScope($archive)`
+
+返回 `['max_start' => $startPrice, 'max_end' => $endPrice]`；
+查不到档案时 `fail('艺术品不存在')`，`getPriceScope` 抛异常时 `fail($e->getMessage())`。
+
+⚠️ **`AppArchiveLogic` 有两个同名文件**：`app/api/logic/open/AppArchiveLogic.php`
+（这个才是调用链上的）和 `app/adminapi/logic/app/AppArchiveLogic.php`。
+按文件名搜会搜错——`findAppArchives` 只在 `api/logic/open/` 那份里。
+
+`getPriceScope` 的复杂度（约 100 行，是这块的真正工作量）：
+
+- 读 8 个档案字段：`is_local` / `low_price` / `local_price` / `high_price` /
+  `price_limit` / `low_percent` / `high_percent` / `id`
+- `is_local === 0`（第三方）时要知道当前最高成交价：取
+  `ReceiveData::order("create_time","desc")->value("price")`，
+  缓存在**裸 Redis** 键 `purchase:ymprice`、TTL 3600 —— Go 可与 PHP 共用
+- `is_local === 1`（本地）时基准价改用 `local_price`
+- 百分比要 `bcdiv((string)$x, '100', 2)` 转成小数；`base_price` 常量 `'0.01'`
+- **两处会抛异常**：`$high_price !== null && $cal_high_price == 0` → `'后台数据异常!'`；
+  以及"无最低限价"分支里 `bccomp($purchaseStart, $cal_high_price, 2) > 0` → `'后台数据异常!!'`
+  （注意一个是单感叹号、一个是双感叹号，文案不同）
+- 然后是一棵按 `price_limit == 0` / `low_price`/`high_price` 是否为 null 展开的分支树，
+  大量 `bccomp(..., 2)` 两两取大/取小
+
+**建议**：这块要单独立项，先照着源码把分支树画出来，再逐条与 PHP 对照取样。
+不要用"边写边猜"的方式做——它有两处异常分支，很容易把"抛异常"写成"返回默认值"。
+
+### `GET /v1/market/purchase/detail`
+
+调用链：`PurchaseController::detail` → `MarketListPurchaseLogic::getSaleDetail($id, $userId)`。
+
+🔴 **已知缺陷：跨用户缓存泄漏。** 缓存键是 `"purchase:getSaleDetail:$id"`，
+**不含 `$userId`**，但响应的计算过程用了 `$userId`（`able_exchange` 之类依赖用户）。
+也就是说先访问的用户会把结果缓存下来，后续**其他用户**拿到的是别人的视图。
+
+迁移时必须正面处理：要么把 `$userId` 加进键（修掉），要么保持原样并明确记录。
+**不要默默修掉也不要默默保留** —— 两种都需要先确认线上是否已有人依赖当前行为。
+
+（同一个文件里的 `getArchive` 也有类似形态，但它的响应不依赖用户，
+所以只有本函数是真问题。区别见第 "两个同名不同物的 getArchive" 一节。）
+
+## 十、环境相关
 
 - Go **1.26.3**，GOPROXY 已指向 `goproxy.cn`
 - protoc **35.1**，插件：`protoc-gen-go` / `protoc-gen-go-http` / `protoc-gen-go-grpc`
