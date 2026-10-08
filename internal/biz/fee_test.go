@@ -93,3 +93,43 @@ func TestTruncateRatIsTruncationNotRounding(t *testing.T) {
 		}
 	}
 }
+
+// 期望值来自真机 PHP：在 CLI 里复刻 showTotalAmount 的函数体、
+// 把 getFeeRate 的结果换成固定入参（这样全程是纯 bcmath，不需要 Cache/DB）。
+func TestShowTotalAmountWithRate_MatchesRealPHP(t *testing.T) {
+	cases := []struct {
+		rate      string
+		count     int
+		unitPrice string
+		want      string
+	}{
+		{"0.0600", 1, "100", "94.00"},
+		{"0.0600", 3, "16.66", "46.98"},
+		{"0.0600", 1, "0.01", "0.00"},
+		// ↓ 参数不合法时返回的是 '0'（没有小数位），不是 '0.00'
+		{"0.0600", 0, "100", "0"},
+		{"0.0600", 1, "0", "0"},
+		{"0.0600", 1, "", "0"},
+		{"0.0000", 1, "100", "99.99"},
+		{"0.0600", 2, "1.005", "1.88"},
+		{"0.0600", 7, "3.333", "21.93"},
+		{"0.0600", 100, "123456789.12", "11604938177.28"},
+		{"0.0100", 5, "99.99", "494.95"},
+	}
+	for _, c := range cases {
+		got := ShowTotalAmountWithRate(c.rate, c.count, c.unitPrice)
+		if got != c.want {
+			t.Errorf("ShowTotalAmountWithRate(%q, %d, %q) = %q, PHP 实测 %q",
+				c.rate, c.count, c.unitPrice, got, c.want)
+		}
+	}
+}
+
+// 总价是**向上取整到分**（×100 → ceil → ÷100），不是四舍五入。
+// 用 rate=0（手续费固定 0.01）反推总价：2.001 若四舍五入到 2.00 则到账 1.99，
+// 向上取整到 2.01 则到账 2.00。
+func TestShowTotalAmount_CeilsToCentNotRounds(t *testing.T) {
+	if got := ShowTotalAmountWithRate("0.0000", 1, "2.001"); got != "2.00" {
+		t.Fatalf("2.001 应向上取整到 2.01（到账 2.00），实际 %q", got)
+	}
+}

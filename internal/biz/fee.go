@@ -103,8 +103,85 @@ func CalcFeeTtl(startTs, endTs, now int64) int64 {
 	return ttl
 }
 
-/* ------------------------------------------------------------ 十进制工具 */
+// ShowTotalAmountWithRate 是 FeeAmountLogic::showTotalAmount 的**纯计算部分**，
+// 费率由调用方给出（真实调用链里来自 getFeeRate，那部分依赖 Cache，见下）。
+//
+// 原实现（$feeRate 换成入参 rate）：
+//
+//	if (empty($appId) || empty($count) || $count <= 0 || empty($unitPrice) || $unitPrice <= 0) {
+//	    return '0';                       // ← 注意是字符串 '0'，不是 '0.00'
+//	}
+//	$totalPrice = bcmul($unitPrice, $count, 10);
+//	$totalPrice = ceil(bcmul($totalPrice, '100', 10)) / 100;
+//	$totalPrice = number_format($totalPrice, 2, '.', '');
+//	$feeAmount  = calculateFeeRate($rate, $totalPrice);
+//	return bcsub($totalPrice, $feeAmount, 2);
+//
+// 三个要点（都是真机实测确认的）：
+//  1. 参数不合法时返回的是 **'0'**（没有小数位），合法路径返回的一定是 2 位小数字符串。
+//     这直接决定 JSON 里是 "0" 还是 "0.00"，前端比较字符串时会不同。
+//  2. 总价是 **向上取整到分**（×100 → ceil → ÷100），不是四舍五入。
+//  3. 手续费是在**取整后的总价**上算的，不是原始总价。
+//
+// 实测：rate=0.0600 count=2 price=1.005 -> '1.88'
+//
+//	（总价 2.01，手续费 0.13，到账 1.88）
+func ShowTotalAmountWithRate(rate string, count int, unitPrice string) string {
+	if count <= 0 || !phpPositiveAmount(unitPrice) {
+		return "0"
+	}
+	totalPrice := bcMul(unitPrice, strconv.Itoa(count), 10)
 
+	mult := bcMul(totalPrice, "100", 10)
+	f, err := strconv.ParseFloat(mult, 64)
+	if err != nil {
+		return "0"
+	}
+	// ceil(...) / 100 之后再 number_format(2)
+	total := math.Ceil(f) / 100
+	totalPrice = strconv.FormatFloat(total, 'f', 2, 64)
+
+	feeAmount := CalculateFeeRate(rate, totalPrice)
+	return bcSub(totalPrice, feeAmount, 2)
+}
+
+// phpPositiveAmount 对应 PHP 的 `empty($v) || $v <= 0`。
+//
+// ⚠️ 这里必须复刻 empty() 对字符串 "0" 的判定：
+// empty("0") 是 true，但 empty("0.0") 是 false（后者靠 `<= 0` 拦下）。
+// 两种都算不合法，但路径不同 —— 不写成统一的数值比较是为了以后加日志时能区分。
+func phpPositiveAmount(s string) bool {
+	if s == "" || s == "0" {
+		return false
+	}
+	r, ok := new(big.Rat).SetString(strings.TrimSpace(s))
+	if !ok {
+		return false
+	}
+	return r.Sign() > 0
+}
+
+// bcMul 对应 bcmul($a, $b, $scale)：精确相乘后向零截断到 scale 位。
+func bcMul(a, b string, scale int) string {
+	ra, ok1 := new(big.Rat).SetString(strings.TrimSpace(a))
+	rb, ok2 := new(big.Rat).SetString(strings.TrimSpace(b))
+	if !ok1 || !ok2 {
+		return "0"
+	}
+	return truncateRat(new(big.Rat).Mul(ra, rb), scale)
+}
+
+// bcSub 对应 bcsub($a, $b, $scale)：精确相减后向零截断到 scale 位。
+func bcSub(a, b string, scale int) string {
+	ra, ok1 := new(big.Rat).SetString(strings.TrimSpace(a))
+	rb, ok2 := new(big.Rat).SetString(strings.TrimSpace(b))
+	if !ok1 || !ok2 {
+		return "0"
+	}
+	return truncateRat(new(big.Rat).Sub(ra, rb), scale)
+}
+
+/* ------------------------------------------------------------ 十进制工具 */
 // truncateRat 把有理数**向零截断**到 scale 位小数，返回十进制字符串。
 // 对应 bcmath 的截断语义（bcmath 不四舍五入）。
 func truncateRat(r *big.Rat, scale int) string {
