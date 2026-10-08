@@ -1,7 +1,16 @@
 # xTravel → Kratos 重构工程
 
 把 `D:\work\phpstudy_pro\WWW\xTravel`（ThinkPHP 8，**754 个 PHP 文件 / 64,588 行**）
-用 Kratos v2 重构。本仓库只在 `develop` 分支改动。
+用 Kratos v2 重构。
+
+> 口径说明（省得下次核对时对不上）：**754 个文件**＝全项目排除 `vendor/` 与 `runtime/`；
+> **64,588 行**＝这些文件的**非空行**（含空行的总行数是 73,755）。
+> 复核命令：
+> ```powershell
+> $f = Get-ChildItem $p -Recurse -Filter *.php -File | ? { $_.FullName -notmatch '\\vendor\\|\\runtime\\' }
+> # 文件数 = $f.Count；非空行 = 逐行 Trim() -ne ''
+> ```
+> 实测 2026 年复核为 754 文件 / 64,572 非空行，与 64,588 差 16 行（测量漂移）。本仓库只在 `develop` 分支改动。
 
 > **远端同步政策（第 37 轮更新）**：已完成并验证的工作**推送到 `origin/develop`**。
 > 这条取代了早期"不推远端"的约定 —— 迁移期两套系统并行，需要让远端保持最新。
@@ -128,7 +137,16 @@ GO : {"id":61089517,"sn":178056289917980,"create_time":1783678044,
 
 **① 白名单（`biz/whitelist.go` + `server/middleware_whitelist.go`）**
 
-对应 `WhitelistMiddleware` + `WhitelistLogic`。market 域有 8 条路由挂着它。
+对应 `WhitelistMiddleware` + `WhitelistLogic`。market 域有 **6 条**路由挂着它。
+
+> ⚠️ 这里原本写的是"8 条"—— **是错的**，复核后改为 6 条。
+> 数错的原因值得记：`market.php` 里含 `whitelist` 的行有 **7** 行，
+> 但其中一行是 `use ...WhitelistMiddleware;`（导入语句，不是路由）。
+> **数路由要数路由声明，不要数"包含某个词的行"。**
+> 当前挂白名单的 6 条：`orders/create/sale`、`order/create/purchase`、
+> `purchase/create`、`purchase/purchaseBuy`、`purchase/grabPriceSubmit`、`purchase`(GET)。
+> 其中 `purchase`(GET) 已迁（`OperationWhitelistItems` 里绑了 `no_collection_trade`），
+> 其余 5 条是写接口，尚未迁移。
 原项目把限制项绑在路由上（`->append(['whitelist_item' => 'no_collection_trade'])`），
 Kratos 没有这个东西，改成 `server/middleware_whitelist.go` 里的一张
 operation → 限制项 表。**改 proto 的 service/method 名时必须同步改那里**，
