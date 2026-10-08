@@ -3,11 +3,15 @@ package service
 import (
 	"context"
 	"net/url"
+	"strconv"
+	"strings"
 
 	khttp "github.com/go-kratos/kratos/v2/transport/http"
 
 	v1 "github.com/lixiaoping4258/ymkj/api/xtravel/v1"
 	"github.com/lixiaoping4258/ymkj/internal/biz"
+	"github.com/lixiaoping4258/ymkj/internal/pkg/httpx"
+	"github.com/lixiaoping4258/ymkj/internal/pkg/pbconv"
 )
 
 // MarketService 对应原项目 app/api/controller/v1/market/PurchaseController.php。
@@ -17,6 +21,7 @@ type MarketService struct {
 	purchase *biz.PurchaseFaceUsecase
 	sale     *biz.SaleFaceUsecase
 	stock    *biz.StockUsecase
+	archive  *biz.ArchiveUsecase
 }
 
 func NewMarketService(
@@ -24,8 +29,9 @@ func NewMarketService(
 	purchase *biz.PurchaseFaceUsecase,
 	sale *biz.SaleFaceUsecase,
 	stock *biz.StockUsecase,
+	archive *biz.ArchiveUsecase,
 ) *MarketService {
-	return &MarketService{market: market, purchase: purchase, sale: sale, stock: stock}
+	return &MarketService{market: market, purchase: purchase, sale: sale, stock: stock, archive: archive}
 }
 
 // GetPayWay 对应 PurchaseController::payWay。
@@ -146,4 +152,59 @@ func (s *MarketService) StockLookAll(ctx context.Context, _ *v1.StockLookAllRequ
 		return nil, bizFail(err)
 	}
 	return &v1.StockLookAllReply{State: res.State, Num: res.Num}, nil
+}
+
+// PurchaseInfo 对应 PurchaseController::purchaseInfo。
+//
+// 原实现：
+//
+//	$params = (new AppArchivePurchaseInfoValidate())->get()->goCheck();
+//	$archive = MarketListPurchaseLogic::getArchive($params['id']);
+//	if ($archive === false) { return $this->fail(MarketListPurchaseLogic::getError()); }
+//	return $this->data($archive);
+//
+// validate 的规则是 'id' => 'require'，缺失时提示"档案ID不能为空"。
+func (s *MarketService) PurchaseInfo(
+	ctx context.Context, in *v1.PurchaseInfoRequest,
+) (*v1.PurchaseInfoReply, error) {
+	idStr := strings.TrimSpace(in.GetId())
+	if idStr == "" {
+		return nil, httpx.Fail("档案ID不能为空")
+	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		// 原 validate 只校验了 require，非数字会被 getArchive 当成 0 查不到，
+		// 最终也是"未找到档案信息"
+		return nil, httpx.Fail("未找到档案信息")
+	}
+
+	row, err := s.archive.GetArchive(ctx, id)
+	if err != nil {
+		return nil, bizFail(err)
+	}
+	if row == nil {
+		return nil, httpx.Fail("未找到档案信息")
+	}
+
+	reply := &v1.PurchaseInfoReply{}
+	if v, ok := row["id"].(int64); ok {
+		reply.Id = v
+	}
+	if v, ok := row["collection_id"].(string); ok {
+		reply.CollectionId = v
+	}
+	if v, ok := row["name"].(string); ok {
+		reply.Name = v
+	}
+	reply.Images = pbconv.ToValue(row["images"])
+	if v, ok := row["issuer"].(string); ok {
+		reply.Issuer = v
+	}
+	if v, ok := row["platform_name"].(string); ok {
+		reply.PlatformName = v
+	}
+	if v, ok := row["platform_id"].(int64); ok {
+		reply.PlatformId = v
+	}
+	return reply, nil
 }

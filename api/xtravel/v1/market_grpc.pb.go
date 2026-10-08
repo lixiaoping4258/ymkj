@@ -25,6 +25,7 @@ const (
 	MarketService_GetSaleCategories_FullMethodName = "/xtravel.v1.MarketService/GetSaleCategories"
 	MarketService_SaleIndex_FullMethodName         = "/xtravel.v1.MarketService/SaleIndex"
 	MarketService_StockLookAll_FullMethodName      = "/xtravel.v1.MarketService/StockLookAll"
+	MarketService_PurchaseInfo_FullMethodName      = "/xtravel.v1.MarketService/PurchaseInfo"
 )
 
 // MarketServiceClient is the client API for MarketService service.
@@ -80,6 +81,11 @@ type MarketServiceClient interface {
 	//
 	//	ThinkPHP 的 cache() 写入，键空间与 Go 侧隔离。详见 biz/stock.go。
 	StockLookAll(ctx context.Context, in *StockLookAllRequest, opts ...grpc.CallOption) (*StockLookAllReply, error)
+	// 藏品封面（档案基础信息）
+	// 原: PurchaseController::purchaseInfo -> MarketListPurchaseLogic::getArchive
+	//
+	//	**需要登录**；结果按 archive id 缓存 600 秒
+	PurchaseInfo(ctx context.Context, in *PurchaseInfoRequest, opts ...grpc.CallOption) (*PurchaseInfoReply, error)
 }
 
 type marketServiceClient struct {
@@ -150,6 +156,16 @@ func (c *marketServiceClient) StockLookAll(ctx context.Context, in *StockLookAll
 	return out, nil
 }
 
+func (c *marketServiceClient) PurchaseInfo(ctx context.Context, in *PurchaseInfoRequest, opts ...grpc.CallOption) (*PurchaseInfoReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurchaseInfoReply)
+	err := c.cc.Invoke(ctx, MarketService_PurchaseInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketServiceServer is the server API for MarketService service.
 // All implementations must embed UnimplementedMarketServiceServer
 // for forward compatibility.
@@ -203,6 +219,11 @@ type MarketServiceServer interface {
 	//
 	//	ThinkPHP 的 cache() 写入，键空间与 Go 侧隔离。详见 biz/stock.go。
 	StockLookAll(context.Context, *StockLookAllRequest) (*StockLookAllReply, error)
+	// 藏品封面（档案基础信息）
+	// 原: PurchaseController::purchaseInfo -> MarketListPurchaseLogic::getArchive
+	//
+	//	**需要登录**；结果按 archive id 缓存 600 秒
+	PurchaseInfo(context.Context, *PurchaseInfoRequest) (*PurchaseInfoReply, error)
 	mustEmbedUnimplementedMarketServiceServer()
 }
 
@@ -230,6 +251,9 @@ func (UnimplementedMarketServiceServer) SaleIndex(context.Context, *SaleIndexReq
 }
 func (UnimplementedMarketServiceServer) StockLookAll(context.Context, *StockLookAllRequest) (*StockLookAllReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method StockLookAll not implemented")
+}
+func (UnimplementedMarketServiceServer) PurchaseInfo(context.Context, *PurchaseInfoRequest) (*PurchaseInfoReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method PurchaseInfo not implemented")
 }
 func (UnimplementedMarketServiceServer) mustEmbedUnimplementedMarketServiceServer() {}
 func (UnimplementedMarketServiceServer) testEmbeddedByValue()                       {}
@@ -360,6 +384,24 @@ func _MarketService_StockLookAll_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketService_PurchaseInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurchaseInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).PurchaseInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_PurchaseInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).PurchaseInfo(ctx, req.(*PurchaseInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketService_ServiceDesc is the grpc.ServiceDesc for MarketService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -390,6 +432,10 @@ var MarketService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StockLookAll",
 			Handler:    _MarketService_StockLookAll_Handler,
+		},
+		{
+			MethodName: "PurchaseInfo",
+			Handler:    _MarketService_PurchaseInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

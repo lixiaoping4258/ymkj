@@ -23,6 +23,7 @@ const OperationMarketServiceCheckExchange = "/xtravel.v1.MarketService/CheckExch
 const OperationMarketServiceGetPayWay = "/xtravel.v1.MarketService/GetPayWay"
 const OperationMarketServiceGetSaleCategories = "/xtravel.v1.MarketService/GetSaleCategories"
 const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseIndex"
+const OperationMarketServicePurchaseInfo = "/xtravel.v1.MarketService/PurchaseInfo"
 const OperationMarketServiceSaleIndex = "/xtravel.v1.MarketService/SaleIndex"
 const OperationMarketServiceStockLookAll = "/xtravel.v1.MarketService/StockLookAll"
 
@@ -47,6 +48,10 @@ type MarketServiceHTTPServer interface {
 	// 返回 RawData：列表行结构任意（bigint 主键 / decimal 字符串 / json 数组 /
 	// "0 转 --" 后处理），用 proto 建模会丢精度又拧巴，见 common.proto 的说明。
 	PurchaseIndex(context.Context, *PurchaseIndexRequest) (*RawData, error)
+	// PurchaseInfo 藏品封面（档案基础信息）
+	// 原: PurchaseController::purchaseInfo -> MarketListPurchaseLogic::getArchive
+	//     **需要登录**；结果按 archive id 缓存 600 秒
+	PurchaseInfo(context.Context, *PurchaseInfoRequest) (*PurchaseInfoReply, error)
 	// SaleIndex 秒转专区首页列表
 	// 原: SaleController::index -> SaleFaceLists
 	//     **需要登录**（不在 $notNeedLogin 里）
@@ -73,6 +78,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/sales/categories", _MarketService_GetSaleCategories0_HTTP_Handler(srv))
 	r.GET("/v1/market/sales", _MarketService_SaleIndex0_HTTP_Handler(srv))
 	r.GET("/v1/market/stock/lookall", _MarketService_StockLookAll0_HTTP_Handler(srv))
+	r.GET("/v1/market/purchase/info", _MarketService_PurchaseInfo0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -189,6 +195,25 @@ func _MarketService_StockLookAll0_HTTP_Handler(srv MarketServiceHTTPServer) func
 	}
 }
 
+func _MarketService_PurchaseInfo0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in PurchaseInfoRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServicePurchaseInfo)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.PurchaseInfo(ctx, req.(*PurchaseInfoRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*PurchaseInfoReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -210,6 +235,10 @@ type MarketServiceHTTPClient interface {
 	// 返回 RawData：列表行结构任意（bigint 主键 / decimal 字符串 / json 数组 /
 	// "0 转 --" 后处理），用 proto 建模会丢精度又拧巴，见 common.proto 的说明。
 	PurchaseIndex(ctx context.Context, req *PurchaseIndexRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// PurchaseInfo 藏品封面（档案基础信息）
+	// 原: PurchaseController::purchaseInfo -> MarketListPurchaseLogic::getArchive
+	//     **需要登录**；结果按 archive id 缓存 600 秒
+	PurchaseInfo(ctx context.Context, req *PurchaseInfoRequest, opts ...http.CallOption) (rsp *PurchaseInfoReply, err error)
 	// SaleIndex 秒转专区首页列表
 	// 原: SaleController::index -> SaleFaceLists
 	//     **需要登录**（不在 $notNeedLogin 里）
@@ -299,6 +328,23 @@ func (c *MarketServiceHTTPClientImpl) PurchaseIndex(ctx context.Context, in *Pur
 	pattern := "/v1/market/purchase"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServicePurchaseIndex))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PurchaseInfo 藏品封面（档案基础信息）
+// 原: PurchaseController::purchaseInfo -> MarketListPurchaseLogic::getArchive
+//
+//	**需要登录**；结果按 archive id 缓存 600 秒
+func (c *MarketServiceHTTPClientImpl) PurchaseInfo(ctx context.Context, in *PurchaseInfoRequest, opts ...http.CallOption) (*PurchaseInfoReply, error) {
+	var out PurchaseInfoReply
+	pattern := "/v1/market/purchase/info"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServicePurchaseInfo))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

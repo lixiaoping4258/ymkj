@@ -40,6 +40,8 @@ var ProviderSet = wire.NewSet(
 	NewPurchaseFaceRepo,
 	NewSaleFaceRepo,
 	NewStockRepo,
+	NewArchiveRepo,
+	NewRawRedisCache,
 	NewAppFlags,
 )
 

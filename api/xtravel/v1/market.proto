@@ -3,6 +3,8 @@ syntax = "proto3";
 package xtravel.v1;
 
 import "google/api/annotations.proto";
+// google.protobuf.Value 用在 PurchaseInfoReply.images 上
+import "google/protobuf/struct.proto";
 // RawData 定义在 common.proto（同属 xtravel.v1 包，但 protoc 仍要求显式 import）。
 //
 // ⚠️ 路径必须与生成脚本传给 protoc 的 target 形式**完全一致**（都是相对项目根的
@@ -72,6 +74,31 @@ service MarketService {
   rpc StockLookAll(StockLookAllRequest) returns (StockLookAllReply) {
     option (google.api.http) = {get: "/v1/market/stock/lookall"};
   }
+
+  // 藏品封面（档案基础信息）
+  // 原: PurchaseController::purchaseInfo -> MarketListPurchaseLogic::getArchive
+  //     **需要登录**；结果按 archive id 缓存 600 秒
+  rpc PurchaseInfo(PurchaseInfoRequest) returns (PurchaseInfoReply) {
+    option (google.api.http) = {get: "/v1/market/purchase/info"};
+  }
+}
+
+message PurchaseInfoRequest {
+  // 查询参数 id（原 validate 规则是 require，缺失会返回"档案ID不能为空"）
+  string id = 1 [json_name = "id"];
+}
+
+message PurchaseInfoReply {
+  int64 id = 1 [json_name = "id"];
+  // ⚠️ 这一列是 varchar，PHP 输出的是**字符串** "116" 而不是数字
+  string collection_id = 2 [json_name = "collection_id"];
+  string name = 3 [json_name = "name"];
+  // images 在 DB 里是 json 字符串，PHP 会解码；解码失败时是 null，
+  // 所以用 Value 承载（普通 repeated string 在未设置时会输出 []，与 null 不同）
+  google.protobuf.Value images = 4 [json_name = "images"];
+  string issuer = 5 [json_name = "issuer"];
+  string platform_name = 6 [json_name = "platform_name"];
+  int64 platform_id = 7 [json_name = "platform_id"];
 }
 
 message StockLookAllRequest {}
