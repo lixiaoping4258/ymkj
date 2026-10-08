@@ -63,7 +63,7 @@ func (r SaleFaceRow) ToMap() map[string]any {
 		"name":          r.Name,
 		"images":        decodeImages(r.Images),
 		"issuer":        r.Issuer,
-		"issuer_time":   formatDBTime(r.IssuerTime),
+		"issuer_time":   formatDBTimeAny(r.IssuerTime),
 		"sale_amount":   r.SaleAmount,
 		"low_price":     derefStr(r.LowPrice),
 		"max_price":     derefStr(r.MaxPrice),

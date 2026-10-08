@@ -261,17 +261,12 @@ func decodeImages(s *string) any {
 	return v
 }
 
-// formatDBTime 把 DB 的 datetime 输出成 PHP 的 'Y-m-d H:i:s'。
+// formatDBTime 已删除。
 //
-// 必须走 time.Time 再格式化：DSN 里开了 parseTime=True，
-// 驱动会把 datetime 转成 time.Time；若直接 Scan 进 string，
-// database/sql 会用 RFC3339 格式化成 "2026-04-17T17:39:39+08:00"，与 PHP 不一致。
-func formatDBTime(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format("2006-01-02 15:04:05")
-}
+// 它把 NULL 输出成空串，而 PHP 对 NULL datetime 输出 null —— 契约破坏。
+// 它在 purchase.go 和 sale.go 各被误用了一处，都改成了 formatDBTimeAny。
+// 留着这个函数只会被再次误用，所以删除。真需要"NULL 变空串"的场景
+// 应该在调用处显式写清楚原因，而不是靠一个泛用函数默默给出错误答案。
 
 func derefStr(p *string) string {
 	if p == nil {
