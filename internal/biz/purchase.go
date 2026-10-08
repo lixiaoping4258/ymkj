@@ -66,12 +66,17 @@ type PurchaseFaceRow struct {
 //  3. images 是 json 字符串时解码成数组；解码失败按 PHP 的 json_decode 行为得到 null
 func (r PurchaseFaceRow) ToMap() map[string]any {
 	m := map[string]any{
-		"id":              r.ID,
-		"archive_id":      r.ArchiveID,
-		"name":            r.Name,
-		"images":          decodeImages(r.Images),
-		"issuer":          r.Issuer,
-		"issuer_time":     formatDBTime(r.IssuerTime),
+		"id":         r.ID,
+		"archive_id": r.ArchiveID,
+		"name":       r.Name,
+		"images":     decodeImages(r.Images),
+		"issuer":     r.Issuer,
+		// ⚠️ 必须用 formatDBTimeAny（NULL -> JSON null），不能用 formatDBTime（NULL -> ""）。
+		// x_app_archive.issuer_time 是 datetime **NULLABLE**，实测 149 行里有 2 行为 NULL。
+		// PHP 的 toArray() 对 NULL datetime 给的是 null，json_encode 出来就是 null。
+		// 用 formatDBTime 会输出空串 —— 类型从 null 变字符串，是静默的契约破坏。
+		// （PurchaseStateRow.ToMap 里一开始就用对了，这里是漏改。）
+		"issuer_time":     formatDBTimeAny(r.IssuerTime),
 		"purchase_amount": r.PurchaseAmount,
 		"platform_name":   r.PlatformName,
 	}
