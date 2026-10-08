@@ -29,6 +29,7 @@ const (
 	MarketService_SaleInfo_FullMethodName          = "/xtravel.v1.MarketService/SaleInfo"
 	MarketService_ShowTotalAmount_FullMethodName   = "/xtravel.v1.MarketService/ShowTotalAmount"
 	MarketService_PurchaseOut_FullMethodName       = "/xtravel.v1.MarketService/PurchaseOut"
+	MarketService_PurchaseOn_FullMethodName        = "/xtravel.v1.MarketService/PurchaseOn"
 )
 
 // MarketServiceClient is the client API for MarketService service.
@@ -118,6 +119,20 @@ type MarketServiceClient interface {
 	//
 	//	还有一次**分页之后**的过滤；COMPLETE 分支没有那次过滤。
 	PurchaseOut(ctx context.Context, in *PurchaseOutRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 兑换中列表（state=WANTED）
+	// 原: PurchaseController::salesOn -> PurchaseStateLists(['state'=>'WANTED'])
+	//
+	//	需要登录
+	//
+	// ⚠️ 与 purchase/out 的两处差异：
+	//  1. 排序不同：unit_price DESC, grab_time ASC, create_time ASC, id DESC
+	//  2. **分页之后**会过滤掉 available_amount <= 0 的行 ——
+	//     所以返回行数可能少于 page_size，而 count() 不做这个过滤，
+	//     **count 与 lists 天然对不上**（原实现行为，刻意保持）
+	//
+	// 原实现还挂了 stale-while-revalidate 缓存（逻辑过期 5s / 物理 15s / 重建锁 5s），
+	// 本批**未接**，每次直查。功能正确，少了缓存。
+	PurchaseOn(ctx context.Context, in *PurchaseOnRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type marketServiceClient struct {
@@ -228,6 +243,16 @@ func (c *marketServiceClient) PurchaseOut(ctx context.Context, in *PurchaseOutRe
 	return out, nil
 }
 
+func (c *marketServiceClient) PurchaseOn(ctx context.Context, in *PurchaseOnRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, MarketService_PurchaseOn_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketServiceServer is the server API for MarketService service.
 // All implementations must embed UnimplementedMarketServiceServer
 // for forward compatibility.
@@ -315,6 +340,20 @@ type MarketServiceServer interface {
 	//
 	//	还有一次**分页之后**的过滤；COMPLETE 分支没有那次过滤。
 	PurchaseOut(context.Context, *PurchaseOutRequest) (*RawData, error)
+	// 兑换中列表（state=WANTED）
+	// 原: PurchaseController::salesOn -> PurchaseStateLists(['state'=>'WANTED'])
+	//
+	//	需要登录
+	//
+	// ⚠️ 与 purchase/out 的两处差异：
+	//  1. 排序不同：unit_price DESC, grab_time ASC, create_time ASC, id DESC
+	//  2. **分页之后**会过滤掉 available_amount <= 0 的行 ——
+	//     所以返回行数可能少于 page_size，而 count() 不做这个过滤，
+	//     **count 与 lists 天然对不上**（原实现行为，刻意保持）
+	//
+	// 原实现还挂了 stale-while-revalidate 缓存（逻辑过期 5s / 物理 15s / 重建锁 5s），
+	// 本批**未接**，每次直查。功能正确，少了缓存。
+	PurchaseOn(context.Context, *PurchaseOnRequest) (*RawData, error)
 	mustEmbedUnimplementedMarketServiceServer()
 }
 
@@ -354,6 +393,9 @@ func (UnimplementedMarketServiceServer) ShowTotalAmount(context.Context, *ShowTo
 }
 func (UnimplementedMarketServiceServer) PurchaseOut(context.Context, *PurchaseOutRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method PurchaseOut not implemented")
+}
+func (UnimplementedMarketServiceServer) PurchaseOn(context.Context, *PurchaseOnRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method PurchaseOn not implemented")
 }
 func (UnimplementedMarketServiceServer) mustEmbedUnimplementedMarketServiceServer() {}
 func (UnimplementedMarketServiceServer) testEmbeddedByValue()                       {}
@@ -556,6 +598,24 @@ func _MarketService_PurchaseOut_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketService_PurchaseOn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurchaseOnRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).PurchaseOn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_PurchaseOn_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).PurchaseOn(ctx, req.(*PurchaseOnRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketService_ServiceDesc is the grpc.ServiceDesc for MarketService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -602,6 +662,10 @@ var MarketService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PurchaseOut",
 			Handler:    _MarketService_PurchaseOut_Handler,
+		},
+		{
+			MethodName: "PurchaseOn",
+			Handler:    _MarketService_PurchaseOn_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

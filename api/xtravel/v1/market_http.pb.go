@@ -24,6 +24,7 @@ const OperationMarketServiceGetPayWay = "/xtravel.v1.MarketService/GetPayWay"
 const OperationMarketServiceGetSaleCategories = "/xtravel.v1.MarketService/GetSaleCategories"
 const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseIndex"
 const OperationMarketServicePurchaseInfo = "/xtravel.v1.MarketService/PurchaseInfo"
+const OperationMarketServicePurchaseOn = "/xtravel.v1.MarketService/PurchaseOn"
 const OperationMarketServicePurchaseOut = "/xtravel.v1.MarketService/PurchaseOut"
 const OperationMarketServiceSaleIndex = "/xtravel.v1.MarketService/SaleIndex"
 const OperationMarketServiceSaleInfo = "/xtravel.v1.MarketService/SaleInfo"
@@ -55,6 +56,19 @@ type MarketServiceHTTPServer interface {
 	// 原: PurchaseController::purchaseInfo -> MarketListPurchaseLogic::getArchive
 	//     **需要登录**；结果按 archive id 缓存 600 秒
 	PurchaseInfo(context.Context, *PurchaseInfoRequest) (*PurchaseInfoReply, error)
+	// PurchaseOn 兑换中列表（state=WANTED）
+	// 原: PurchaseController::salesOn -> PurchaseStateLists(['state'=>'WANTED'])
+	//     需要登录
+	//
+	// ⚠️ 与 purchase/out 的两处差异：
+	//   1. 排序不同：unit_price DESC, grab_time ASC, create_time ASC, id DESC
+	//   2. **分页之后**会过滤掉 available_amount <= 0 的行 ——
+	//      所以返回行数可能少于 page_size，而 count() 不做这个过滤，
+	//      **count 与 lists 天然对不上**（原实现行为，刻意保持）
+	//
+	// 原实现还挂了 stale-while-revalidate 缓存（逻辑过期 5s / 物理 15s / 重建锁 5s），
+	// 本批**未接**，每次直查。功能正确，少了缓存。
+	PurchaseOn(context.Context, *PurchaseOnRequest) (*RawData, error)
 	// PurchaseOut 兑换售出列表（state=COMPLETE）
 	// 原: PurchaseController::salesOut -> PurchaseStateLists(['state'=>'COMPLETE'])
 	//     需要登录；结果按参数 md5 缓存 10 秒（简单 TTL，无锁）
@@ -109,6 +123,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/sales/info", _MarketService_SaleInfo0_HTTP_Handler(srv))
 	r.GET("/v1/market/purchase/showTotalAmount", _MarketService_ShowTotalAmount0_HTTP_Handler(srv))
 	r.GET("/v1/market/purchase/out", _MarketService_PurchaseOut0_HTTP_Handler(srv))
+	r.GET("/v1/market/purchase/on", _MarketService_PurchaseOn0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -301,6 +316,25 @@ func _MarketService_PurchaseOut0_HTTP_Handler(srv MarketServiceHTTPServer) func(
 	}
 }
 
+func _MarketService_PurchaseOn0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in PurchaseOnRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServicePurchaseOn)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.PurchaseOn(ctx, req.(*PurchaseOnRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -326,6 +360,19 @@ type MarketServiceHTTPClient interface {
 	// 原: PurchaseController::purchaseInfo -> MarketListPurchaseLogic::getArchive
 	//     **需要登录**；结果按 archive id 缓存 600 秒
 	PurchaseInfo(ctx context.Context, req *PurchaseInfoRequest, opts ...http.CallOption) (rsp *PurchaseInfoReply, err error)
+	// PurchaseOn 兑换中列表（state=WANTED）
+	// 原: PurchaseController::salesOn -> PurchaseStateLists(['state'=>'WANTED'])
+	//     需要登录
+	//
+	// ⚠️ 与 purchase/out 的两处差异：
+	//   1. 排序不同：unit_price DESC, grab_time ASC, create_time ASC, id DESC
+	//   2. **分页之后**会过滤掉 available_amount <= 0 的行 ——
+	//      所以返回行数可能少于 page_size，而 count() 不做这个过滤，
+	//      **count 与 lists 天然对不上**（原实现行为，刻意保持）
+	//
+	// 原实现还挂了 stale-while-revalidate 缓存（逻辑过期 5s / 物理 15s / 重建锁 5s），
+	// 本批**未接**，每次直查。功能正确，少了缓存。
+	PurchaseOn(ctx context.Context, req *PurchaseOnRequest, opts ...http.CallOption) (rsp *RawData, err error)
 	// PurchaseOut 兑换售出列表（state=COMPLETE）
 	// 原: PurchaseController::salesOut -> PurchaseStateLists(['state'=>'COMPLETE'])
 	//     需要登录；结果按参数 md5 缓存 10 秒（简单 TTL，无锁）
@@ -456,6 +503,32 @@ func (c *MarketServiceHTTPClientImpl) PurchaseInfo(ctx context.Context, in *Purc
 	pattern := "/v1/market/purchase/info"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServicePurchaseInfo))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PurchaseOn 兑换中列表（state=WANTED）
+// 原: PurchaseController::salesOn -> PurchaseStateLists(['state'=>'WANTED'])
+//
+//	需要登录
+//
+// ⚠️ 与 purchase/out 的两处差异：
+//  1. 排序不同：unit_price DESC, grab_time ASC, create_time ASC, id DESC
+//  2. **分页之后**会过滤掉 available_amount <= 0 的行 ——
+//     所以返回行数可能少于 page_size，而 count() 不做这个过滤，
+//     **count 与 lists 天然对不上**（原实现行为，刻意保持）
+//
+// 原实现还挂了 stale-while-revalidate 缓存（逻辑过期 5s / 物理 15s / 重建锁 5s），
+// 本批**未接**，每次直查。功能正确，少了缓存。
+func (c *MarketServiceHTTPClientImpl) PurchaseOn(ctx context.Context, in *PurchaseOnRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/market/purchase/on"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServicePurchaseOn))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

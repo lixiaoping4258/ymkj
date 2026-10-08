@@ -333,3 +333,28 @@ func (s *MarketService) PurchaseOut(ctx context.Context, in *v1.PurchaseOutReque
 	}
 	return &v1.RawData{Json: raw}, nil
 }
+
+// PurchaseOn 对应 PurchaseController::salesOn（state=WANTED）。
+//
+// 原实现比 salesOut 复杂：套了一层 stale-while-revalidate 缓存
+// （逻辑过期 5s + 物理 TTL 15s + 重建锁 5s，没抢到锁就用旧值顶着）。
+// 本批**未接缓存**，直接查库；业务行为（含分页后过滤）与原实现一致。
+//
+// 与 PurchaseOut 的区别只有 state —— 两者共用同一个 usecase，
+// state 决定 where 分支、order by、以及是否做分页后过滤。
+func (s *MarketService) PurchaseOn(ctx context.Context, in *v1.PurchaseOnRequest) (*v1.RawData, error) {
+	q := url.Values{}
+	if h, ok := ctx.(khttp.Context); ok && h.Request() != nil {
+		q = h.Request().URL.Query()
+	}
+	page := biz.ParsePageParams(q)
+
+	raw, err := s.purchaseState.List(ctx, biz.MktPurchaseStateWanted, in.GetId(), page)
+	if err != nil {
+		if errors.Is(err, biz.ErrPurchaseListNotFound) {
+			return nil, httpx.Fail("记录不存在")
+		}
+		return nil, bizFail(err)
+	}
+	return &v1.RawData{Json: raw}, nil
+}
