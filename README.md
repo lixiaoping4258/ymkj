@@ -271,6 +271,11 @@ Where("user_id = ? AND state = ?", userID, state)
 
 **📌 待办一：`salesOn` 已实现缓存击穿防护，`salesOut` 没有**
 
+> ✅ **已实现 helper**：`biz/stalecache.go` + `biz/stalecache_test.go`（8 条单测）。
+> `StaleCache.Serve()` 逐行对照下面这段 `salesOn` 的控制流。
+> ⚠️ 但它**目前还没有被任何接口使用** —— 第一个消费者是 `purchase/on`（`salesOn`），
+> 而那个接口依赖的 `PurchaseStateLists` 比较复杂（见待办二），所以分两批做。
+
 `PurchaseController::salesOn` 里是一套完整的 **stale-while-revalidate**：
 逻辑过期 5 秒 + 物理 TTL 15 秒 + 重建锁 5 秒。
 
