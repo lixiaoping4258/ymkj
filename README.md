@@ -72,20 +72,28 @@ ok  github.com/lixiaoping4258/ymkj/internal/biz
 ## 二、快速开始
 
 ```bash
-# 1. 配置：复制并填入真实连接信息
-cp configs/config.yaml configs/config.local.yaml     # 后者已 gitignore
+# 1. 配置：直接从 xTravel 的 .env 生成（含真实凭据，产物已 gitignore）
+./scripts/gen-config.ps1          # Windows
+make gen-config
 
 # 2. 生成代码（改了 .proto 之后）
-./scripts/gen.ps1            # Windows
-make api                     # Linux/macOS
+./scripts/gen.ps1                 # Windows
+make api                          # Linux/macOS
 
 # 3. 生成依赖注入（改了构造函数签名之后）
 wire ./cmd/xtravel
 
 # 4. 跑
 go run ./cmd/xtravel -conf configs/config.local.yaml
-curl http://127.0.0.1:18000/v1/common/config
+
+# 5. 端到端冒烟（22 项，覆盖信封/鉴权/字段类型）
+./scripts/smoke.ps1
 ```
+
+**不要手工拼 `configs/config.local.yaml` 的 DSN。** 用 `gen-config.ps1`，
+它把两个已经踩过的坑固化在代码里（见第九节）：PowerShell 的
+`"$db?charset"` 变量名陷阱、以及 `Set-Content -Encoding utf8` 写 BOM 的问题。
+脚本写完还会回读校验一遍 DSN 结构。
 
 `configs/config.local.yaml` 含明文数据库密码，**已在 .gitignore 中排除**，不要提交。
 
@@ -120,7 +128,10 @@ internal/
   pkg/httpx/                     ★ 响应信封（协议兼容核心）
   pkg/pbconv/                    Go 值 <-> protobuf.Value
 third_party/                     protoc 依赖的 google/api 等 proto
-scripts/gen.ps1                  Windows 代码生成
+scripts/
+  gen.ps1                        生成 proto 代码
+  gen-config.ps1                 ★ 从 .env 生成 config.local.yaml（避开两个已知坑）
+  smoke.ps1                      ★ 端到端冒烟测试（22 项断言）
 ```
 
 **分层铁律**：`service` 只做协议转换，业务判断全在 `biz`；

@@ -10,14 +10,35 @@ LDFLAGS      := -X main.Version=$(VERSION)
 
 .PHONY: help
 help:
-	@echo "make init      安装 protoc 插件和工具链"
-	@echo "make api       生成 proto 代码（Windows 用 scripts/gen.ps1）"
-	@echo "make wire      生成依赖注入代码"
-	@echo "make build     编译到 bin/"
-	@echo "make run       本地运行（用 configs/config.local.yaml）"
-	@echo "make test      跑单元测试"
-	@echo "make lint      静态检查"
-	@echo "make fmt       格式化"
+	@echo "make init        安装 protoc 插件和工具链"
+	@echo "make gen-config  从 xTravel 的 .env 生成 configs/config.local.yaml"
+	@echo "make api         生成 proto 代码（Windows 用 scripts/gen.ps1）"
+	@echo "make wire        生成依赖注入代码"
+	@echo "make build       编译到 bin/"
+	@echo "make run         本地运行（用 configs/config.local.yaml）"
+	@echo "make test        跑单元测试"
+	@echo "make smoke       对运行中的实例做端到端冒烟测试"
+	@echo "make lint        静态检查"
+	@echo "make fmt         格式化"
+
+.PHONY: gen-config
+gen-config:
+ifeq ($(GOHOSTOS), windows)
+	powershell -ExecutionPolicy Bypass -File ./scripts/gen-config.ps1
+else
+	@echo "gen-config.ps1 是 PowerShell 脚本，非 Windows 请手工写 configs/config.local.yaml"
+	@echo "参考 configs/config.yaml 的字段，注意 DSN 格式与 x_ 表前缀"
+	false
+endif
+
+.PHONY: smoke
+smoke:
+ifeq ($(GOHOSTOS), windows)
+	powershell -ExecutionPolicy Bypass -File ./scripts/smoke.ps1
+else
+	@echo "smoke.ps1 是 PowerShell 脚本"
+	false
+endif
 
 .PHONY: init
 init:
