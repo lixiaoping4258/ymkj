@@ -5,6 +5,7 @@ import (
 
 	v1 "github.com/lixiaoping4258/ymkj/api/xtravel/v1"
 	"github.com/lixiaoping4258/ymkj/internal/biz"
+	"github.com/lixiaoping4258/ymkj/internal/pkg/pbconv"
 )
 
 // UserService 对应原项目 app/api/controller/v1/user/UserController.php。
@@ -40,16 +41,19 @@ func (s *UserService) GetUserInfo(ctx context.Context, _ *v1.GetUserInfoRequest)
 		return &v1.GetUserInfoReply{}, nil
 	}
 	return &v1.GetUserInfoReply{
-		Id:          profile.ID,
-		Sn:          profile.Sn,
-		Sex:         profile.Sex,
-		Nickname:    profile.Nickname,
-		RealName:    profile.RealName,
-		Avatar:      profile.Avatar,
-		Mobile:      profile.Mobile,
-		CreateTime:  profile.CreateTime,
-		UserMoney:   profile.UserMoney,
-		OptPwd:      profile.OptPwd,
+		Id:         profile.ID,
+		Sn:         profile.Sn,
+		Sex:        profile.Sex,
+		Nickname:   profile.Nickname,
+		RealName:   profile.RealName,
+		Avatar:     profile.Avatar,
+		Mobile:     profile.Mobile,
+		CreateTime: profile.CreateTime,
+		// 可空字段用 StringValue：nil -> null，非 nil -> 字符串。
+		// 直接赋 string 会把 NULL 变成 ""，与 PHP 的 null 不一致
+		// （实测 1365 个用户里 1277 个 opt_pwd 是 NULL）。
+		UserMoney:   pbconv.StringValue(profile.UserMoney),
+		OptPwd:      pbconv.StringValue(profile.OptPwd),
 		HasPassword: profile.HasPassword,
 		HasOptPwd:   profile.HasOptPwd,
 		IsReal:      profile.IsReal,

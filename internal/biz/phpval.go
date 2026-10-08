@@ -2,6 +2,7 @@ package biz
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 )
 
@@ -135,4 +136,49 @@ func DecodeConfigValue(v any) any {
 		return decoded
 	}
 	return s
+}
+
+// PhpLooseEqualsInt 复刻 PHP 的宽松比较 `$value == $n`（n 是整数）。
+//
+// 用在 TradeConfigService 的开关判断上：
+//
+//	if ($tradeSwitchCheck['tradeSwitch'] == 1 && $tradeSwitchCheck['isOpen'] != 1)
+//
+// tradeSwitch 来自 ConfigService::get，类型不确定（可能 int 1、字符串 "1"、
+// 或 json_decode 出来的 float64 1）。PHP 的 == 对它们都判真，
+// Go 里用 == 就只认 int，会把「开关已打开」误判成关闭。
+//
+// 注意这里只覆盖整数比较这一种用法，不是完整的 PHP 比较表
+// （PHP 8 改过字符串与数字比较的规则，完整复刻是个无底洞且没必要）。
+func PhpLooseEqualsInt(v any, want int64) bool {
+	switch t := v.(type) {
+	case nil:
+		return false
+	case bool:
+		if t {
+			return want == 1
+		}
+		return want == 0
+	case int:
+		return int64(t) == want
+	case int32:
+		return int64(t) == want
+	case int64:
+		return t == want
+	case uint64:
+		return int64(t) == want
+	case float32:
+		return float64(t) == float64(want)
+	case float64:
+		return t == float64(want)
+	case string:
+		// 数字字符串按数字比较（"1" == 1 为真）
+		f, err := strconv.ParseFloat(strings.TrimSpace(t), 64)
+		if err != nil {
+			return false
+		}
+		return f == float64(want)
+	default:
+		return false
+	}
 }

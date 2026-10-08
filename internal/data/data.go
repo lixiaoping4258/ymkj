@@ -33,6 +33,9 @@ var ProviderSet = wire.NewSet(
 	wire.Bind(new(biz.UserBriefRepo), new(*userRepo)),
 	NewUserSessionRepo,
 	NewUserTokenCache,
+	// 锁的键与 PHP 共用（不加隔离前缀），见 data/lock.go 的说明
+	NewRedisLocker,
+	NewMarketPurchaseRepo,
 )
 
 // gormWriter 把 GORM 的 SQL 日志转接到 Kratos 的 logger。

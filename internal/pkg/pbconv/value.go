@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // ToValue 把任意 Go 值转成 google.protobuf.Value。
@@ -24,4 +25,18 @@ func ToValue(v any) *structpb.Value {
 		return structpb.NewStringValue(fmt.Sprintf("%v", v))
 	}
 	return pv
+}
+
+// StringValue 把可空字符串转成 wrapperspb.StringValue。
+//
+// nil -> 返回 nil（protojson 会输出 null）
+// 非 nil -> 返回包装值（protojson 输出字符串）
+//
+// 用它是因为原项目有些列可空，PHP 的 json_encode 会输出 null，
+// 而 proto3 的普通 string 字段永远是 ""，区分不出 NULL。
+func StringValue(p *string) *wrapperspb.StringValue {
+	if p == nil {
+		return nil
+	}
+	return wrapperspb.String(*p)
 }

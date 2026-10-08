@@ -14,12 +14,15 @@
 package httpx
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"reflect"
 
 	"github.com/go-kratos/kratos/v2/errors"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // 业务码。注意与 Kratos/HTTP 的语义相反。
@@ -59,20 +62,143 @@ func marshalData(v any) (json.RawMessage, error) {
 		return json.RawMessage("[]"), nil
 	}
 	if m, ok := v.(proto.Message); ok {
-		b, err := protojson.MarshalOptions{
-			EmitUnpopulated: true,
-			UseProtoNames:   false, // 输出 lowerCamelCase，和 PHP 侧一致
-		}.Marshal(m)
-		if err != nil {
-			return nil, err
-		}
-		return json.RawMessage(b), nil
+		return marshalProto(m)
+	}
+	// 切片：原项目有不少接口的 data 就是**顶层数组**（例如支付方式列表），
+	// 而 Kratos 的 reply 是 message，天然会被包成 {"data":{...}}。
+	// 所以这里对 []*SomeReply 这类切片逐个用 protojson 序列化再拼成 JSON 数组，
+	// 保证 data 的 JSON 形态仍是数组。
+	if arr, err, handled := marshalProtoSlice(v); handled {
+		return arr, err
 	}
 	b, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
 	return json.RawMessage(b), nil
+}
+
+func marshalProto(m proto.Message) (json.RawMessage, error) {
+	b, err := protojson.MarshalOptions{
+		EmitUnpopulated: true,
+		UseProtoNames:   false, // json_name 已在 .proto 里逐个显式指定
+	}.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	return unquoteInt64(m, b)
+}
+
+// is64BitInt 判断 proto 标量类型在 JSON 里会被序列化成字符串。
+func is64BitInt(k protoreflect.Kind) bool {
+	switch k {
+	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind,
+		protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+		return true
+	default:
+		return false
+	}
+}
+
+func isMessageKind(k protoreflect.Kind) bool {
+	return k == protoreflect.MessageKind || k == protoreflect.GroupKind
+}
+
+// unquoteInt64 把 proto3 JSON 里的 64 位整数字符串还原成 JSON 数字。
+//
+// 为什么必须做：proto3 的 JSON 映射**规定** int64/uint64/sint64/fixed64 等
+// 序列化成字符串（为了避开 JavaScript 2^53 的精度问题）。但原项目
+// `json_encode` 对 PHP int 输出的是**数字**：
+//
+//	{"id":61089517,"sn":178056289917980,"create_time":1783678044}
+//
+// 前端只要做了 `===` 比较或算术运算，字符串就会坏掉。
+// 已用真实 PHP（复刻 ThinkPHP 的 PDO 参数：STRINGIFY_FETCHES=false、
+// EMULATE_PREPARES=false）实测确认过这一点。
+//
+// 这里按 **protoreflect 的字段类型**精确匹配，而不是对输出做字符串替换 ——
+// 后者会把同样长得像数字的普通字符串字段（比如 user_money 的 "0.00"）一起误伤。
+func unquoteInt64(m proto.Message, raw []byte) (json.RawMessage, error) {
+	var v any
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+	fixInt64Fields(m.ProtoReflect(), v)
+	out, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(out), nil
+}
+
+// fixInt64Fields 递归地把 64 位整数字段从字符串改成 json.Number。
+func fixInt64Fields(md protoreflect.Message, v any) {
+	obj, ok := v.(map[string]any)
+	if !ok {
+		// 不是对象（例如 google.protobuf.Value 装的是标量），无需处理
+		return
+	}
+	fields := md.Descriptor().Fields()
+	for i := 0; i < fields.Len(); i++ {
+		fd := fields.Get(i)
+		key := fd.JSONName()
+		val, present := obj[key]
+		if !present {
+			continue
+		}
+		switch {
+		case is64BitInt(fd.Kind()):
+			if s, ok := val.(string); ok {
+				obj[key] = json.Number(s)
+			}
+		case fd.IsMap():
+			// 本项目暂无 map<_, message> 字段；真要用到再补
+		case fd.IsList() && isMessageKind(fd.Kind()):
+			arr, ok := val.([]any)
+			if !ok {
+				continue
+			}
+			list := md.Get(fd).List()
+			for j := 0; j < len(arr) && j < list.Len(); j++ {
+				fixInt64Fields(list.Get(j).Message(), arr[j])
+			}
+		case isMessageKind(fd.Kind()):
+			// 未设置的 message 字段在这里是 null，walk 进去也拿不到 map，是安全的
+			fixInt64Fields(md.Get(fd).Message(), val)
+		}
+	}
+}
+
+// marshalProtoSlice 处理「元素是 proto.Message 的切片」。
+// 第二个返回值是错误，第三个表示是否已处理。
+func marshalProtoSlice(v any) (json.RawMessage, error, bool) {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Slice {
+		return nil, nil, false
+	}
+	n := rv.Len()
+	parts := make([]json.RawMessage, 0, n)
+	for i := 0; i < n; i++ {
+		el := rv.Index(i).Interface()
+		m, ok := el.(proto.Message)
+		if !ok {
+			// 只要有一个元素不是 proto 消息，就交给通用 json 处理，
+			// 避免出现半 proto 半原生 的怪异结果
+			return nil, nil, false
+		}
+		b, err := marshalProto(m)
+		if err != nil {
+			return nil, err, true
+		}
+		parts = append(parts, b)
+	}
+	out, err := json.Marshal(parts)
+	if err != nil {
+		return nil, err, true
+	}
+	return out, nil, true
 }
 
 func writeEnvelope(w http.ResponseWriter, code, show int, msg string, data any) error {

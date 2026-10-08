@@ -6,17 +6,19 @@ package model
 // datetime 列用的，而这里是 int unsigned NULL，对不上，所以不用 GORM 的软删除，
 // 改在查询里显式加 `delete_time IS NULL`。
 type User struct {
-	ID         uint64  `gorm:"column:id;primaryKey"`
-	Sn         uint64  `gorm:"column:sn"`
-	Sex        int32   `gorm:"column:sex"`
-	Nickname   string  `gorm:"column:nickname"`
-	RealName   string  `gorm:"column:real_name"`
-	Avatar     string  `gorm:"column:avatar"`
-	Mobile     string  `gorm:"column:mobile"`
-	CreateTime uint64  `gorm:"column:create_time"`
-	UserMoney  string  `gorm:"column:user_money"` // decimal(10,2)，PHP 输出字符串
-	Password   string  `gorm:"column:password"`
-	OptPwd     string  `gorm:"column:opt_pwd"`
+	ID         uint64 `gorm:"column:id;primaryKey"`
+	Sn         uint64 `gorm:"column:sn"`
+	Sex        int32  `gorm:"column:sex"`
+	Nickname   string `gorm:"column:nickname"`
+	RealName   string `gorm:"column:real_name"`
+	Avatar     string `gorm:"column:avatar"`
+	Mobile     string `gorm:"column:mobile"`
+	CreateTime uint64 `gorm:"column:create_time"`
+	// decimal(10,2) 且可空 —— 用指针才能区分 NULL 与 "0.00"
+	UserMoney *string `gorm:"column:user_money"`
+	Password  string  `gorm:"column:password"`
+	// 可空（实测 93% 的用户是 NULL）
+	OptPwd     *string `gorm:"column:opt_pwd"`
 	DeleteTime *uint64 `gorm:"column:delete_time"`
 }
 

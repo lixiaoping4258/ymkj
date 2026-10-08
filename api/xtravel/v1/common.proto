@@ -11,6 +11,11 @@ option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
 // 对应原项目 app/api/route/common.php + app/api/controller/v1/common/*。
 //
 // 路径保持 /v1/common/... 不变，前端无需改动。
+//
+// ⚠️ 本文件的 json_name 是 camelCase —— 因为原 PHP 源码里这些键就是
+// camelCase（'outFee'、'tradeSwitch'、'isOpen'…），不是 DB 列名。
+// 对比 user.proto：那边直接透传 DB 行，所以是 snake_case。
+// **每个字段都必须对着原 PHP 的实际输出确认，不能套用统一约定。**
 service CommonService {
   // 手续费/交易开关等基础配置
   // 原: ConfigController::index  (免登录)
@@ -32,50 +37,50 @@ message GetConfigReply {
   //
   // 用 google.protobuf.Value 是因为原项目这里的类型是不确定的 ——
   // ConfigService 会把 json 字符串 decode 成数组/标量，proto 定不了具体类型。
-  google.protobuf.Value out_fee = 1;
+  google.protobuf.Value out_fee = 1 [json_name = "outFee"];
 
   // ⚠️ 命名陷阱：原项目这个 key 叫 tradeSwitch，但它的值其实是
   //    TradeConfigService::checkTradeTime() 的**完整返回对象**，不是布尔开关。
   //    为了前端不改，这里保持原样。
-  TradeTimeStatus trade_switch = 2;
+  TradeTimeStatus trade_switch = 2 [json_name = "tradeSwitch"];
 
   // 求购/兑出限制  原: ConfigService::get('trade','buyOrSaleConfig')
-  google.protobuf.Value buy_or_sale_config = 3;
+  google.protobuf.Value buy_or_sale_config = 3 [json_name = "buyOrSaleConfig"];
 }
 
 // TradeTimeStatus 对应 app/common/service/TradeConfigService::checkTradeTime()
 message TradeTimeStatus {
   // 全局总开关。原: ConfigService::get('trade','tradeSwitch',0)
   // 注意原项目注释写「0=开启, 1=关闭」，与直觉相反。
-  google.protobuf.Value trade_switch = 1;
+  google.protobuf.Value trade_switch = 1 [json_name = "tradeSwitch"];
 
   // 当前是否开市 0/1
-  int32 is_open = 2;
+  int32 is_open = 2 [json_name = "isOpen"];
 
   // workday | holiday
-  string today_type = 3;
+  string today_type = 3 [json_name = "todayType"];
 
   // 工作日 | 节假日
-  string today_type_str = 4;
+  string today_type_str = 4 [json_name = "todayTypeStr"];
 
   // 当前适用的交易时段
-  repeated TradePeriod periods = 5;
+  repeated TradePeriod periods = 5 [json_name = "periods"];
 
   // 给前端展示的文案
-  string tips = 6;
+  string tips = 6 [json_name = "tips"];
 }
 
 message TradePeriod {
-  string start = 1;
-  string end = 2;
+  string start = 1 [json_name = "start"];
+  string end = 2 [json_name = "end"];
 }
 
 message GetTradeConfigRequest {}
 
 message GetTradeConfigReply {
   // 原: ConfigService::get('trade','switch')
-  google.protobuf.Value switch = 1;
+  google.protobuf.Value switch = 1 [json_name = "switch"];
 
   // 原: ConfigService::get('trade','limitTime')
-  google.protobuf.Value limit_time = 2;
+  google.protobuf.Value limit_time = 2 [json_name = "limitTime"];
 }

@@ -14,7 +14,8 @@
 |---|---|---|
 | **Stage 1** | Kratos 骨架、基础设施、协议兼容层、`v1/common` 垂直切片 | ✅ 完成并验证 |
 | **Stage 2** | 鉴权中间件、token 生命周期、`v1/user/info`、单元测试 | ✅ 完成并验证 |
-| Stage 3 | `market` 域（45 条路由，核心业务） | 待做 |
+| **Stage 3** | `market` 域第 1 批：`pay_way`、`check/exchange` + 契约修正 | 🔄 进行中（2/44 路由） |
+| Stage 3+ | `market` 域其余 42 条（含全部写操作） | 待做 |
 | Stage 4 | `wallet` / `payment` / `ticket` / `whitelist` | 待做 |
 | Stage 5 | `adminapi`（61 控制器，最大一块） | 待做 |
 | Stage 6 | `open` / `third` / 队列消费者 | 待做 |
@@ -67,6 +68,36 @@ ok  github.com/lixiaoping4258/ymkj/internal/biz
 **这些用例是「Go 有没有真的复刻 PHP」的唯一可回归证据**，
 改 `phpval.go` / `token.go` 之前先跑 `go test ./...`。
 
+### Stage 3 验证记录（market 域第 1 批）
+
+```
+GET /v1/market/pay_way           无 token  code=-403            ← market 接口需要登录
+GET /v1/market/pay_way           有 token  code=1
+    data = [{"pay_way":1,"pay_name":"茶交所"},{"pay_way":2,"pay_name":"陶交所"}]
+           ^^^^^^^^ 顶层数组，snake_case 键名
+
+GET /v1/market/check/exchange    有 token  code=0 show=1
+    msg = "当前不在兑换时间内，暂无法导入数字艺术品"
+```
+
+`check/exchange` 这条把三件事一次验穿：**2 秒防重复点击锁**（与 PHP 共用 Redis 键）
+→ **交易时段判断**（复用 Stage 1 的 `TradeConfigService`）→ **业务错误转 fail 信封**。
+当前时间 16:22 不在 09:30-11:30 内，所以按预期被拦下。
+
+**最重要的验证是与真实 PHP 逐字段比对**：
+
+```
+PHP: {"id":61089517,"sn":178056289917980,"create_time":1783678044,
+      "user_money":"0.00","opt_pwd":null,...}
+GO : {"id":61089517,"sn":178056289917980,"create_time":1783678044,
+      "user_money":"0.00","opt_pwd":null,...}
+
+键名完全一致 (15 个)          所有字段类型零差异
+```
+
+这次比对**抓出了三个 Stage 2 遗留的静默 bug**（见 4.1 节），
+说明"能跑通"和"契约一致"是两件事 —— 冒烟测试断言因此从 22 项加到 47 项。
+
 ---
 
 ## 二、快速开始
@@ -102,7 +133,9 @@ go run ./cmd/xtravel -conf configs/config.local.yaml
 ## 三、目录结构
 
 ```
-api/xtravel/v1/common.proto     API 定义（proto 是一等公民，不是文档）
+api/xtravel/v1/                 API 定义（proto 是一等公民，不是文档）
+  common.proto / user.proto / market.proto
+  envelope.go                   ★ 让部分 reply 以「顶层数组」作为 data
 cmd/xtravel/
   main.go                        装配 + 优雅退出
   wire.go                        wire 声明（wireinject 标签，不参与普通编译）
@@ -118,10 +151,14 @@ internal/
     trade.go                     TradeConfigService 的逐行对照实现
     token.go                     ★ LoginMiddleware + UserTokenService + UserTokenCache
     user.go                      UserLogic::info
+    market.go                    PurchaseController::payWay/checkExchange
+    errors.go                    BizError（可展示给用户的业务错误）
     *_test.go                    单测（PHP 语义回归 + token 生命周期）
   data/                          数据访问（GORM / Redis）
     token.go                     session 仓储 + token 缓存（键空间与 TP 隔离）
     user.go                      x_user / x_user_real / x_user_accounts
+    market.go                    x_market_purchase
+    lock.go                      ★ Redis 锁（键与 PHP **共用**，见下）
   service/                       协议转换层（proto <-> biz）
   server/                        HTTP 服务装配
     middleware.go                ★ 鉴权中间件（替代 LoginMiddleware）
@@ -161,6 +198,68 @@ scripts/
 > `httpx.CompatHTTPStatus` 控制是否强制 HTTP 200。
 > 现在为 `true`（兼容优先）。等前端切到新契约后改成 `false`，
 > 网关/监控才能看到真实的 HTTP 错误 —— 现在的代价是所有失败都"看起来是 200"。
+
+### 4.1 线上契约的四条规则（每个新接口都要过一遍）
+
+这四条是**逐接口**的，不能靠全局约定。每一条我都踩过一次，而且**全都是静默失败**
+（不报错，只是前端拿不到数据或算错），所以写在这里当检查清单。
+
+**① JSON 键名：camelCase 还是 snake_case，取决于原 PHP 怎么写**
+
+| 原 PHP 写法 | 键名 | 例子 |
+|---|---|---|
+| 手写数组 `['outFee' => ...]` | **camelCase** | `outFee` `tradeSwitch` `isOpen` `limitTime` |
+| `$model->toArray()` 透传 DB 行 | **snake_case** | `real_name` `create_time` `user_money` `has_password` |
+| 手写数组 `['pay_way' => ...]` | **snake_case** | `pay_way` `pay_name` |
+
+protojson 默认输出 camelCase，所以 **snake_case 的字段必须在 `.proto` 里逐个写
+`json_name`**：
+
+```proto
+string real_name = 5 [json_name = "real_name"];
+```
+
+漏写的后果：前端拿到 `realName`，取 `data.real_name` 得到 undefined。
+
+**② 64 位整数必须是 JSON 数字，不是字符串**
+
+proto3 的 JSON 映射**规定** int64/uint64 序列化成**字符串**（为避开 JS 2^53 精度问题）。
+但 PHP 的 `json_encode` 对 PHP int 输出**数字**。实测原 PHP：
+
+```json
+{"id":61089517,"sn":178056289917980,"create_time":1783678044}
+```
+
+已在 `httpx.unquoteInt64` 里用 protoreflect **按字段类型**还原成数字
+（不做字符串替换 —— 那会误伤 `user_money` 这种"长得像数字的字符串"）。
+
+**③ 可空列必须是 `null`，不是 `""`**
+
+proto3 的普通 `string` 字段永远是 `""`，区分不出 NULL。用
+`google.protobuf.StringValue`：字段不设置 → `null`，设置了 → 字符串。
+
+实例：`x_user.opt_pwd` 可空，实测 **1365 个用户里 1277 个是 NULL**（93%）。
+用普通 string 会让这 93% 的用户拿到 `""` 而不是 `null`。
+
+**④ `data` 是数组还是对象**
+
+原项目不少接口 `return $this->data([...])`，`data` 就是**顶层数组**；
+成功但无内容时是**空数组 `[]`** 而不是空对象 `{}`。
+
+Kratos 的 reply 是 message，默认会被包成 `{"data":{"items":[...]}}`。
+解决办法见 `api/xtravel/v1/envelope.go` —— 给 reply 加一个 `Envelope()` 方法
+（Go 的接口是结构化的，不需要 import httpx 就能满足 `httpx.Enveloper`）：
+
+```go
+func (r *GetPayWayReply) Envelope() (int, int, string, any) {
+    return 1, 0, "", r.GetItems()   // 把 items 摊出去，data 就成了数组
+}
+```
+
+**验证方式**：`scripts/smoke.ps1` 对这四条都有断言（47 项）。
+更好的办法是像 Stage 3 那样，**用真实 PHP 跑一遍同样的查询再逐字段比对** ——
+`PDO::ATTR_STRINGIFY_FETCHES=false` + `ATTR_EMULATE_PREPARES=false`，
+这样才知道 PHP 到底输出数字还是字符串。
 
 ---
 
@@ -250,6 +349,19 @@ if ($value === 0 || $value === '0') {...}   // 严格比较
 7. **登录签发（`setToken`）已实现但未接线。** 没有对应的 HTTP 接口 ——
    登录属于 user 域后续的工作。Stage 2 的目标是「能校验 PHP 签发的 token」，
    这个已经达成，两套系统可以并行跑。
+
+8. **Redis 前缀：缓存隔离，锁共用 —— 这两个决策是相反的，不是笔误。**
+
+   | 用途 | 前缀 | 为什么 |
+   |---|---|---|
+   | 缓存（`config:*`、`token_user_*`、`user:info:*`） | `xtravel:go:` **隔离** | 原实现走 `BaseCache::set` → `store()->tag()->set()`，存的是 ThinkPHP 的 tag 结构 + 序列化数据，Go 读不了 |
+   | 锁（`click:*`） | 无前缀，**与 PHP 共用** | 锁值只是个随机 token，`SET key val NX PX ms`，两边格式完全一致；而共用才能保证用户不会在新旧两套系统上各提交一次 |
+
+   加错方向的代价：缓存共用会读出乱码；锁隔离会让"防重复点击"在迁移期失效。
+
+9. **`market` 域只迁了 2/44 条路由，且都是只读。** 剩下的里有下单、支付、
+   兑换、划转等**涉及资金**的写操作，必须单独评估（幂等、并发、事务边界、
+   与 PHP 并存时的双写问题），不能顺手一起做。
 
 ---
 

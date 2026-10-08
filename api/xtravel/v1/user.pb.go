@@ -10,6 +10,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -60,11 +61,17 @@ func (*GetUserInfoRequest) Descriptor() ([]byte, []int) {
 
 // GetUserInfoReply 对应 UserLogic::info 组装出来的 $profile 数组。
 //
-// ⚠️ 字段名和类型必须和 PHP 的 json_encode 结果一致，否则前端解析会出问题。
-// 几个容易踩的点：
-//   - user_money 是 decimal(10,2)，ThinkPHP 输出的是**字符串** "0.00" 而不是数字
-//   - has_password / has_opt_pwd / is_real 是 boolean
-//   - user_code 查不到时是空字符串 ""
+// ⚠️⚠️ json_name 必须逐个显式指定，不能用 protojson 的默认 camelCase。
+//
+// 原因：原实现的 $profile 直接来自 `$user->toArray()`，键就是**数据库列名**，
+// 也就是 snake_case（real_name / create_time / user_money / has_password …）。
+// ThinkPHP 的 JsonService 不做任何键名转换就 json_encode 出去，
+// 所以线上契约是 snake_case。protojson 默认会把 real_name 输出成 realName，
+// 前端就拿不到字段 —— 这是静默的接口破坏，不会报错，只会显示为空。
+//
+// 教训：**命名规则是逐接口的**。项目里有的接口用 camelCase（见 common.proto
+// 的 outFee/tradeSwitch，因为 PHP 源码里就是那样写的），有的用 snake_case
+// （凡是直接透传 DB 行的地方）。所以每个字段都要对着原 PHP 的输出写死。
 type GetUserInfoReply struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -72,21 +79,26 @@ type GetUserInfoReply struct {
 	// 0 未知 / 1 男 / 2 女（原样透传）
 	Sex        int32  `protobuf:"varint,3,opt,name=sex,proto3" json:"sex,omitempty"`
 	Nickname   string `protobuf:"bytes,4,opt,name=nickname,proto3" json:"nickname,omitempty"`
-	RealName   string `protobuf:"bytes,5,opt,name=real_name,json=realName,proto3" json:"real_name,omitempty"`
+	RealName   string `protobuf:"bytes,5,opt,name=real_name,proto3" json:"real_name,omitempty"`
 	Avatar     string `protobuf:"bytes,6,opt,name=avatar,proto3" json:"avatar,omitempty"`
 	Mobile     string `protobuf:"bytes,7,opt,name=mobile,proto3" json:"mobile,omitempty"`
-	CreateTime uint64 `protobuf:"varint,8,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
-	// decimal 用字符串承载，对齐 PHP 的输出
-	UserMoney string `protobuf:"bytes,9,opt,name=user_money,json=userMoney,proto3" json:"user_money,omitempty"`
+	CreateTime uint64 `protobuf:"varint,8,opt,name=create_time,proto3" json:"create_time,omitempty"`
+	// decimal(10,2)。这一列声明为**可空**，NULL 时 PHP 输出 null；
+	// 正常值是字符串 "0.00"（ThinkPHP 对 decimal 输出字符串而不是数字）。
+	// 所以用 StringValue：字段不设置 -> null，设置了 -> 字符串。
+	// 用普通 string 的话 NULL 会变成 ""，类型和值都不对。
+	UserMoney *wrapperspb.StringValue `protobuf:"bytes,9,opt,name=user_money,proto3" json:"user_money,omitempty"`
 	// ⚠️ 原项目把 opt_pwd（支付密码哈希）**直接返回给前端**了（只 hidden 了 password）。
 	//
 	//	这是原系统的信息泄露问题，Go 版为兼容前端暂时保留，见 README 安全章节。
-	OptPwd        string        `protobuf:"bytes,10,opt,name=opt_pwd,json=optPwd,proto3" json:"opt_pwd,omitempty"`
-	HasPassword   bool          `protobuf:"varint,11,opt,name=has_password,json=hasPassword,proto3" json:"has_password,omitempty"`
-	HasOptPwd     bool          `protobuf:"varint,12,opt,name=has_opt_pwd,json=hasOptPwd,proto3" json:"has_opt_pwd,omitempty"`
-	IsReal        bool          `protobuf:"varint,13,opt,name=is_real,json=isReal,proto3" json:"is_real,omitempty"`
-	UserCode      string        `protobuf:"bytes,14,opt,name=user_code,json=userCode,proto3" json:"user_code,omitempty"`
-	UserCodeAuth  *UserCodeAuth `protobuf:"bytes,15,opt,name=user_code_auth,json=userCodeAuth,proto3" json:"user_code_auth,omitempty"`
+	//	该列可空，实测 1365 个用户里 1277 个是 NULL —— 也就是说绝大多数用户
+	//	这里应该是 null 而不是 ""，所以同样必须用 StringValue。
+	OptPwd        *wrapperspb.StringValue `protobuf:"bytes,10,opt,name=opt_pwd,proto3" json:"opt_pwd,omitempty"`
+	HasPassword   bool                    `protobuf:"varint,11,opt,name=has_password,proto3" json:"has_password,omitempty"`
+	HasOptPwd     bool                    `protobuf:"varint,12,opt,name=has_opt_pwd,proto3" json:"has_opt_pwd,omitempty"`
+	IsReal        bool                    `protobuf:"varint,13,opt,name=is_real,proto3" json:"is_real,omitempty"`
+	UserCode      string                  `protobuf:"bytes,14,opt,name=user_code,proto3" json:"user_code,omitempty"`
+	UserCodeAuth  *UserCodeAuth           `protobuf:"bytes,15,opt,name=user_code_auth,proto3" json:"user_code_auth,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -177,18 +189,18 @@ func (x *GetUserInfoReply) GetCreateTime() uint64 {
 	return 0
 }
 
-func (x *GetUserInfoReply) GetUserMoney() string {
+func (x *GetUserInfoReply) GetUserMoney() *wrapperspb.StringValue {
 	if x != nil {
 		return x.UserMoney
 	}
-	return ""
+	return nil
 }
 
-func (x *GetUserInfoReply) GetOptPwd() string {
+func (x *GetUserInfoReply) GetOptPwd() *wrapperspb.StringValue {
 	if x != nil {
 		return x.OptPwd
 	}
-	return ""
+	return nil
 }
 
 func (x *GetUserInfoReply) GetHasPassword() bool {
@@ -229,9 +241,9 @@ func (x *GetUserInfoReply) GetUserCodeAuth() *UserCodeAuth {
 type UserCodeAuth struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 原: tea_user_code = x_user_accounts 里 app_id=3 的 user_code
-	TeaUserCode string `protobuf:"bytes,1,opt,name=tea_user_code,json=teaUserCode,proto3" json:"tea_user_code,omitempty"`
+	TeaUserCode string `protobuf:"bytes,1,opt,name=tea_user_code,proto3" json:"tea_user_code,omitempty"`
 	// 原: tao_user_code = x_user_accounts 里 app_id=4 的 user_code
-	TaoUserCode   string `protobuf:"bytes,2,opt,name=tao_user_code,json=taoUserCode,proto3" json:"tao_user_code,omitempty"`
+	TaoUserCode   string `protobuf:"bytes,2,opt,name=tao_user_code,proto3" json:"tao_user_code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -285,30 +297,30 @@ var File_api_xtravel_v1_user_proto protoreflect.FileDescriptor
 const file_api_xtravel_v1_user_proto_rawDesc = "" +
 	"\n" +
 	"\x19api/xtravel/v1/user.proto\x12\n" +
-	"xtravel.v1\x1a\x1cgoogle/api/annotations.proto\"\x14\n" +
-	"\x12GetUserInfoRequest\"\xbf\x03\n" +
+	"xtravel.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1egoogle/protobuf/wrappers.proto\"\x14\n" +
+	"\x12GetUserInfoRequest\"\x86\x04\n" +
 	"\x10GetUserInfoReply\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x0e\n" +
 	"\x02sn\x18\x02 \x01(\x04R\x02sn\x12\x10\n" +
 	"\x03sex\x18\x03 \x01(\x05R\x03sex\x12\x1a\n" +
-	"\bnickname\x18\x04 \x01(\tR\bnickname\x12\x1b\n" +
-	"\treal_name\x18\x05 \x01(\tR\brealName\x12\x16\n" +
+	"\bnickname\x18\x04 \x01(\tR\bnickname\x12\x1c\n" +
+	"\treal_name\x18\x05 \x01(\tR\treal_name\x12\x16\n" +
 	"\x06avatar\x18\x06 \x01(\tR\x06avatar\x12\x16\n" +
-	"\x06mobile\x18\a \x01(\tR\x06mobile\x12\x1f\n" +
-	"\vcreate_time\x18\b \x01(\x04R\n" +
-	"createTime\x12\x1d\n" +
+	"\x06mobile\x18\a \x01(\tR\x06mobile\x12 \n" +
+	"\vcreate_time\x18\b \x01(\x04R\vcreate_time\x12<\n" +
 	"\n" +
-	"user_money\x18\t \x01(\tR\tuserMoney\x12\x17\n" +
+	"user_money\x18\t \x01(\v2\x1c.google.protobuf.StringValueR\n" +
+	"user_money\x126\n" +
 	"\aopt_pwd\x18\n" +
-	" \x01(\tR\x06optPwd\x12!\n" +
-	"\fhas_password\x18\v \x01(\bR\vhasPassword\x12\x1e\n" +
-	"\vhas_opt_pwd\x18\f \x01(\bR\thasOptPwd\x12\x17\n" +
-	"\ais_real\x18\r \x01(\bR\x06isReal\x12\x1b\n" +
-	"\tuser_code\x18\x0e \x01(\tR\buserCode\x12>\n" +
-	"\x0euser_code_auth\x18\x0f \x01(\v2\x18.xtravel.v1.UserCodeAuthR\fuserCodeAuth\"V\n" +
-	"\fUserCodeAuth\x12\"\n" +
-	"\rtea_user_code\x18\x01 \x01(\tR\vteaUserCode\x12\"\n" +
-	"\rtao_user_code\x18\x02 \x01(\tR\vtaoUserCode2q\n" +
+	" \x01(\v2\x1c.google.protobuf.StringValueR\aopt_pwd\x12\"\n" +
+	"\fhas_password\x18\v \x01(\bR\fhas_password\x12 \n" +
+	"\vhas_opt_pwd\x18\f \x01(\bR\vhas_opt_pwd\x12\x18\n" +
+	"\ais_real\x18\r \x01(\bR\ais_real\x12\x1c\n" +
+	"\tuser_code\x18\x0e \x01(\tR\tuser_code\x12@\n" +
+	"\x0euser_code_auth\x18\x0f \x01(\v2\x18.xtravel.v1.UserCodeAuthR\x0euser_code_auth\"Z\n" +
+	"\fUserCodeAuth\x12$\n" +
+	"\rtea_user_code\x18\x01 \x01(\tR\rtea_user_code\x12$\n" +
+	"\rtao_user_code\x18\x02 \x01(\tR\rtao_user_code2q\n" +
 	"\vUserService\x12b\n" +
 	"\vGetUserInfo\x12\x1e.xtravel.v1.GetUserInfoRequest\x1a\x1c.xtravel.v1.GetUserInfoReply\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/user/infoB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
 
@@ -326,19 +338,22 @@ func file_api_xtravel_v1_user_proto_rawDescGZIP() []byte {
 
 var file_api_xtravel_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_api_xtravel_v1_user_proto_goTypes = []any{
-	(*GetUserInfoRequest)(nil), // 0: xtravel.v1.GetUserInfoRequest
-	(*GetUserInfoReply)(nil),   // 1: xtravel.v1.GetUserInfoReply
-	(*UserCodeAuth)(nil),       // 2: xtravel.v1.UserCodeAuth
+	(*GetUserInfoRequest)(nil),     // 0: xtravel.v1.GetUserInfoRequest
+	(*GetUserInfoReply)(nil),       // 1: xtravel.v1.GetUserInfoReply
+	(*UserCodeAuth)(nil),           // 2: xtravel.v1.UserCodeAuth
+	(*wrapperspb.StringValue)(nil), // 3: google.protobuf.StringValue
 }
 var file_api_xtravel_v1_user_proto_depIdxs = []int32{
-	2, // 0: xtravel.v1.GetUserInfoReply.user_code_auth:type_name -> xtravel.v1.UserCodeAuth
-	0, // 1: xtravel.v1.UserService.GetUserInfo:input_type -> xtravel.v1.GetUserInfoRequest
-	1, // 2: xtravel.v1.UserService.GetUserInfo:output_type -> xtravel.v1.GetUserInfoReply
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3, // 0: xtravel.v1.GetUserInfoReply.user_money:type_name -> google.protobuf.StringValue
+	3, // 1: xtravel.v1.GetUserInfoReply.opt_pwd:type_name -> google.protobuf.StringValue
+	2, // 2: xtravel.v1.GetUserInfoReply.user_code_auth:type_name -> xtravel.v1.UserCodeAuth
+	0, // 3: xtravel.v1.UserService.GetUserInfo:input_type -> xtravel.v1.GetUserInfoRequest
+	1, // 4: xtravel.v1.UserService.GetUserInfo:output_type -> xtravel.v1.GetUserInfoReply
+	4, // [4:5] is the sub-list for method output_type
+	3, // [3:4] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_api_xtravel_v1_user_proto_init() }

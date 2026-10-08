@@ -29,28 +29,30 @@ type UserRow struct {
 	Avatar     string
 	Mobile     string
 	CreateTime uint64
-	// decimal(10,2)。ThinkPHP 输出的是**字符串** "0.00" 而非数字，
-	// 所以这里也用 string 承载，保证 JSON 类型一致。
-	UserMoney string
-	// password 会被 hidden 掉，不出现在响应里；只用来算 has_password
+	// decimal(10,2)，且该列声明为**可空**。
+	// ThinkPHP 对 decimal 输出字符串 "0.00"，NULL 时输出 null —— 所以用指针保留 NULL。
+	UserMoney *string
+	// password 会被 hidden 掉，不出现在响应里；只用来算 has_password。
+	// 该列 NOT NULL，所以用普通 string。
 	Password string
 	// opt_pwd（支付密码哈希）原项目**没有** hidden，直接返回给前端了。
-	// 见 README 安全章节。
-	OptPwd string
+	// 见 README 安全章节。该列可空（实测 93% 的用户是 NULL）。
+	OptPwd *string
 }
 
 // UserProfile 是 UserLogic::info 组装出的 $profile。
 type UserProfile struct {
-	ID           uint64
-	Sn           uint64
-	Sex          int32
-	Nickname     string
-	RealName     string
-	Avatar       string
-	Mobile       string
-	CreateTime   uint64
-	UserMoney    string
-	OptPwd       string
+	ID         uint64
+	Sn         uint64
+	Sex        int32
+	Nickname   string
+	RealName   string
+	Avatar     string
+	Mobile     string
+	CreateTime uint64
+	// 可空：NULL 时必须序列化成 null，不能是 ""
+	UserMoney    *string
+	OptPwd       *string
 	HasPassword  bool
 	HasOptPwd    bool
 	IsReal       bool
@@ -126,8 +128,10 @@ func (uc *UserUsecase) Info(ctx context.Context, userID uint64) (*UserProfile, e
 		UserMoney:  row.UserMoney,
 		OptPwd:     row.OptPwd,
 		// PHP: !empty($password) / !empty($opt_pwd)
-		HasPassword: len(row.Password) > 0,
-		HasOptPwd:   len(row.OptPwd) > 0,
+		// 必须用 PhpTruthy 而不是「长度 > 0」：PHP 里 empty("0") 也是真，
+		// 所以值为字符串 "0" 时 has_* 应当是 false。
+		HasPassword: PhpTruthy(row.Password),
+		HasOptPwd:   row.OptPwd != nil && PhpTruthy(*row.OptPwd),
 	}
 
 	// 实名状态：只有 state='SUCCESS' 记录存在才算已实名

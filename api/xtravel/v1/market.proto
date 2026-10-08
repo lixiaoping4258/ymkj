@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package xtravel.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
+
+// MarketService 市场交易域。
+// 对应原项目 app/api/route/market.php（44 条路由）与 app/api/controller/v1/market/*。
+//
+// ⚠️ 这是项目核心业务域，Stage 3 分批迁。本文件当前只包含第一批：
+// 两个不涉及资金、不改数据的只读接口。写入类接口（下单/支付/兑换）
+// 必须单独评估，不能顺手一起做。
+service MarketService {
+  // 支付方式列表
+  // 原: PurchaseController::payWay（硬编码，不查库；需要登录）
+  rpc GetPayWay(GetPayWayRequest) returns (GetPayWayReply) {
+    option (google.api.http) = {get: "/v1/market/pay_way"};
+  }
+
+  // 兑换前置校验
+  // 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
+  //     （需要登录；会加 2 秒防重复点击锁并查一次兑换单数量）
+  rpc CheckExchange(CheckExchangeRequest) returns (CheckExchangeReply) {
+    option (google.api.http) = {get: "/v1/market/check/exchange"};
+  }
+}
+
+message GetPayWayRequest {}
+
+message GetPayWayReply {
+  // ⚠️ 原接口的 data 是**顶层数组**而不是对象：
+  //     {"code":1,"show":0,"msg":"","data":[{"pay_way":1,...}]}
+  //     Kratos 的 reply 是 message，默认会被包成 {"data":{"items":[...]}}。
+  //     所以这里靠 api/xtravel/v1/envelope.go 里的 Envelope() 把 items 摊出去。
+  repeated PayWay items = 1;
+}
+
+message PayWay {
+  // 原 PHP 是硬编码数组 ['pay_way' => 1, 'pay_name' => '茶交所']，
+  // json_encode 出来就是下划线键名。必须显式指定 json_name，
+  // 否则 protojson 会输出 payWay / payName，前端取不到字段。
+  int32 pay_way = 1 [json_name = "pay_way"];
+  string pay_name = 2 [json_name = "pay_name"];
+}
+
+message CheckExchangeRequest {}
+
+// 成功时原接口返回的是**空数组** []（`return $this->data([])`），
+// 不是空对象 {}。同样由 Envelope() 处理。
+message CheckExchangeReply {}

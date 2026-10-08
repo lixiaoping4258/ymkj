@@ -27,6 +27,7 @@ func NewHTTPServer(
 	auth *conf.Auth,
 	common *service.CommonService,
 	user *service.UserService,
+	market *service.MarketService,
 	tokens *biz.UserTokenUsecase,
 	logger log.Logger,
 ) *http.Server {
@@ -54,5 +55,6 @@ func NewHTTPServer(
 	srv := http.NewServer(opts...)
 	v1.RegisterCommonServiceHTTPServer(srv, common)
 	v1.RegisterUserServiceHTTPServer(srv, user)
+	v1.RegisterMarketServiceHTTPServer(srv, market)
 	return srv
 }

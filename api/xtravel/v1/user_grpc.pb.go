@@ -28,9 +28,6 @@ const (
 //
 // UserService 用户相关。
 // 对应原项目 app/api/controller/v1/user/UserController.php。
-//
-// Stage 2 只迁 info —— 它的价值是「唯一依赖登录态、不依赖其它业务」的端点，
-// 用来验证鉴权中间件是否真的工作。
 type UserServiceClient interface {
 	// 当前登录用户信息
 	// 原: UserController::info -> UserLogic::info($this->userId)
@@ -62,9 +59,6 @@ func (c *userServiceClient) GetUserInfo(ctx context.Context, in *GetUserInfoRequ
 //
 // UserService 用户相关。
 // 对应原项目 app/api/controller/v1/user/UserController.php。
-//
-// Stage 2 只迁 info —— 它的价值是「唯一依赖登录态、不依赖其它业务」的端点，
-// 用来验证鉴权中间件是否真的工作。
 type UserServiceServer interface {
 	// 当前登录用户信息
 	// 原: UserController::info -> UserLogic::info($this->userId)

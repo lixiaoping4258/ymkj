@@ -3,14 +3,12 @@ syntax = "proto3";
 package xtravel.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
 
 // UserService 用户相关。
 // 对应原项目 app/api/controller/v1/user/UserController.php。
-//
-// Stage 2 只迁 info —— 它的价值是「唯一依赖登录态、不依赖其它业务」的端点，
-// 用来验证鉴权中间件是否真的工作。
 service UserService {
   // 当前登录用户信息
   // 原: UserController::info -> UserLogic::info($this->userId)
@@ -24,38 +22,49 @@ message GetUserInfoRequest {}
 
 // GetUserInfoReply 对应 UserLogic::info 组装出来的 $profile 数组。
 //
-// ⚠️ 字段名和类型必须和 PHP 的 json_encode 结果一致，否则前端解析会出问题。
-// 几个容易踩的点：
-//   - user_money 是 decimal(10,2)，ThinkPHP 输出的是**字符串** "0.00" 而不是数字
-//   - has_password / has_opt_pwd / is_real 是 boolean
-//   - user_code 查不到时是空字符串 ""
+// ⚠️⚠️ json_name 必须逐个显式指定，不能用 protojson 的默认 camelCase。
+//
+// 原因：原实现的 $profile 直接来自 `$user->toArray()`，键就是**数据库列名**，
+// 也就是 snake_case（real_name / create_time / user_money / has_password …）。
+// ThinkPHP 的 JsonService 不做任何键名转换就 json_encode 出去，
+// 所以线上契约是 snake_case。protojson 默认会把 real_name 输出成 realName，
+// 前端就拿不到字段 —— 这是静默的接口破坏，不会报错，只会显示为空。
+//
+// 教训：**命名规则是逐接口的**。项目里有的接口用 camelCase（见 common.proto
+// 的 outFee/tradeSwitch，因为 PHP 源码里就是那样写的），有的用 snake_case
+// （凡是直接透传 DB 行的地方）。所以每个字段都要对着原 PHP 的输出写死。
 message GetUserInfoReply {
-  uint64 id = 1;
-  uint64 sn = 2;
+  uint64 id = 1 [json_name = "id"];
+  uint64 sn = 2 [json_name = "sn"];
   // 0 未知 / 1 男 / 2 女（原样透传）
-  int32 sex = 3;
-  string nickname = 4;
-  string real_name = 5;
-  string avatar = 6;
-  string mobile = 7;
-  uint64 create_time = 8;
-  // decimal 用字符串承载，对齐 PHP 的输出
-  string user_money = 9;
+  int32 sex = 3 [json_name = "sex"];
+  string nickname = 4 [json_name = "nickname"];
+  string real_name = 5 [json_name = "real_name"];
+  string avatar = 6 [json_name = "avatar"];
+  string mobile = 7 [json_name = "mobile"];
+  uint64 create_time = 8 [json_name = "create_time"];
+  // decimal(10,2)。这一列声明为**可空**，NULL 时 PHP 输出 null；
+  // 正常值是字符串 "0.00"（ThinkPHP 对 decimal 输出字符串而不是数字）。
+  // 所以用 StringValue：字段不设置 -> null，设置了 -> 字符串。
+  // 用普通 string 的话 NULL 会变成 ""，类型和值都不对。
+  google.protobuf.StringValue user_money = 9 [json_name = "user_money"];
   // ⚠️ 原项目把 opt_pwd（支付密码哈希）**直接返回给前端**了（只 hidden 了 password）。
   //    这是原系统的信息泄露问题，Go 版为兼容前端暂时保留，见 README 安全章节。
-  string opt_pwd = 10;
+  //    该列可空，实测 1365 个用户里 1277 个是 NULL —— 也就是说绝大多数用户
+  //    这里应该是 null 而不是 ""，所以同样必须用 StringValue。
+  google.protobuf.StringValue opt_pwd = 10 [json_name = "opt_pwd"];
 
-  bool has_password = 11;
-  bool has_opt_pwd = 12;
-  bool is_real = 13;
+  bool has_password = 11 [json_name = "has_password"];
+  bool has_opt_pwd = 12 [json_name = "has_opt_pwd"];
+  bool is_real = 13 [json_name = "is_real"];
 
-  string user_code = 14;
-  UserCodeAuth user_code_auth = 15;
+  string user_code = 14 [json_name = "user_code"];
+  UserCodeAuth user_code_auth = 15 [json_name = "user_code_auth"];
 }
 
 message UserCodeAuth {
   // 原: tea_user_code = x_user_accounts 里 app_id=3 的 user_code
-  string tea_user_code = 1;
+  string tea_user_code = 1 [json_name = "tea_user_code"];
   // 原: tao_user_code = x_user_accounts 里 app_id=4 的 user_code
-  string tao_user_code = 2;
+  string tao_user_code = 2 [json_name = "tao_user_code"];
 }

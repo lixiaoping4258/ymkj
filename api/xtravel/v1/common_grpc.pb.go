@@ -31,6 +31,11 @@ const (
 // 对应原项目 app/api/route/common.php + app/api/controller/v1/common/*。
 //
 // 路径保持 /v1/common/... 不变，前端无需改动。
+//
+// ⚠️ 本文件的 json_name 是 camelCase —— 因为原 PHP 源码里这些键就是
+// camelCase（'outFee'、'tradeSwitch'、'isOpen'…），不是 DB 列名。
+// 对比 user.proto：那边直接透传 DB 行，所以是 snake_case。
+// **每个字段都必须对着原 PHP 的实际输出确认，不能套用统一约定。**
 type CommonServiceClient interface {
 	// 手续费/交易开关等基础配置
 	// 原: ConfigController::index  (免登录)
@@ -76,6 +81,11 @@ func (c *commonServiceClient) GetTradeConfig(ctx context.Context, in *GetTradeCo
 // 对应原项目 app/api/route/common.php + app/api/controller/v1/common/*。
 //
 // 路径保持 /v1/common/... 不变，前端无需改动。
+//
+// ⚠️ 本文件的 json_name 是 camelCase —— 因为原 PHP 源码里这些键就是
+// camelCase（'outFee'、'tradeSwitch'、'isOpen'…），不是 DB 列名。
+// 对比 user.proto：那边直接透传 DB 行，所以是 snake_case。
+// **每个字段都必须对着原 PHP 的实际输出确认，不能套用统一约定。**
 type CommonServiceServer interface {
 	// 手续费/交易开关等基础配置
 	// 原: ConfigController::index  (免登录)
