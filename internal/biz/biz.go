@@ -12,4 +12,5 @@ var ProviderSet = wire.NewSet(
 	NewUserTokenUsecase,
 	NewUserUsecase,
 	NewMarketUsecase,
+	NewWhitelistUsecase,
 )

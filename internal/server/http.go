@@ -29,6 +29,7 @@ func NewHTTPServer(
 	user *service.UserService,
 	market *service.MarketService,
 	tokens *biz.UserTokenUsecase,
+	whitelist *biz.WhitelistUsecase,
 	logger log.Logger,
 ) *http.Server {
 	var opts = []http.ServerOption{
@@ -36,6 +37,8 @@ func NewHTTPServer(
 			recovery.Recovery(),
 			logging.Server(logger),
 			AuthMiddleware(tokens, auth, logger),
+			// 白名单必须在 Auth 之内：它依赖 context 里的用户信息
+			WhitelistMiddleware(whitelist, logger),
 		),
 		// 关键：换成原项目 JsonService 的信封，否则前端拿到的格式全变
 		http.ResponseEncoder(httpx.ResponseEncoder),

@@ -36,6 +36,7 @@ var ProviderSet = wire.NewSet(
 	// 锁的键与 PHP 共用（不加隔离前缀），见 data/lock.go 的说明
 	NewRedisLocker,
 	NewMarketPurchaseRepo,
+	NewWhitelistRepo,
 )
 
 // gormWriter 把 GORM 的 SQL 日志转接到 Kratos 的 logger。

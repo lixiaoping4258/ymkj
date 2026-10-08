@@ -57,7 +57,9 @@ func wireApp(confServer *conf.Server, confData *conf.Data, app *conf.App, confLo
 	authConfig := data.NewAuthConfig(auth, logger)
 	userTokenCache := data.NewUserTokenCache(client, authConfig)
 	userTokenUsecase := biz.NewUserTokenUsecase(userSessionRepo, userRepo, userTokenCache, authConfig, logger)
-	httpServer := server.NewHTTPServer(confServer, auth, commonService, userService, marketService, userTokenUsecase, logger)
+	whitelistRepo := data.NewWhitelistRepo(db)
+	whitelistUsecase := biz.NewWhitelistUsecase(whitelistRepo, cache, logger)
+	httpServer := server.NewHTTPServer(confServer, auth, commonService, userService, marketService, userTokenUsecase, whitelistUsecase, logger)
 	kratosApp := newApp(logger, httpServer)
 	return kratosApp, func() {
 		cleanup2()

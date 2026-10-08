@@ -14,7 +14,8 @@
 |---|---|---|
 | **Stage 1** | Kratos 骨架、基础设施、协议兼容层、`v1/common` 垂直切片 | ✅ 完成并验证 |
 | **Stage 2** | 鉴权中间件、token 生命周期、`v1/user/info`、单元测试 | ✅ 完成并验证 |
-| **Stage 3** | `market` 域第 1 批：`pay_way`、`check/exchange` + 契约修正 | 🔄 进行中（2/44 路由） |
+| **Stage 3** | `market` 域第 1 批：`pay_way`、`check/exchange` + 契约修正 | ✅ 完成并验证 |
+| **Stage 3** | 白名单中间件 + 分页基础设施（77 个列表类的公共前置件） | ✅ 完成并验证（单测） |
 | Stage 3+ | `market` 域其余 42 条（含全部写操作） | 待做 |
 | Stage 4 | `wallet` / `payment` / `ticket` / `whitelist` | 待做 |
 | Stage 5 | `adminapi`（61 控制器，最大一块） | 待做 |
@@ -97,6 +98,61 @@ GO : {"id":61089517,"sn":178056289917980,"create_time":1783678044,
 
 这次比对**抓出了三个 Stage 2 遗留的静默 bug**（见 4.1 节），
 说明"能跑通"和"契约一致"是两件事 —— 冒烟测试断言因此从 22 项加到 47 项。
+
+### Stage 3 第二批：白名单中间件 + 分页基础设施
+
+两块都是**全项目共用的前置件**，所以先做它们再铺接口：
+
+**① 白名单（`biz/whitelist.go` + `server/middleware_whitelist.go`）**
+
+对应 `WhitelistMiddleware` + `WhitelistLogic`。market 域有 8 条路由挂着它。
+原项目把限制项绑在路由上（`->append(['whitelist_item' => 'no_collection_trade'])`），
+Kratos 没有这个东西，改成 `server/middleware_whitelist.go` 里的一张
+operation → 限制项 表。**改 proto 的 service/method 名时必须同步改那里**，
+否则白名单会静默失效。
+
+实测数据（`xmarket_test`）：5 个限制项、3 个组、**只有 1 个白名单用户**、
+9 条组配置**全是 enabled=0** —— 也就是说**现在白名单不拦截任何人**，
+正好是干净的迁移基线。
+
+**② 分页（`biz/lists.go`）**
+
+对应 `BaseDataLists`。**全项目 77 个列表类**（39 adminapi + 29 api + 9 common）
+都继承这套模式，所以这层做对了，后面每个列表接口都是照抄。
+
+`PageParams` 的语义坑见 4.2 节。
+
+**③ 列表响应的 `data` 形态**
+
+```
+{"lists":[...],"count":N,"page_no":1,"page_size":25,"extend":[]}
+```
+
+全是 snake_case，且 `extend` 为空时是 `[]` 不是 `null`。
+由 `biz.ListData.ToJSON()` 用 map 组装（不用 struct tag，避免改字段名时悄悄变键名）。
+
+单测覆盖：白名单 9 项（含未知限制项、组停用、细粒度 pay_way/兑换单判断）、
+分页 8 项。`go test ./internal/biz/...` 共 **32 项全绿**。
+
+> ⚠️ 白名单中间件目前**还没有挂到任何已迁接口上**（它要拦的 `GET /v1/market/purchase`
+> 还没迁），所以它只有单测覆盖、没有端到端验证。绑定表里已经预留了该 operation。
+
+### 4.2 分页参数的两个语义坑
+
+`BaseDataLists::initPage` 里 `page_type` 和 `page_no` 用的是**不同的默认值规则**：
+
+```php
+$this->pageType = (int)$this->request->get('page_type', 1);   // 参数缺失才取默认
+$this->pageNo   = $this->request->get('page_no', 1) ?: 1;     // falsy 也取默认
+```
+
+- `?page_type=0` → 显式 0 → **不分页**（一次取 1,000,000 条）
+- `?page_no=0` → falsy → **落回 1**
+
+我第一版把 `page_type=0` 也当成缺失处理，落回了默认的 1（分页）。
+后果是**调用方请求全量数据只会拿到 25 条** —— 这是单测抓出来的，不是看代码看出来的。
+
+另外注意 `page_type` **默认是 1（分页）**，这与 likeadmin 通用版本相反。
 
 ---
 
@@ -412,6 +468,30 @@ Go 版改成返回 nil（视为 token 无效）→ 直接 403「登录超时，�
 token 列有 UNIQUE 约束，撞了轻则登录失败，重则在换发路径上覆盖到别人的会话。
 Go 版额外加了 `crypto/rand` + 进程内自增序号，
 `TestCreateToken_Is32HexAndUnique` 会跑 200 次检查唯一性。
+
+### 🟡 白名单 `checkPermission` 的注释与代码互相矛盾（潜伏缺陷）
+
+```php
+// 如果限制项不存在于系统中，默认放行
+if (!isset($permissions[$itemCode])) {
+    return true;        // ← 注释说"放行"，但调用方把 true 当"拦截"
+}
+```
+
+`WhitelistMiddleware` 里 `if (checkPermissionWithContext(...)) { return fail(...); }`，
+也就是**返回 true = 拦截**。所以「限制项不在启用列表里」实际会让**所有人被拦**。
+
+**当前不构成线上故障**：路由用到的 3 个 code（`no_collection_trade` /
+`no_tea_trade` / `no_tao_trade`）在 `x_whitelist_item` 里都存在且 `status=1`，
+走不到这个分支。
+
+**Go 版按注释的意图实现（未知限制项 → 放行）**，理由：
+1. 注释明确写了意图，代码大概率是笔误；
+2. 照搬字面行为会在「某天有人把限制项停用」时让整个接口对所有人 403，
+   这个失败模式远比"少拦一次"严重。
+
+这是一处**有意的行为分歧**，有单测锁住（`TestWhitelist_UnknownItemIsAllowed`）。
+如果业务确认要保留原字面行为，改 `biz/whitelist.go` 里那一行即可。
 
 ### 🔴 `workdayPeriods` 与 `tradeTips` 不一致 —— 下午盘可能永远不开
 
