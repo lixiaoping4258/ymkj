@@ -26,6 +26,11 @@ func (r *GetPayWayReply) Envelope() (int, int, string, any) {
 	return 1, 0, "", r.GetItems()
 }
 
+// Envelope 让秒转分类列表以顶层数组返回。
+func (r *GetSaleCategoriesReply) Envelope() (int, int, string, any) {
+	return 1, 0, "", r.GetItems()
+}
+
 // Envelope 让兑换校验以空数组返回（原实现是 `return $this->data([])`）。
 func (r *CheckExchangeReply) Envelope() (int, int, string, any) {
 	return 1, 0, "", []any{}

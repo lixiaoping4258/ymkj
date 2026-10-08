@@ -50,8 +50,9 @@ import (
 //   - 把该登录的标成公开 -> 未授权访问（安全）
 //   - 把公开的标成需登录 -> 前端匿名访问直接 403（功能不可用，本次踩的就是这个）
 var defaultPublicOps = map[string]struct{}{
-	"/xtravel.v1.CommonService/GetConfig":     {},
-	"/xtravel.v1.MarketService/PurchaseIndex": {},
+	"/xtravel.v1.CommonService/GetConfig":         {},
+	"/xtravel.v1.MarketService/PurchaseIndex":     {},
+	"/xtravel.v1.MarketService/GetSaleCategories": {},
 }
 
 // AuthMiddleware 构造鉴权中间件。

@@ -19,9 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MarketService_GetPayWay_FullMethodName     = "/xtravel.v1.MarketService/GetPayWay"
-	MarketService_CheckExchange_FullMethodName = "/xtravel.v1.MarketService/CheckExchange"
-	MarketService_PurchaseIndex_FullMethodName = "/xtravel.v1.MarketService/PurchaseIndex"
+	MarketService_GetPayWay_FullMethodName         = "/xtravel.v1.MarketService/GetPayWay"
+	MarketService_CheckExchange_FullMethodName     = "/xtravel.v1.MarketService/CheckExchange"
+	MarketService_PurchaseIndex_FullMethodName     = "/xtravel.v1.MarketService/PurchaseIndex"
+	MarketService_GetSaleCategories_FullMethodName = "/xtravel.v1.MarketService/GetSaleCategories"
+	MarketService_SaleIndex_FullMethodName         = "/xtravel.v1.MarketService/SaleIndex"
 )
 
 // MarketServiceClient is the client API for MarketService service.
@@ -53,6 +55,21 @@ type MarketServiceClient interface {
 	// 返回 RawData：列表行结构任意（bigint 主键 / decimal 字符串 / json 数组 /
 	// "0 转 --" 后处理），用 proto 建模会丢精度又拧巴，见 common.proto 的说明。
 	PurchaseIndex(ctx context.Context, in *PurchaseIndexRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 秒转专区分类列表
+	// 原: SaleController::categories —— **硬编码**，不查库；是 SaleController 里
+	//
+	//	唯一免登录的方法（$notNeedLogin = ['categories']）
+	GetSaleCategories(ctx context.Context, in *GetSaleCategoriesRequest, opts ...grpc.CallOption) (*GetSaleCategoriesReply, error)
+	// 秒转专区首页列表
+	// 原: SaleController::index -> SaleFaceLists
+	//
+	//	**需要登录**（不在 $notNeedLogin 里）
+	//
+	// ⚠️ 与 purchase 列表的两个差异（都是实测出来的）：
+	//  1. 该接口没有默认排序 —— PurchaseFaceLists 的 switch 有 default 分支，
+	//     SaleFaceLists 没有，所以**不带 sort 参数时 SQL 里根本没有 ORDER BY**
+	//  2. 行后处理只做 images 的 json 解码，没有 "0 转 --" 那套
+	SaleIndex(ctx context.Context, in *SaleIndexRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type marketServiceClient struct {
@@ -93,6 +110,26 @@ func (c *marketServiceClient) PurchaseIndex(ctx context.Context, in *PurchaseInd
 	return out, nil
 }
 
+func (c *marketServiceClient) GetSaleCategories(ctx context.Context, in *GetSaleCategoriesRequest, opts ...grpc.CallOption) (*GetSaleCategoriesReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSaleCategoriesReply)
+	err := c.cc.Invoke(ctx, MarketService_GetSaleCategories_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *marketServiceClient) SaleIndex(ctx context.Context, in *SaleIndexRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, MarketService_SaleIndex_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketServiceServer is the server API for MarketService service.
 // All implementations must embed UnimplementedMarketServiceServer
 // for forward compatibility.
@@ -122,6 +159,21 @@ type MarketServiceServer interface {
 	// 返回 RawData：列表行结构任意（bigint 主键 / decimal 字符串 / json 数组 /
 	// "0 转 --" 后处理），用 proto 建模会丢精度又拧巴，见 common.proto 的说明。
 	PurchaseIndex(context.Context, *PurchaseIndexRequest) (*RawData, error)
+	// 秒转专区分类列表
+	// 原: SaleController::categories —— **硬编码**，不查库；是 SaleController 里
+	//
+	//	唯一免登录的方法（$notNeedLogin = ['categories']）
+	GetSaleCategories(context.Context, *GetSaleCategoriesRequest) (*GetSaleCategoriesReply, error)
+	// 秒转专区首页列表
+	// 原: SaleController::index -> SaleFaceLists
+	//
+	//	**需要登录**（不在 $notNeedLogin 里）
+	//
+	// ⚠️ 与 purchase 列表的两个差异（都是实测出来的）：
+	//  1. 该接口没有默认排序 —— PurchaseFaceLists 的 switch 有 default 分支，
+	//     SaleFaceLists 没有，所以**不带 sort 参数时 SQL 里根本没有 ORDER BY**
+	//  2. 行后处理只做 images 的 json 解码，没有 "0 转 --" 那套
+	SaleIndex(context.Context, *SaleIndexRequest) (*RawData, error)
 	mustEmbedUnimplementedMarketServiceServer()
 }
 
@@ -140,6 +192,12 @@ func (UnimplementedMarketServiceServer) CheckExchange(context.Context, *CheckExc
 }
 func (UnimplementedMarketServiceServer) PurchaseIndex(context.Context, *PurchaseIndexRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method PurchaseIndex not implemented")
+}
+func (UnimplementedMarketServiceServer) GetSaleCategories(context.Context, *GetSaleCategoriesRequest) (*GetSaleCategoriesReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSaleCategories not implemented")
+}
+func (UnimplementedMarketServiceServer) SaleIndex(context.Context, *SaleIndexRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaleIndex not implemented")
 }
 func (UnimplementedMarketServiceServer) mustEmbedUnimplementedMarketServiceServer() {}
 func (UnimplementedMarketServiceServer) testEmbeddedByValue()                       {}
@@ -216,6 +274,42 @@ func _MarketService_PurchaseIndex_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketService_GetSaleCategories_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSaleCategoriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).GetSaleCategories(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_GetSaleCategories_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).GetSaleCategories(ctx, req.(*GetSaleCategoriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MarketService_SaleIndex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaleIndexRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).SaleIndex(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_SaleIndex_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).SaleIndex(ctx, req.(*SaleIndexRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketService_ServiceDesc is the grpc.ServiceDesc for MarketService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -234,6 +328,14 @@ var MarketService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PurchaseIndex",
 			Handler:    _MarketService_PurchaseIndex_Handler,
+		},
+		{
+			MethodName: "GetSaleCategories",
+			Handler:    _MarketService_GetSaleCategories_Handler,
+		},
+		{
+			MethodName: "SaleIndex",
+			Handler:    _MarketService_SaleIndex_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

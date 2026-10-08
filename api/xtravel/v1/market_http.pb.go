@@ -21,7 +21,9 @@ const _ = http.SupportPackageIsVersion1
 
 const OperationMarketServiceCheckExchange = "/xtravel.v1.MarketService/CheckExchange"
 const OperationMarketServiceGetPayWay = "/xtravel.v1.MarketService/GetPayWay"
+const OperationMarketServiceGetSaleCategories = "/xtravel.v1.MarketService/GetSaleCategories"
 const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseIndex"
+const OperationMarketServiceSaleIndex = "/xtravel.v1.MarketService/SaleIndex"
 
 type MarketServiceHTTPServer interface {
 	// CheckExchange 兑换前置校验
@@ -31,6 +33,10 @@ type MarketServiceHTTPServer interface {
 	// GetPayWay 支付方式列表
 	// 原: PurchaseController::payWay（硬编码，不查库；需要登录）
 	GetPayWay(context.Context, *GetPayWayRequest) (*GetPayWayReply, error)
+	// GetSaleCategories 秒转专区分类列表
+	// 原: SaleController::categories —— **硬编码**，不查库；是 SaleController 里
+	//     唯一免登录的方法（$notNeedLogin = ['categories']）
+	GetSaleCategories(context.Context, *GetSaleCategoriesRequest) (*GetSaleCategoriesReply, error)
 	// PurchaseIndex 兑换专区首页列表
 	// 原: PurchaseController::index -> PurchaseFaceLists
 	//     **免登录**（控制器 $notNeedLogin 放行了 index）
@@ -40,6 +46,15 @@ type MarketServiceHTTPServer interface {
 	// 返回 RawData：列表行结构任意（bigint 主键 / decimal 字符串 / json 数组 /
 	// "0 转 --" 后处理），用 proto 建模会丢精度又拧巴，见 common.proto 的说明。
 	PurchaseIndex(context.Context, *PurchaseIndexRequest) (*RawData, error)
+	// SaleIndex 秒转专区首页列表
+	// 原: SaleController::index -> SaleFaceLists
+	//     **需要登录**（不在 $notNeedLogin 里）
+	//
+	// ⚠️ 与 purchase 列表的两个差异（都是实测出来的）：
+	//   1. 该接口没有默认排序 —— PurchaseFaceLists 的 switch 有 default 分支，
+	//      SaleFaceLists 没有，所以**不带 sort 参数时 SQL 里根本没有 ORDER BY**
+	//   2. 行后处理只做 images 的 json 解码，没有 "0 转 --" 那套
+	SaleIndex(context.Context, *SaleIndexRequest) (*RawData, error)
 }
 
 func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer) {
@@ -47,6 +62,8 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/pay_way", _MarketService_GetPayWay0_HTTP_Handler(srv))
 	r.GET("/v1/market/check/exchange", _MarketService_CheckExchange0_HTTP_Handler(srv))
 	r.GET("/v1/market/purchase", _MarketService_PurchaseIndex0_HTTP_Handler(srv))
+	r.GET("/v1/market/sales/categories", _MarketService_GetSaleCategories0_HTTP_Handler(srv))
+	r.GET("/v1/market/sales", _MarketService_SaleIndex0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -106,6 +123,44 @@ func _MarketService_PurchaseIndex0_HTTP_Handler(srv MarketServiceHTTPServer) fun
 	}
 }
 
+func _MarketService_GetSaleCategories0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetSaleCategoriesRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServiceGetSaleCategories)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetSaleCategories(ctx, req.(*GetSaleCategoriesRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetSaleCategoriesReply)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _MarketService_SaleIndex0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in SaleIndexRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServiceSaleIndex)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.SaleIndex(ctx, req.(*SaleIndexRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -114,6 +169,10 @@ type MarketServiceHTTPClient interface {
 	// GetPayWay 支付方式列表
 	// 原: PurchaseController::payWay（硬编码，不查库；需要登录）
 	GetPayWay(ctx context.Context, req *GetPayWayRequest, opts ...http.CallOption) (rsp *GetPayWayReply, err error)
+	// GetSaleCategories 秒转专区分类列表
+	// 原: SaleController::categories —— **硬编码**，不查库；是 SaleController 里
+	//     唯一免登录的方法（$notNeedLogin = ['categories']）
+	GetSaleCategories(ctx context.Context, req *GetSaleCategoriesRequest, opts ...http.CallOption) (rsp *GetSaleCategoriesReply, err error)
 	// PurchaseIndex 兑换专区首页列表
 	// 原: PurchaseController::index -> PurchaseFaceLists
 	//     **免登录**（控制器 $notNeedLogin 放行了 index）
@@ -123,6 +182,15 @@ type MarketServiceHTTPClient interface {
 	// 返回 RawData：列表行结构任意（bigint 主键 / decimal 字符串 / json 数组 /
 	// "0 转 --" 后处理），用 proto 建模会丢精度又拧巴，见 common.proto 的说明。
 	PurchaseIndex(ctx context.Context, req *PurchaseIndexRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// SaleIndex 秒转专区首页列表
+	// 原: SaleController::index -> SaleFaceLists
+	//     **需要登录**（不在 $notNeedLogin 里）
+	//
+	// ⚠️ 与 purchase 列表的两个差异（都是实测出来的）：
+	//   1. 该接口没有默认排序 —— PurchaseFaceLists 的 switch 有 default 分支，
+	//      SaleFaceLists 没有，所以**不带 sort 参数时 SQL 里根本没有 ORDER BY**
+	//   2. 行后处理只做 images 的 json 解码，没有 "0 转 --" 那套
+	SaleIndex(ctx context.Context, req *SaleIndexRequest, opts ...http.CallOption) (rsp *RawData, err error)
 }
 
 type MarketServiceHTTPClientImpl struct {
@@ -165,6 +233,23 @@ func (c *MarketServiceHTTPClientImpl) GetPayWay(ctx context.Context, in *GetPayW
 	return &out, nil
 }
 
+// GetSaleCategories 秒转专区分类列表
+// 原: SaleController::categories —— **硬编码**，不查库；是 SaleController 里
+//
+//	唯一免登录的方法（$notNeedLogin = ['categories']）
+func (c *MarketServiceHTTPClientImpl) GetSaleCategories(ctx context.Context, in *GetSaleCategoriesRequest, opts ...http.CallOption) (*GetSaleCategoriesReply, error) {
+	var out GetSaleCategoriesReply
+	pattern := "/v1/market/sales/categories"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServiceGetSaleCategories))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // PurchaseIndex 兑换专区首页列表
 // 原: PurchaseController::index -> PurchaseFaceLists
 //
@@ -179,6 +264,28 @@ func (c *MarketServiceHTTPClientImpl) PurchaseIndex(ctx context.Context, in *Pur
 	pattern := "/v1/market/purchase"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServicePurchaseIndex))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SaleIndex 秒转专区首页列表
+// 原: SaleController::index -> SaleFaceLists
+//
+//	**需要登录**（不在 $notNeedLogin 里）
+//
+// ⚠️ 与 purchase 列表的两个差异（都是实测出来的）：
+//  1. 该接口没有默认排序 —— PurchaseFaceLists 的 switch 有 default 分支，
+//     SaleFaceLists 没有，所以**不带 sort 参数时 SQL 里根本没有 ORDER BY**
+//  2. 行后处理只做 images 的 json 解码，没有 "0 转 --" 那套
+func (c *MarketServiceHTTPClientImpl) SaleIndex(ctx context.Context, in *SaleIndexRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/market/sales"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServiceSaleIndex))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

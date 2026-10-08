@@ -43,9 +43,43 @@ service MarketService {
   rpc PurchaseIndex(PurchaseIndexRequest) returns (RawData) {
     option (google.api.http) = {get: "/v1/market/purchase"};
   }
+
+  // 秒转专区分类列表
+  // 原: SaleController::categories —— **硬编码**，不查库；是 SaleController 里
+  //     唯一免登录的方法（$notNeedLogin = ['categories']）
+  rpc GetSaleCategories(GetSaleCategoriesRequest) returns (GetSaleCategoriesReply) {
+    option (google.api.http) = {get: "/v1/market/sales/categories"};
+  }
+
+  // 秒转专区首页列表
+  // 原: SaleController::index -> SaleFaceLists
+  //     **需要登录**（不在 $notNeedLogin 里）
+  //
+  // ⚠️ 与 purchase 列表的两个差异（都是实测出来的）：
+  //   1. 该接口没有默认排序 —— PurchaseFaceLists 的 switch 有 default 分支，
+  //      SaleFaceLists 没有，所以**不带 sort 参数时 SQL 里根本没有 ORDER BY**
+  //   2. 行后处理只做 images 的 json 解码，没有 "0 转 --" 那套
+  rpc SaleIndex(SaleIndexRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/market/sales"};
+  }
 }
 
 message PurchaseIndexRequest {}
+
+message GetSaleCategoriesRequest {}
+
+message GetSaleCategoriesReply {
+  // 原接口 data 是顶层数组：[{"title":"全部","key":"all"}]
+  repeated SaleCategory items = 1;
+}
+
+message SaleCategory {
+  string title = 1 [json_name = "title"];
+  // key 是 PHP 数组里的字面键名，输出就是 "key"
+  string key = 2 [json_name = "key"];
+}
+
+message SaleIndexRequest {}
 
 message GetPayWayRequest {}
 

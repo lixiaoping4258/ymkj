@@ -197,6 +197,76 @@ func findRepoRoot(t *testing.T) string {
 	return dir + "/../.."
 }
 
+// TestSaleFaceRepo_MatchesRealPHP 验证秒转列表的查询与 PHP 一致。
+//
+// 这个接口的行级验证做不了：x_market_list_sales 只有 4 行，且与 state=1 的
+// archive join 后是 **0 行**（已直查确认）。PHP 跑出来也是 count=0 / rows=0。
+// 所以这里断言的是：count 一致、SQL 能跑、5 种排序都安全。
+//
+// 顺带锁住一个容易抄错的差异：**SaleFaceLists 的 switch($sort) 没有 default**，
+// 所以不带 sort 时 SQL 里根本没有 ORDER BY；而 PurchaseFaceLists 有 default。
+func TestSaleFaceRepo_MatchesRealPHP(t *testing.T) {
+	root := findRepoRoot(t)
+	cfgPath := root + "/configs/config.local.yaml"
+	if _, err := os.Stat(cfgPath); err != nil {
+		t.Skip("configs/config.local.yaml 不存在，跳过集成测试")
+	}
+	var cfg struct {
+		Data struct {
+			Database struct {
+				Source string `yaml:"source"`
+				Prefix string `yaml:"prefix"`
+			} `yaml:"database"`
+		} `yaml:"data"`
+	}
+	raw, _ := os.ReadFile(cfgPath)
+	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("解析配置失败: %v", err)
+	}
+	db, err := gorm.Open(mysql.Open(cfg.Data.Database.Source), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			TablePrefix:   cfg.Data.Database.Prefix,
+			SingularTable: true,
+		},
+		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("连库失败: %v", err)
+	}
+	repo := NewSaleFaceRepo(db, testConf(cfg.Data.Database.Prefix))
+	ctx := context.Background()
+
+	page := biz.PageParams{PageNo: 1, PageSize: 2, Offset: 0, Limit: 2}
+	q := biz.SaleFaceQuery{Page: page}
+
+	// PHP 实测结果：count=0
+	count, err := repo.Count(ctx, q)
+	if err != nil {
+		t.Fatalf("Count 失败: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("count 应为 0（与 PHP 实测一致：list_sales 4 行但 join state=1 后为 0），实际 %d", count)
+	}
+	rows, err := repo.List(ctx, q, 0, 2)
+	if err != nil {
+		t.Fatalf("List 失败: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("应返回 0 行，实际 %d", len(rows))
+	}
+
+	// 5 种排序（含不带 sort 的"无 ORDER BY"分支）都必须能跑
+	for _, s := range []string{"", "low", "high", "public", "done", "bogus", "x; DROP TABLE x_user"} {
+		qq := biz.SaleFaceQuery{Page: page, Sort: s}
+		if _, err := repo.List(ctx, qq, 0, 2); err != nil {
+			t.Fatalf("sort=%q 查询失败: %v", s, err)
+		}
+		if _, err := repo.Count(ctx, qq); err != nil {
+			t.Fatalf("sort=%q count 失败: %v", s, err)
+		}
+	}
+}
+
 // testConf 造一个只带表前缀的配置。
 //
 // ⚠️ 必须显式传前缀：NewPurchaseFaceRepo 在前缀为空时会退回默认的 la_，

@@ -139,6 +139,20 @@ if ($piNoTok.body.data.count -eq 0) {
     Check "closed-trading extend is an ARRAY" ($piNoTok.body.data.extend -is [array]) "type=$($piNoTok.body.data.extend.GetType().Name)"
 }
 
+# SaleController::$notNeedLogin = ['categories'] -> categories is PUBLIC, index is NOT
+$scNoTok = Get-Json "$Base/v1/market/sales/categories" @{}
+Check "sales/categories is PUBLIC" ($scNoTok.body.code -eq 1) "code=$($scNoTok.body.code) raw=$($scNoTok.raw)"
+Check "sales/categories data is a top-level ARRAY" ($scNoTok.body.data -is [array]) "type=$($scNoTok.body.data.GetType().Name)"
+if ($scNoTok.body.data -is [array] -and $scNoTok.body.data.Count -ge 1) {
+    $c0 = $scNoTok.body.data[0]
+    Check "sales/categories item has key 'key'" ($c0.PSObject.Properties.Name -contains 'key') "raw=$($scNoTok.raw)"
+    Check "sales/categories item has key 'title'" ($c0.PSObject.Properties.Name -contains 'title') "raw=$($scNoTok.raw)"
+    Check "sales/categories key is 'all'" ($c0.key -eq 'all') "key=$($c0.key)"
+}
+
+$siNoTok = Get-Json "$Base/v1/market/sales" @{}
+Check "market/sales requires login" ($siNoTok.body.code -eq -403) "code=$($siNoTok.body.code)"
+
 # ---------------------------------------------------------------- real token
 $mysql = Get-ChildItem 'D:\work\phpstudy_pro\Extensions' -Recurse -Filter mysql.exe -EA SilentlyContinue |
          Select-Object -First 1 -ExpandProperty FullName

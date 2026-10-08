@@ -15,10 +15,15 @@ type MarketService struct {
 	v1.UnimplementedMarketServiceServer
 	market   *biz.MarketUsecase
 	purchase *biz.PurchaseFaceUsecase
+	sale     *biz.SaleFaceUsecase
 }
 
-func NewMarketService(market *biz.MarketUsecase, purchase *biz.PurchaseFaceUsecase) *MarketService {
-	return &MarketService{market: market, purchase: purchase}
+func NewMarketService(
+	market *biz.MarketUsecase,
+	purchase *biz.PurchaseFaceUsecase,
+	sale *biz.SaleFaceUsecase,
+) *MarketService {
+	return &MarketService{market: market, purchase: purchase, sale: sale}
 }
 
 // GetPayWay 对应 PurchaseController::payWay。
@@ -86,6 +91,46 @@ func (s *MarketService) PurchaseIndex(ctx context.Context, _ *v1.PurchaseIndexRe
 	}
 
 	raw, err := s.purchase.Index(ctx, biz.UserIDFromContext(ctx), query)
+	if err != nil {
+		return nil, bizFail(err)
+	}
+	return &v1.RawData{Json: raw}, nil
+}
+
+// GetSaleCategories 对应 SaleController::categories。
+// 硬编码一项，不查库；是 SaleController 里唯一免登录的方法。
+func (s *MarketService) GetSaleCategories(
+	_ context.Context, _ *v1.GetSaleCategoriesRequest,
+) (*v1.GetSaleCategoriesReply, error) {
+	cats := biz.SaleCategories()
+	items := make([]*v1.SaleCategory, 0, len(cats))
+	for _, c := range cats {
+		items = append(items, &v1.SaleCategory{Title: c.Title, Key: c.Key})
+	}
+	return &v1.GetSaleCategoriesReply{Items: items}, nil
+}
+
+// SaleIndex 对应 SaleController::index -> SaleFaceLists。
+//
+// 与 PurchaseIndex 不同：没有交易时段判断、没有缓存、没有生产测试用户分支
+// （原实现就是一句 `return $this->dataLists(new SaleFaceLists())`）。
+// 参数获取方式与 PurchaseIndex 一致，见那里的说明。
+func (s *MarketService) SaleIndex(ctx context.Context, _ *v1.SaleIndexRequest) (*v1.RawData, error) {
+	q := url.Values{}
+	if h, ok := ctx.(khttp.Context); ok && h.Request() != nil {
+		q = h.Request().URL.Query()
+	}
+	page := biz.ParsePageParams(q)
+	query := biz.SaleFaceQuery{
+		Page:       page,
+		Keyword:    q.Get("keyword"),
+		PriceStart: page.Float("price_start"),
+		PriceEnd:   page.Float("price_end"),
+		TimeStart:  q.Get("time_start"),
+		TimeEnd:    q.Get("time_end"),
+		Sort:       q.Get("sort"),
+	}
+	raw, err := s.sale.Index(ctx, query)
 	if err != nil {
 		return nil, bizFail(err)
 	}

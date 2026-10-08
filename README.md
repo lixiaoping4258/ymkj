@@ -17,7 +17,8 @@
 | **Stage 3** | `market` 域第 1 批：`pay_way`、`check/exchange` + 契约修正 | ✅ 完成并验证 |
 | **Stage 3** | 白名单中间件 + 分页基础设施（77 个列表类的公共前置件） | ✅ 完成并验证 |
 | **Stage 3** | `market` 域第 2 批：`purchase` 列表接口 + **免登录白名单审计修正** | ✅ 完成并验证 |
-| Stage 3+ | `market` 域其余 41 条（含全部写操作） | 待做 |
+| **Stage 3** | `market` 域第 3 批：`sales/categories`、`sales` 列表 | ✅ 完成并验证 |
+| Stage 3+ | `market` 域其余 39 条（含全部写操作） | 待做 |
 | Stage 4 | `wallet` / `payment` / `ticket` / `whitelist` | 待做 |
 | Stage 5 | `adminapi`（61 控制器，最大一块） | 待做 |
 | Stage 6 | `open` / `third` / 队列消费者 | 待做 |
@@ -208,6 +209,37 @@ count=3 与 PHP 一致；11 个字段逐字匹配（含 `issuer_time` 的 `Y-m-d
 
 **规则**：每迁一个接口，先回 PHP 找它所属控制器的 `$notNeedLogin`，
 确认这个方法在不在里面，两个方向的错都要防。
+
+### Stage 3 第四批：`sales/categories` + `sales` 列表
+
+`SaleController` 的公开性也逐个核过：
+`$notNeedLogin = ['categories']` → **`categories` 免登录，`index` 需要登录**。
+
+两个接口：
+
+| 接口 | 原实现 | 说明 |
+|---|---|---|
+| `GET /v1/market/sales/categories` | `SaleController::categories` | **硬编码** `[{"title":"全部","key":"all"}]`，不查库；免登录 |
+| `GET /v1/market/sales` | `SaleController::index` → `SaleFaceLists` | 需要登录；复用分页基础设施 |
+
+**两个列表的差异（都是实测出来的，不是推断）**：
+
+| | `PurchaseFaceLists` | `SaleFaceLists` |
+|---|---|---|
+| `switch($sort)` 有 default 分支 | ✅ 有 → 默认 `purchase_lists DESC` | ❌ 没有 → **不带 sort 时 SQL 里根本没有 ORDER BY** |
+| 行后处理 | `purchase_lists` 假值转 `"--"`，并连带两个单价转 `"--"` | 只有 `images` 的 json 解码 |
+| 控制器层 | 有交易时段判断 + 20 秒缓存 + 生产测试用户分支 | 只有一句 `return $this->dataLists(...)` |
+
+> 第二个列表的**代码量确实小得多**（没有交易时段、没有缓存），说明分页基础设施起到了作用。
+> 但两个 repo 的 WHERE/SELECT 仍有重复 —— 下批再抽公共构造器，届时两个集成测试会兜住回归。
+
+**验证**：`internal/data` 的集成测试新增 `TestSaleFaceRepo_MatchesRealPHP`。
+该接口**行级验证做不了**：`x_market_list_sales` 只有 4 行，与 `state=1` 的 archive
+join 后是 **0 行**（已直查确认，PHP 跑出来同样是 `count=0 / rows=0`）。
+所以断言的是 count 一致、SQL 可跑、6 种排序（含"无 ORDER BY"分支）都安全。
+这是**如实说明验证边界**，不是"验过了"。
+
+冒烟测试断言从 58 项加到 **64 项**，全部通过。
 
 ### 4.2 分页参数的两个语义坑
 
