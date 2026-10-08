@@ -1,4 +1,4 @@
-# End-to-end smoke test against a running instance.
+﻿# End-to-end smoke test against a running instance.
 #
 # Checks the things that actually break in this migration:
 #   - the response envelope is {code,show,msg,data}, not Kratos' default
@@ -224,6 +224,75 @@ if ($tok.Length -ne 32) {
     $pg3 = Get-Json "$Base/v1/market/sales?page_type=0" $hdr
     Check "sales page_type=0 is not treated as absent" ($pg3.body.data.page_size -ne 25) `
           "page_size=$($pg3.body.data.page_size)"
+
+    # ------------------------------------------- 其余已迁接口也要有断言
+    #
+    # 之前这 6 条接口迁完并验证过，但**一条冒烟断言都没有** ——
+    # 它们坏了不会有任何东西发现。这里补上。
+    #
+    # 断言优先挑**与数据无关**的部分（错误分支、字段类型、键集合），
+    # 只有确实需要真实数据的才用已知存在的 id，并注明来源，
+    # 避免测试因为数据变化而碎掉。
+
+    # --- purchase/showTotalAmount：纯计算，不需要任何数据 ---
+    $ta = Get-Json "$Base/v1/market/purchase/showTotalAmount?app_id=1&amount=1&unit_price=100" $hdr
+    Check "showTotalAmount code=1" ($ta.body.code -eq 1) "code=$($ta.body.code) raw=$($ta.raw)"
+    # 已用真机 PHP 对照过：feeRate=outFee(6.66)*0.01=0.0666 时 (1,100) -> "93.34"
+    Check "showTotalAmount(1,100) = 93.34 (matches real PHP)" ($ta.body.data.totalAmount -eq "93.34") `
+          "totalAmount=$($ta.body.data.totalAmount)"
+    # ⚠️ totalAmount 是**字符串**不是数字（原实现返回 bcsub 的结果）
+    Check "showTotalAmount totalAmount is a STRING" ($ta.body.data.totalAmount -is [string]) `
+          "type=$($ta.body.data.totalAmount.GetType().Name)"
+    # 参数不合法 -> 字符串 "0"（没有小数位），不是 "0.00"
+    $ta0 = Get-Json "$Base/v1/market/purchase/showTotalAmount?app_id=1&amount=0&unit_price=100" $hdr
+    Check "showTotalAmount(0,...) = '0' not '0.00'" ($ta0.body.data.totalAmount -eq "0") `
+          "totalAmount=$($ta0.body.data.totalAmount)"
+
+    # --- stock/lookall：不需要特定数据 ---
+    $sl = Get-Json "$Base/v1/market/stock/lookall" $hdr
+    Check "stock/lookall code=1" ($sl.body.code -eq 1) "code=$($sl.body.code)"
+    $slk = $sl.body.data.PSObject.Properties.Name
+    Check "stock/lookall has keys state+num" (($slk -contains 'state') -and ($slk -contains 'num')) `
+          "keys=$($slk -join ',')"
+    Check "stock/lookall num is a NUMBER" ($sl.body.data.num -is [int] -or $sl.body.data.num -is [long]) `
+          "type=$($sl.body.data.num.GetType().Name)"
+
+    # --- purchase/info：错误分支与数据无关 ---
+    $piNoId = Get-Json "$Base/v1/market/purchase/info" $hdr
+    Check "purchase/info missing id -> msg 档案ID不能为空" ($piNoId.body.msg -eq '档案ID不能为空') `
+          "msg=$($piNoId.body.msg)"
+    $piBad = Get-Json "$Base/v1/market/purchase/info?id=99999999" $hdr
+    Check "purchase/info unknown id -> msg 未找到档案信息" ($piBad.body.msg -eq '未找到档案信息') `
+          "msg=$($piBad.body.msg)"
+
+    # --- sales/info：两条错误信息必须可区分（原实现分两步的意义） ---
+    $siBad = Get-Json "$Base/v1/market/sales/info?id=999999999" $hdr
+    Check "sales/info unknown id -> msg 未找到艺术品信息" ($siBad.body.msg -eq '未找到艺术品信息') `
+          "msg=$($siBad.body.msg)"
+
+    # --- purchase/out 与 purchase/on：同一个 id 应给出不同 count（证明 state 分支独立生效） ---
+    $lpid = '178056289901818'
+    $po = Get-Json "$Base/v1/market/purchase/out?id=$lpid" $hdr
+    $pn = Get-Json "$Base/v1/market/purchase/on?id=$lpid" $hdr
+    Check "purchase/out id 不存在 -> msg 记录不存在" `
+          ((Get-Json "$Base/v1/market/purchase/out?id=99999999" $hdr).body.msg -eq '记录不存在') ""
+    Check "purchase/out code=1 (list id $lpid)" ($po.body.code -eq 1) "code=$($po.body.code) raw=$($po.raw)"
+    Check "purchase/on  code=1 (list id $lpid)" ($pn.body.code -eq 1) "code=$($pn.body.code) raw=$($pn.raw)"
+    # 这两个接口必须各自有 count，且可以不同 —— 相同也不报错，但至少形状要对
+    # 注意：PowerShell 对跨行的 -and 表达式解析很挑剔（会报 Missing closing ')'），
+    # 所以先把键列表取到变量里，再写成单行判断。
+    $poKeys = $po.body.data.PSObject.Properties.Name
+    $poKeysOk = ($poKeys -contains 'count') -and ($poKeys -contains 'lists') -and ($poKeys -contains 'page_size')
+    Check "purchase/out has count+lists+page_size" $poKeysOk "keys=$($poKeys -join ',')"
+    # purchase/out 的行里 available_amount 必须是**字符串**（bcsub 的结果，不是数字）
+    if ($po.body.data.lists.Count -gt 0) {
+        $row = $po.body.data.lists[0]
+        $aa = $row.available_amount
+        Check "purchase/out available_amount is a STRING" ($aa -is [string]) "type=$($aa.GetType().Name) val=$aa"
+        $rowKeys = $row.PSObject.Properties.Name
+        $noLeak = ($rowKeys -notcontains 'receiveAmount') -and ($rowKeys -notcontains 'archiveId')
+        Check "purchase/out row has no camelCase leak" $noLeak "keys=$($rowKeys -join ',')"
+    }
 
     # ------------------------------------------------------------ user/info
     $me = Get-Json "$Base/v1/user/info" $hdr
