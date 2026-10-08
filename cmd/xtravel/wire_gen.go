@@ -66,7 +66,7 @@ func wireApp(confServer *conf.Server, confData *conf.Data, app *conf.App, confLo
 	purchaseStateRepo := data.NewPurchaseStateRepo(db, confData, client, app)
 	purchaseStateUsecase := biz.NewPurchaseStateUsecase(purchaseStateRepo, logger)
 	rawKeyCache := data.NewRawCache(client)
-	staleCache := biz.NewStaleCache(cache, locker, logger)
+	staleCache := biz.NewStaleCache(rawKeyCache, locker, logger)
 	marketService := service.NewMarketService(marketUsecase, purchaseFaceUsecase, saleFaceUsecase, stockUsecase, archiveUsecase, feeUsecase, purchaseStateUsecase, rawKeyCache, staleCache, logger)
 	userSessionRepo := data.NewUserSessionRepo(db)
 	authConfig := data.NewAuthConfig(auth, logger)

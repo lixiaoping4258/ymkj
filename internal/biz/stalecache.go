@@ -51,12 +51,21 @@ import (
 
 // StaleCache 提供 stale-while-revalidate 的读取语义。
 type StaleCache struct {
-	cache  Cache
+	cache  RawKeyCache
 	locker Locker
 	log    *log.Helper
 }
 
-func NewStaleCache(cache Cache, locker Locker, logger log.Logger) *StaleCache {
+// NewStaleCache 的 cache 参数用 RawKeyCache（不带前缀）而不是 Cache。
+//
+// 原因：这套模式在原项目里是**和 tryLock/unlock 一起用 RedisLockService 的**，
+// 也就是裸 Redis、无前缀。如果这里收 biz.Cache，wire 会注入带 xtravel:go: 前缀的
+// 实现，键空间就与原实现不一致了（功能不受影响，但不自洽）。
+//
+// RawKeyCache 的方法集与 Cache 完全相同，所以任何满足 Cache 的实现
+// （包括单测里的 fake）都自动满足它，改动不影响既有测试。
+
+func NewStaleCache(cache RawKeyCache, locker Locker, logger log.Logger) *StaleCache {
 	return &StaleCache{cache: cache, locker: locker, log: log.NewHelper(logger)}
 }
 
