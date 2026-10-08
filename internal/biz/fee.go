@@ -1,10 +1,17 @@
 package biz
 
 import (
+	"context"
+	"encoding/json"
 	"math"
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/go-kratos/kratos/v2/log"
+
+	"github.com/lixiaoping4258/ymkj/internal/conf"
 )
 
 // 本文件对应原项目 app/api/logic/order/FeeAmountLogic.php 的**纯计算部分**：
@@ -241,4 +248,154 @@ func max64(a, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+/* ------------------------------------------------------------ 费率用例 */
+
+// FeeUsecase 负责解析费率并计算总额。
+//
+// 依赖说明：
+//   - config：对应 ConfigService::get('trade', ...)，它自带 TP 层缓存（另一套机制），
+//     这里复用已有的 ConfigUsecase。
+//   - cache：对应 Cache::tag('appFee')->set(...)，是 **TP 缓存** -> 用隔离前缀。
+type FeeUsecase struct {
+	config *ConfigUsecase
+	cache  Cache
+	loc    *time.Location
+	log    *log.Helper
+}
+
+func NewFeeUsecase(config *ConfigUsecase, cache Cache, c *conf.App, logger log.Logger) *FeeUsecase {
+	loc := time.Local
+	if c != nil && c.Timezone != "" {
+		if l, err := time.LoadLocation(c.Timezone); err == nil {
+			loc = l
+		}
+	}
+	return &FeeUsecase{config: config, cache: cache, loc: loc, log: log.NewHelper(logger)}
+}
+
+// GetFeeRate 逐字对应 FeeAmountLogic::getFeeRate($appId)。
+//
+//	if (empty($appId)) { return '0'; }
+//	$cacheKey = sprintf('app:%s:fee', $appId);
+//	$feeRate = Cache::get($cacheKey);
+//	if (is_null($feeRate)) {                       // 只在未命中时重算并写入
+//	    $outFee = ConfigService::get('trade','outFee');
+//	    $outFeeDate = ConfigService::get('trade','outFeeDate');
+//	    $ttl = 60;
+//	    if (!empty($outFeeDate) && !empty($outFeeDate['start'])
+//	        && !empty($outFeeDate['end']) && !empty($outFeeDate['fee'])) {
+//	        $now = time();
+//	        $startTs = strtotime(trim($outFeeDate['start']).' 00:00:00');
+//	        $endTs   = strtotime(trim($outFeeDate['end']).' 23:59:59');
+//	        if ($startTs <= $now && $now < $endTs) { $outFee = $outFeeDate['fee'] ?? 0; }
+//	        $ttl = self::calcFeeTtl($startTs, $endTs, $now);
+//	    }
+//	    $feeRate = bcmul($outFee, 0.01, 4);        // 百分数 -> 小数，4 位
+//	    Cache::tag('appFee')->set($cacheKey, $feeRate, $ttl);
+//	}
+//	return $feeRate;
+//
+// 两个实现细节：
+//  1. 只有**缓存未命中**时才读配置。原注释写明了原因：每次都写会让 TTL 不断续期，
+//     导致缓存永不失效、费率切换无限延迟。
+//  2. TTL 用 CalcFeeTtl 对齐到费率切换时刻（活动开始/结束），不是死板的 60 秒。
+//
+// 线上当前配置：outFee='6.66'（即 6.66%），
+// outFeeDate={'fee':'1','start':'2026-09-24','end':'2026-09-24'}。
+// 不在活动期内时用 outFee；活动当天会切到 1%。
+func (uc *FeeUsecase) GetFeeRate(ctx context.Context, appID string) (string, error) {
+	if appID == "" {
+		return "0", nil
+	}
+	cacheKey := "app:" + appID + ":fee"
+
+	if v, err := uc.cache.Get(ctx, cacheKey); err != nil {
+		uc.log.WithContext(ctx).Warnf("读取费率缓存失败: %v", err)
+	} else if s, ok := v.(string); ok && s != "" {
+		return s, nil
+	}
+
+	outFee := uc.configString(ctx, "outFee")
+	ttl := int64(60)
+
+	if v, err := uc.config.Get(ctx, "trade", "outFeeDate"); err == nil {
+		if m, ok := v.(map[string]any); ok {
+			start := feeStr(m["start"])
+			end := feeStr(m["end"])
+			fee := feeStr(m["fee"])
+			if start != "" && end != "" && fee != "" {
+				now := time.Now().Unix()
+				startTs := parseInLoc(start+" 00:00:00", uc.loc)
+				endTs := parseInLoc(end+" 23:59:59", uc.loc)
+				if startTs <= now && now < endTs {
+					outFee = fee
+				}
+				ttl = CalcFeeTtl(startTs, endTs, now)
+			}
+		}
+	}
+
+	feeRate := bcMul(outFee, "0.01", 4)
+	if ttl < 1 {
+		ttl = 1
+	}
+	if err := uc.cache.Set(ctx, cacheKey, feeRate, time.Duration(ttl)*time.Second); err != nil {
+		uc.log.WithContext(ctx).Warnf("写入费率缓存失败: %v", err)
+	}
+	return feeRate, nil
+}
+
+// ShowTotalAmount 对应 FeeAmountLogic::showTotalAmount($appId, $count, $unitPrice)。
+//
+// ⚠️ 调用顺序与原实现一致：**参数不合法时直接返回 '0'，不会去碰 getFeeRate**。
+func (uc *FeeUsecase) ShowTotalAmount(ctx context.Context, appID string, count int, unitPrice string) (string, error) {
+	if appID == "" || count <= 0 || !phpPositiveAmount(unitPrice) {
+		return "0", nil
+	}
+	rate, err := uc.GetFeeRate(ctx, appID)
+	if err != nil {
+		return "", err
+	}
+	return ShowTotalAmountWithRate(rate, count, unitPrice), nil
+}
+
+func (uc *FeeUsecase) configString(ctx context.Context, name string) string {
+	v, err := uc.config.Get(ctx, "trade", name)
+	if err != nil {
+		uc.log.WithContext(ctx).Warnf("读取配置 trade.%s 失败: %v", name, err)
+		return "0"
+	}
+	return feeStr(v)
+}
+
+// feeStr 把配置值转成 bcmath 能吃的十进制字符串。
+func feeStr(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(t)
+	case int:
+		return strconv.Itoa(t)
+	case int64:
+		return strconv.FormatInt(t, 10)
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	case json.Number:
+		return t.String()
+	default:
+		return ""
+	}
+}
+
+// parseInLoc 对应 strtotime('Y-m-d H:i:s')，按应用时区解析。
+// 解析失败返回 0（PHP 的 strtotime 失败返回 false，参与比较时当 0 用）。
+func parseInLoc(s string, loc *time.Location) int64 {
+	t, err := time.ParseInLocation("2006-01-02 15:04:05", strings.TrimSpace(s), loc)
+	if err != nil {
+		return 0
+	}
+	return t.Unix()
 }

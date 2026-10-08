@@ -26,6 +26,7 @@ const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseI
 const OperationMarketServicePurchaseInfo = "/xtravel.v1.MarketService/PurchaseInfo"
 const OperationMarketServiceSaleIndex = "/xtravel.v1.MarketService/SaleIndex"
 const OperationMarketServiceSaleInfo = "/xtravel.v1.MarketService/SaleInfo"
+const OperationMarketServiceShowTotalAmount = "/xtravel.v1.MarketService/ShowTotalAmount"
 const OperationMarketServiceStockLookAll = "/xtravel.v1.MarketService/StockLookAll"
 
 type MarketServiceHTTPServer interface {
@@ -73,6 +74,12 @@ type MarketServiceHTTPServer interface {
 	//    （物理键 archive:{id}），有 7 个字段，TTL 600s。
 	//    两者物理键不同所以不会互相覆盖，但字段集不同 —— 不要"顺手统一"。
 	SaleInfo(context.Context, *SaleInfoRequest) (*SaleInfoReply, error)
+	// ShowTotalAmount 计算总额（含服务手续费）
+	// 原: PurchaseOrdersController::showTotalAmount -> FeeAmountLogic::showTotalAmount
+	//
+	// ⚠️ totalAmount 是**字符串**，不是数字：原实现返回的是 bcsub 的结果，
+	//    且参数不合法时是 '0'（没有小数位），合法时是 2 位小数。
+	ShowTotalAmount(context.Context, *ShowTotalAmountRequest) (*ShowTotalAmountReply, error)
 	// StockLookAll 库存汇总（可释放数量 + 是否有释放任务在处理中）
 	// 原: PurchaseController::lookAll -> GoodsLogic::lookAll
 	//     **需要登录**；结果缓存 10 秒
@@ -92,6 +99,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/stock/lookall", _MarketService_StockLookAll0_HTTP_Handler(srv))
 	r.GET("/v1/market/purchase/info", _MarketService_PurchaseInfo0_HTTP_Handler(srv))
 	r.GET("/v1/market/sales/info", _MarketService_SaleInfo0_HTTP_Handler(srv))
+	r.GET("/v1/market/purchase/showTotalAmount", _MarketService_ShowTotalAmount0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -246,6 +254,25 @@ func _MarketService_SaleInfo0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx
 	}
 }
 
+func _MarketService_ShowTotalAmount0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in ShowTotalAmountRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServiceShowTotalAmount)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.ShowTotalAmount(ctx, req.(*ShowTotalAmountRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*ShowTotalAmountReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -291,6 +318,12 @@ type MarketServiceHTTPClient interface {
 	//    （物理键 archive:{id}），有 7 个字段，TTL 600s。
 	//    两者物理键不同所以不会互相覆盖，但字段集不同 —— 不要"顺手统一"。
 	SaleInfo(ctx context.Context, req *SaleInfoRequest, opts ...http.CallOption) (rsp *SaleInfoReply, err error)
+	// ShowTotalAmount 计算总额（含服务手续费）
+	// 原: PurchaseOrdersController::showTotalAmount -> FeeAmountLogic::showTotalAmount
+	//
+	// ⚠️ totalAmount 是**字符串**，不是数字：原实现返回的是 bcsub 的结果，
+	//    且参数不合法时是 '0'（没有小数位），合法时是 2 位小数。
+	ShowTotalAmount(ctx context.Context, req *ShowTotalAmountRequest, opts ...http.CallOption) (rsp *ShowTotalAmountReply, err error)
 	// StockLookAll 库存汇总（可释放数量 + 是否有释放任务在处理中）
 	// 原: PurchaseController::lookAll -> GoodsLogic::lookAll
 	//     **需要登录**；结果缓存 10 秒
@@ -435,6 +468,25 @@ func (c *MarketServiceHTTPClientImpl) SaleInfo(ctx context.Context, in *SaleInfo
 	pattern := "/v1/market/sales/info"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServiceSaleInfo))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ShowTotalAmount 计算总额（含服务手续费）
+// 原: PurchaseOrdersController::showTotalAmount -> FeeAmountLogic::showTotalAmount
+//
+// ⚠️ totalAmount 是**字符串**，不是数字：原实现返回的是 bcsub 的结果，
+//
+//	且参数不合法时是 '0'（没有小数位），合法时是 2 位小数。
+func (c *MarketServiceHTTPClientImpl) ShowTotalAmount(ctx context.Context, in *ShowTotalAmountRequest, opts ...http.CallOption) (*ShowTotalAmountReply, error) {
+	var out ShowTotalAmountReply
+	pattern := "/v1/market/purchase/showTotalAmount"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServiceShowTotalAmount))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

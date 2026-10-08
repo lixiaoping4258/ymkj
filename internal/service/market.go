@@ -22,6 +22,7 @@ type MarketService struct {
 	sale     *biz.SaleFaceUsecase
 	stock    *biz.StockUsecase
 	archive  *biz.ArchiveUsecase
+	fee      *biz.FeeUsecase
 }
 
 func NewMarketService(
@@ -30,8 +31,12 @@ func NewMarketService(
 	sale *biz.SaleFaceUsecase,
 	stock *biz.StockUsecase,
 	archive *biz.ArchiveUsecase,
+	fee *biz.FeeUsecase,
 ) *MarketService {
-	return &MarketService{market: market, purchase: purchase, sale: sale, stock: stock, archive: archive}
+	return &MarketService{
+		market: market, purchase: purchase, sale: sale,
+		stock: stock, archive: archive, fee: fee,
+	}
 }
 
 // GetPayWay 对应 PurchaseController::payWay。
@@ -264,4 +269,29 @@ func (s *MarketService) SaleInfo(
 		reply.PlatformName = v
 	}
 	return reply, nil
+}
+
+// ShowTotalAmount 对应 PurchaseOrdersController::showTotalAmount。
+//
+// 原实现：
+//
+//	$params = $this->request->param();                  // GET/POST 都收
+//	$appId = $params['app_id'] ?? '';
+//	$amount = $params['amount'] ?? 0;
+//	$unitPrice = $params['unit_price'] ?? '0';
+//	$totalAmount = FeeAmountLogic::showTotalAmount((string)$appId, (int)$amount, (string)$unitPrice);
+//	return $this->data(['totalAmount' => $totalAmount]);
+func (s *MarketService) ShowTotalAmount(
+	ctx context.Context, in *v1.ShowTotalAmountRequest,
+) (*v1.ShowTotalAmountReply, error) {
+	// (int)$amount 的语义：非数字转 0
+	amount := 0
+	if v, err := strconv.Atoi(strings.TrimSpace(in.GetAmount())); err == nil {
+		amount = v
+	}
+	total, err := s.fee.ShowTotalAmount(ctx, in.GetAppId(), amount, in.GetUnitPrice())
+	if err != nil {
+		return nil, bizFail(err)
+	}
+	return &v1.ShowTotalAmountReply{TotalAmount: total}, nil
 }

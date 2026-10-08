@@ -95,6 +95,27 @@ service MarketService {
   rpc SaleInfo(SaleInfoRequest) returns (SaleInfoReply) {
     option (google.api.http) = {get: "/v1/market/sales/info"};
   }
+
+  // 计算总额（含服务手续费）
+  // 原: PurchaseOrdersController::showTotalAmount -> FeeAmountLogic::showTotalAmount
+  //
+  // ⚠️ totalAmount 是**字符串**，不是数字：原实现返回的是 bcsub 的结果，
+  //    且参数不合法时是 '0'（没有小数位），合法时是 2 位小数。
+  rpc ShowTotalAmount(ShowTotalAmountRequest) returns (ShowTotalAmountReply) {
+    option (google.api.http) = {get: "/v1/market/purchase/showTotalAmount"};
+  }
+}
+
+message ShowTotalAmountRequest {
+  // 原实现用 $this->request->param()（GET/POST 都收），路由是 GET
+  string app_id = 1 [json_name = "app_id"];
+  string amount = 2 [json_name = "amount"];
+  string unit_price = 3 [json_name = "unit_price"];
+}
+
+message ShowTotalAmountReply {
+  // 原实现是 $this->data(['totalAmount' => $totalAmount]) —— key 是 camelCase
+  string total_amount = 1 [json_name = "totalAmount"];
 }
 
 message SaleInfoRequest {

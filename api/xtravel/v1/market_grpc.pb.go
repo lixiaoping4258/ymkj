@@ -27,6 +27,7 @@ const (
 	MarketService_StockLookAll_FullMethodName      = "/xtravel.v1.MarketService/StockLookAll"
 	MarketService_PurchaseInfo_FullMethodName      = "/xtravel.v1.MarketService/PurchaseInfo"
 	MarketService_SaleInfo_FullMethodName          = "/xtravel.v1.MarketService/SaleInfo"
+	MarketService_ShowTotalAmount_FullMethodName   = "/xtravel.v1.MarketService/ShowTotalAmount"
 )
 
 // MarketServiceClient is the client API for MarketService service.
@@ -100,6 +101,13 @@ type MarketServiceClient interface {
 	//	（物理键 archive:{id}），有 7 个字段，TTL 600s。
 	//	两者物理键不同所以不会互相覆盖，但字段集不同 —— 不要"顺手统一"。
 	SaleInfo(ctx context.Context, in *SaleInfoRequest, opts ...grpc.CallOption) (*SaleInfoReply, error)
+	// 计算总额（含服务手续费）
+	// 原: PurchaseOrdersController::showTotalAmount -> FeeAmountLogic::showTotalAmount
+	//
+	// ⚠️ totalAmount 是**字符串**，不是数字：原实现返回的是 bcsub 的结果，
+	//
+	//	且参数不合法时是 '0'（没有小数位），合法时是 2 位小数。
+	ShowTotalAmount(ctx context.Context, in *ShowTotalAmountRequest, opts ...grpc.CallOption) (*ShowTotalAmountReply, error)
 }
 
 type marketServiceClient struct {
@@ -190,6 +198,16 @@ func (c *marketServiceClient) SaleInfo(ctx context.Context, in *SaleInfoRequest,
 	return out, nil
 }
 
+func (c *marketServiceClient) ShowTotalAmount(ctx context.Context, in *ShowTotalAmountRequest, opts ...grpc.CallOption) (*ShowTotalAmountReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ShowTotalAmountReply)
+	err := c.cc.Invoke(ctx, MarketService_ShowTotalAmount_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketServiceServer is the server API for MarketService service.
 // All implementations must embed UnimplementedMarketServiceServer
 // for forward compatibility.
@@ -261,6 +279,13 @@ type MarketServiceServer interface {
 	//	（物理键 archive:{id}），有 7 个字段，TTL 600s。
 	//	两者物理键不同所以不会互相覆盖，但字段集不同 —— 不要"顺手统一"。
 	SaleInfo(context.Context, *SaleInfoRequest) (*SaleInfoReply, error)
+	// 计算总额（含服务手续费）
+	// 原: PurchaseOrdersController::showTotalAmount -> FeeAmountLogic::showTotalAmount
+	//
+	// ⚠️ totalAmount 是**字符串**，不是数字：原实现返回的是 bcsub 的结果，
+	//
+	//	且参数不合法时是 '0'（没有小数位），合法时是 2 位小数。
+	ShowTotalAmount(context.Context, *ShowTotalAmountRequest) (*ShowTotalAmountReply, error)
 	mustEmbedUnimplementedMarketServiceServer()
 }
 
@@ -294,6 +319,9 @@ func (UnimplementedMarketServiceServer) PurchaseInfo(context.Context, *PurchaseI
 }
 func (UnimplementedMarketServiceServer) SaleInfo(context.Context, *SaleInfoRequest) (*SaleInfoReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaleInfo not implemented")
+}
+func (UnimplementedMarketServiceServer) ShowTotalAmount(context.Context, *ShowTotalAmountRequest) (*ShowTotalAmountReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method ShowTotalAmount not implemented")
 }
 func (UnimplementedMarketServiceServer) mustEmbedUnimplementedMarketServiceServer() {}
 func (UnimplementedMarketServiceServer) testEmbeddedByValue()                       {}
@@ -460,6 +488,24 @@ func _MarketService_SaleInfo_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketService_ShowTotalAmount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShowTotalAmountRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).ShowTotalAmount(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_ShowTotalAmount_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).ShowTotalAmount(ctx, req.(*ShowTotalAmountRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketService_ServiceDesc is the grpc.ServiceDesc for MarketService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -498,6 +544,10 @@ var MarketService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SaleInfo",
 			Handler:    _MarketService_SaleInfo_Handler,
+		},
+		{
+			MethodName: "ShowTotalAmount",
+			Handler:    _MarketService_ShowTotalAmount_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
