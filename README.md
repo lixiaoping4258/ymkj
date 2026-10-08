@@ -1076,3 +1076,42 @@ Go 版保持原样以兼容前端，但在 proto 里写了注释说明。
   YAML 解析器遇到 BOM 会挂。用 `[System.IO.File]::WriteAllText(..., UTF8Encoding($false))`
 - 真实连接信息在 `xTravel/.env` 的 `[DATABASE]` / `[redis]` 段：
   表前缀是 **`x_`**，不是 `config/database.php` 里的默认值 `la_`
+
+### 10.1 ⚠️ BOM 有两个**相反**的要求，别记混
+
+这是本项目最容易搞错的一点：**同一个项目里，有的文件必须有 BOM，有的绝不能有。**
+
+| 文件 | BOM | 原因 |
+|---|---|---|
+| `scripts/*.ps1`（**含非 ASCII 内容时**） | **必须有** | PS 5.1 不带 BOM 时按 ANSI/GBK 读 `.ps1`；UTF-8 中文的前导字节会**吞掉紧随其后的换行**，于是报出 `Missing closing ')'` / `Unexpected token '}'` 这类**看起来像括号不配对**的语法错误，实际是编码问题 |
+| `configs/*.yaml` | **绝不能有** | YAML 解析器遇到 BOM 直接挂 |
+| `.env` 生成物（`gen-config.ps1` 产出的 yaml） | **绝不能有** | 同上 |
+
+写法对照：
+
+```powershell
+# 需要 BOM（.ps1）
+[System.IO.File]::WriteAllText($f, $c, (New-Object System.Text.UTF8Encoding($true)))
+
+# 不要 BOM（.yaml）
+[System.IO.File]::WriteAllText($f, $c, (New-Object System.Text.UTF8Encoding($false)))
+```
+
+**判断依据是"谁来读这个文件"**：PS 5.1 读 `.ps1`、YAML 解析器读 `.yaml`。
+
+> 这条是**真踩过两次**才记下来的：第一次我以为是多行 `-and` 表达式的问题，
+> 改完报错换了个行号仍在，才想到编码。
+> 而写这一节时我原本声称"这条教训早就写进 README 了" ——
+> **去查发现 `ASCII`/`ANSI`/`GBK` 在 README 里各出现 0 次，根本没记过。**
+> 凡声称"文档里写过"，先搜一遍再说。
+
+### 10.2 其余 PowerShell 解析陷阱（都实际踩过）
+
+| 写法 | 问题 | 正确写法 |
+|---|---|---|
+| `"$db?charset=utf8"` | `?` 是合法变量名字符，`$db?charset` 被当成未定义变量 → 空串 | `${db}?charset=utf8` |
+| `[IO.File]::ReadAllText(".\x.go")` | **.NET 静态调用用进程工作目录，不是 PowerShell 的 `cd`** | 传绝对路径 |
+| `"`t"` 想表达制表符 | PowerShell 不认 `\t`，那是字面反斜杠+t | 用 `` `t `` |
+| `@($空结果).Count` | **等于 1**（空字符串被当成一个元素），会把空输出数成 1 条 | 直接打印内容判断，别用 `.Count` 判空 |
+| 在 `.ps1` 里写 `<<'EOF'` heredoc | PowerShell 不支持 | 写消息文件再 `git commit -F` |
+| `Select-Object -First N` 接在原生命令后 | **会关掉管道并杀掉上游进程**（曾杀掉一个 56% 的 Blender 渲染） | 用 `[array]` 收全再截取 |
