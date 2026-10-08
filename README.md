@@ -241,6 +241,66 @@ join 后是 **0 行**（已直查确认，PHP 跑出来同样是 `count=0 / rows
 
 冒烟测试断言从 58 项加到 **64 项**，全部通过。
 
+### Stage 3 第五批：修一个我自己的软删除 bug + 记录两处待办
+
+**🔴 `MarketPurchase` 的软删除过滤漏了（我 Stage 3 埋的）**
+
+`MarketPurchase` 用了 ThinkPHP 的 SoftDelete，**PHP 侧所有查询都会隐式加
+`delete_time IS NULL`，GORM 不会**。我写 `checkExchange` 的计数时漏了这个条件：
+
+```go
+// 错的：会把软删除的兑换单也算进来
+Where("user_id = ? AND state = ?", userID, state)
+```
+
+后果：软删除的 WANTED 兑换单被算进「当前是否存在兑换单」，
+导致用户被**错误拦下**（"当前存在兑换单，暂无法导入数字艺术品"）。
+
+**怎么发现的**：读 `PurchaseStateLists` 源码时，第 90 行的注释里贴了一段真实 SQL，
+末尾带着 `AND MarketPurchase.delete_time IS NULL`。也就是说这条线索一直明晃晃地
+写在原项目的注释里，我却是第四轮才看到。
+
+**实测数据**：`x_market_purchase` 共 750 行，其中 **65 行软删除**。
+测试用例取 `user_id=16 + state='OFFLINE'`：全量 95 行、存活 69 行，
+漏过滤会得 95。新增 `TestMarketPurchase_SoftDeleteFilterIsApplied` 锁住，
+并断言"不能等于全量行数"——这样将来数据变了也不会误判成通过。
+
+注意本表的 `delete_time` 是 **datetime**，而 `x_user` 的是 int unsigned：
+判空写法一样，类型不同，模型里别混用。
+`PurchaseOrders` 也用了 SoftDelete，迁移订单域时要一并处理。
+
+**📌 待办一：`salesOn` 已实现缓存击穿防护，`salesOut` 没有**
+
+`PurchaseController::salesOn` 里是一套完整的 **stale-while-revalidate**：
+逻辑过期 5 秒 + 物理 TTL 15 秒 + 重建锁 5 秒。
+
+```php
+$payload = ['value'=>..., 'expire_at'=>time()+5];              // 逻辑过期
+RedisLockService::set($cacheKey, json_encode($payload), 15);   // 物理 TTL 只兜底
+if ($payload && $payload['expire_at'] > time()) return $payload['value'];
+$token = tryLock($lockKey, 5000);
+if ($token === false) {
+    if ($payload) return $payload['value'];   // 没抢到锁 -> 用旧值顶着，绝不排队
+    return $this->dataLists(...);             // 冷启动 -> 直查，且不写缓存
+}
+```
+
+**这正是十几轮前讨论过的「缓存过期 + 很多人同时刷新」问题，原项目里已经实现了。**
+而 `salesOut` 用的是简单版（无锁、无逻辑过期），两者不一致 —— 迁移时**逐字保持各自的
+行为**，不要"顺手统一"。另外 `salesOn` 里的 `ksort($params)` 注释写着
+"固定顺序，否则 `?a=1&b=2` 与 `?b=2&a=1` 是两个键"，与我在
+`purchaseIndexCacheKey` 里做的处理一致（而 `index`/`salesOut` 都没做）。
+
+**📌 待办二：`PurchaseStateLists` 比 face list 复杂，迁移要小心**
+
+- 构造时要 `MarketListPurchaseLogic::findSales($id)` 查库，查不到直接抛异常
+- `queryWhere` 分 state 两支，用 `end_time > now`、`receive_amount > 0`
+- `APP_DEBUG=false` 时会排除测试用户 [6,7,1000] 发布的求购单
+- **逐行调 `PurchaseOrderStockLogic::getNum($id)`** 算 `available_amount`（N+1 查询）
+- **WANTED 状态下会在分页之后过滤掉 `available_amount <= 0` 的行** ——
+  也就是那一页可能少于 `page_size` 条，而 `count()` 不做这个过滤，
+  **count 与 lists 天然对不上**。这是原实现的行为，迁移时保持，但要写进文档。
+
 ### 4.2 分页参数的两个语义坑
 
 `BaseDataLists::initPage` 里 `page_type` 和 `page_no` 用的是**不同的默认值规则**：

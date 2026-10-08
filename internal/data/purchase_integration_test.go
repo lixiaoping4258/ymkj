@@ -277,3 +277,77 @@ func testConf(prefix string) *conf.Data {
 		Database: &conf.Data_Database{Prefix: prefix},
 	}
 }
+
+// openTestDB 打开真实库（读 configs/config.local.yaml），没有配置就跳过。
+func openTestDB(t *testing.T) (*gorm.DB, string) {
+	t.Helper()
+	cfgPath := findRepoRoot(t) + "/configs/config.local.yaml"
+	if _, err := os.Stat(cfgPath); err != nil {
+		t.Skip("configs/config.local.yaml 不存在，跳过集成测试")
+	}
+	var cfg struct {
+		Data struct {
+			Database struct {
+				Source string `yaml:"source"`
+				Prefix string `yaml:"prefix"`
+			} `yaml:"database"`
+		} `yaml:"data"`
+	}
+	raw, _ := os.ReadFile(cfgPath)
+	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("解析配置失败: %v", err)
+	}
+	db, err := gorm.Open(mysql.Open(cfg.Data.Database.Source), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			TablePrefix:   cfg.Data.Database.Prefix,
+			SingularTable: true,
+		},
+		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("连库失败: %v", err)
+	}
+	return db, cfg.Data.Database.Prefix
+}
+
+// TestMarketPurchase_SoftDeleteFilterIsApplied 锁住一个**真实的 bug**。
+//
+// MarketPurchase 用了 ThinkPHP 的 SoftDelete，PHP 侧所有查询都会隐式加
+// `delete_time IS NULL`，GORM 不会。我 Stage 3 写 checkExchange 时漏了这个条件，
+// 后果是：软删除的兑换单也被算进 "是否存在 WANTED 兑换单"，
+// 导致用户被错误拦下（"当前存在兑换单，暂无法导入数字艺术品"）。
+//
+// 这个 bug 发现于 PurchaseStateLists 源码第 90 行的注释 —— 那段注释里贴了真实 SQL，
+// 末尾带着 `AND MarketPurchase.delete_time IS NULL`。
+//
+// 用例取自真实数据：user_id=16 + state='OFFLINE' 共 95 行，其中 26 行是软删除的，
+// 存活 69 行。漏过滤会得到 95，正确应得 69 —— 两者可区分。
+func TestMarketPurchase_SoftDeleteFilterIsApplied(t *testing.T) {
+	db, prefix := openTestDB(t)
+	repo := NewMarketPurchaseRepo(db)
+	ctx := context.Background()
+
+	// 先直查确认这个用例的前提仍然成立（数据变了就让测试显式跳过，而不是误判）
+	var total, alive int64
+	raw := "SELECT COUNT(*) FROM " + prefix + "market_purchase WHERE user_id = 16 AND state = 'OFFLINE'"
+	if err := db.Raw(raw).Scan(&total).Error; err != nil {
+		t.Fatalf("直查失败: %v", err)
+	}
+	if err := db.Raw(raw + " AND delete_time IS NULL").Scan(&alive).Error; err != nil {
+		t.Fatalf("直查失败: %v", err)
+	}
+	if total == alive {
+		t.Skipf("用例前提已变（total=%d alive=%d，没有软删除记录可区分），跳过", total, alive)
+	}
+
+	got, err := repo.CountByUserAndState(ctx, 16, "OFFLINE")
+	if err != nil {
+		t.Fatalf("CountByUserAndState 失败: %v", err)
+	}
+	if got == total {
+		t.Fatalf("计数 %d 等于全量行数 —— 说明 delete_time IS NULL 过滤没生效（PHP 应返回 %d）", got, alive)
+	}
+	if got != alive {
+		t.Fatalf("计数 %d，应为存活行数 %d", got, alive)
+	}
+}

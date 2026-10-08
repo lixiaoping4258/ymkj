@@ -91,6 +91,10 @@ func (r *whitelistRepo) GroupItemEnabled(ctx context.Context, groupID uint64) (m
 
 // PurchasePayWay 对应
 // MarketPurchase::where([['id','=',$context['purchase_id']]])->field('id,pay_way')->findOrEmpty()。
+//
+// ⚠️ 同样要带 `delete_time IS NULL`（MarketPurchase 用了 SoftDelete，
+// ThinkPHP 隐式加条件）。已软删除的兑换单在 PHP 侧查不到，
+// 这里若查得到就会多做一次细粒度判断，行为就不一致了。
 func (r *whitelistRepo) PurchasePayWay(ctx context.Context, purchaseID uint64) (int32, bool, error) {
 	var row struct {
 		PayWay *int32 `gorm:"column:pay_way"`
@@ -99,6 +103,7 @@ func (r *whitelistRepo) PurchasePayWay(ctx context.Context, purchaseID uint64) (
 		Model(&model.MarketPurchase{}).
 		Select("pay_way").
 		Where("id = ?", purchaseID).
+		Where(model.NotDeletedMktPurchase).
 		Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return 0, false, nil
