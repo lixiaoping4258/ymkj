@@ -132,6 +132,24 @@ func TestListData_ToJSON(t *testing.T) {
 	if _, ok := got["count"].(float64); !ok {
 		t.Fatalf("count 应为数字，实际 %T", got["count"])
 	}
+	// —— 值断言（不只是"键存在"）——
+	//
+	// 上面只检查了键是否出现。如果实现把 page_no 和 page_size 写反，
+	// 那些断言照样通过。**presence 不等于 value** —— 这是本项目反复踩过
+	// 的一类断言盲区（见第 17 轮那个 query 参数被忽略的 bug）。
+	if got["count"] != float64(1) {
+		t.Errorf("count 应为 1，实际 %#v", got["count"])
+	}
+	if got["page_no"] != float64(2) {
+		t.Errorf("page_no 应为 2，实际 %#v", got["page_no"])
+	}
+	if got["page_size"] != float64(25) {
+		t.Errorf("page_size 应为 25，实际 %#v", got["page_size"])
+	}
+	// 明确排除两者被写反的情况
+	if got["page_no"] == got["page_size"] {
+		t.Error("page_no 与 page_size 相等，无法区分是否写反 —— 请用不同的值构造用例")
+	}
 	// lists 为 nil 时要输出 []，不是 null
 	empty, _ := ListData{PageNo: 1, PageSize: 25}.ToJSON()
 	var got2 map[string]any
