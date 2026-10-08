@@ -1,0 +1,25 @@
+# 二进制与产物
+/bin/
+/tmp/
+/logs/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go 工作区
+go.work
+go.work.sum
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# 本地覆盖的配置（含真实密码，绝不入库）
+configs/config.local.yaml
+configs/*.secret.yaml

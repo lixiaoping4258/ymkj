@@ -1,0 +1,42 @@
+# Kratos 配置 —— 对应原 ThinkPHP 的 config/*.php + .env
+#
+# ⚠️ 下面 database.source 和 redis 是占位值。
+#    真实值请从 xTravel 的 .env 里抄（键名 DATABASE / USERNAME / PASSWORD / HOSTNAME / HOSTPORT / PREFIX），
+#    以及 config/database.php 里的 prefix（默认 la_）。
+server:
+  http:
+    network: tcp
+    addr: 0.0.0.0:8000
+    timeout: 5s
+  grpc:
+    network: tcp
+    addr: 0.0.0.0:9000
+    timeout: 1s
+
+data:
+  database:
+    driver: mysql
+    # 格式: user:pass@tcp(host:port)/dbname?charset=utf8mb4&parseTime=True&loc=Local
+    source: root:root@tcp(127.0.0.1:3306)/xtravel?charset=utf8mb4&parseTime=True&loc=Local
+    prefix: la_
+    debug: false
+    max_open_conns: 100
+    max_idle_conns: 20
+  redis:
+    network: tcp
+    addr: 127.0.0.1:6379
+    password: ""
+    db: 0
+    read_timeout: 0.5s
+    write_timeout: 0.5s
+
+app:
+  name: xtravel
+  env: dev
+  # 必须和原项目一致，否则「交易时段」判断会差 8 小时
+  timezone: Asia/Shanghai
+
+log:
+  level: info
+  format: text
+  path: ./logs

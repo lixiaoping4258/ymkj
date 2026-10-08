@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package xtravel.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
+
+// CommonService 公共接口。
+// 对应原项目 app/api/route/common.php + app/api/controller/v1/common/*。
+//
+// 路径保持 /v1/common/... 不变，前端无需改动。
+service CommonService {
+  // 手续费/交易开关等基础配置
+  // 原: ConfigController::index  (免登录)
+  rpc GetConfig(GetConfigRequest) returns (GetConfigReply) {
+    option (google.api.http) = {get: "/v1/common/config"};
+  }
+
+  // 交易配置（开关 + 限制时段）
+  // 原: IndexController::tradeConfig  (免登录)
+  rpc GetTradeConfig(GetTradeConfigRequest) returns (GetTradeConfigReply) {
+    option (google.api.http) = {get: "/v1/common/trade/config"};
+  }
+}
+
+message GetConfigRequest {}
+
+message GetConfigReply {
+  // 手续费配置(%)  原: ConfigService::get('trade','outFee')
+  //
+  // 用 google.protobuf.Value 是因为原项目这里的类型是不确定的 ——
+  // ConfigService 会把 json 字符串 decode 成数组/标量，proto 定不了具体类型。
+  google.protobuf.Value out_fee = 1;
+
+  // ⚠️ 命名陷阱：原项目这个 key 叫 tradeSwitch，但它的值其实是
+  //    TradeConfigService::checkTradeTime() 的**完整返回对象**，不是布尔开关。
+  //    为了前端不改，这里保持原样。
+  TradeTimeStatus trade_switch = 2;
+
+  // 求购/兑出限制  原: ConfigService::get('trade','buyOrSaleConfig')
+  google.protobuf.Value buy_or_sale_config = 3;
+}
+
+// TradeTimeStatus 对应 app/common/service/TradeConfigService::checkTradeTime()
+message TradeTimeStatus {
+  // 全局总开关。原: ConfigService::get('trade','tradeSwitch',0)
+  // 注意原项目注释写「0=开启, 1=关闭」，与直觉相反。
+  google.protobuf.Value trade_switch = 1;
+
+  // 当前是否开市 0/1
+  int32 is_open = 2;
+
+  // workday | holiday
+  string today_type = 3;
+
+  // 工作日 | 节假日
+  string today_type_str = 4;
+
+  // 当前适用的交易时段
+  repeated TradePeriod periods = 5;
+
+  // 给前端展示的文案
+  string tips = 6;
+}
+
+message TradePeriod {
+  string start = 1;
+  string end = 2;
+}
+
+message GetTradeConfigRequest {}
+
+message GetTradeConfigReply {
+  // 原: ConfigService::get('trade','switch')
+  google.protobuf.Value switch = 1;
+
+  // 原: ConfigService::get('trade','limitTime')
+  google.protobuf.Value limit_time = 2;
+}

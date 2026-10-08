@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package kratos.api;
+
+option go_package = "github.com/lixiaoping4258/ymkj/internal/conf;conf";
+
+import "google/protobuf/duration.proto";
+
+// Bootstrap 是整个应用的配置根。对应原 ThinkPHP 项目的
+// config/*.php + .env，但收敛成一份声明式的 yaml。
+message Bootstrap {
+  Server server = 1;
+  Data data = 2;
+  App app = 3;
+  Log log = 4;
+}
+
+message Server {
+  message HTTP {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  message GRPC {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  HTTP http = 1;
+  GRPC grpc = 2;
+}
+
+message Data {
+  message Database {
+    string driver = 1;
+    // GORM DSN，形如 user:pass@tcp(host:port)/db?charset=utf8mb4&parseTime=True&loc=Local
+    string source = 2;
+    // 表前缀。原项目 database.php 里默认是 la_
+    string prefix = 3;
+    bool debug = 4;
+    int32 max_open_conns = 5;
+    int32 max_idle_conns = 6;
+  }
+  message Redis {
+    string network = 1;
+    string addr = 2;
+    string password = 3;
+    int32 db = 4;
+    google.protobuf.Duration read_timeout = 5;
+    google.protobuf.Duration write_timeout = 6;
+  }
+  Database database = 1;
+  Redis redis = 2;
+}
+
+message App {
+  string name = 1;
+  string env = 2;
+  // 时区。原项目 .env 里有 DEFAULT_TIMEZONE，交易时段判断强依赖它
+  string timezone = 3;
+}
+
+message Log {
+  // debug | info | warn | error
+  string level = 1;
+  // json | text
+  string format = 2;
+  string path = 3;
+}
