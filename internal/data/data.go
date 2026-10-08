@@ -43,6 +43,7 @@ var ProviderSet = wire.NewSet(
 	NewArchiveRepo,
 	NewRawRedisCache,
 	NewPurchaseStateRepo,
+	NewRawCache,
 	NewAppFlags,
 )
 

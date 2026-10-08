@@ -34,6 +34,7 @@ func NewHTTPServer(
 ) *http.Server {
 	var opts = []http.ServerOption{
 		http.Middleware(
+			RequestQueryMiddleware(),
 			recovery.Recovery(),
 			logging.Server(logger),
 			AuthMiddleware(tokens, auth, logger),

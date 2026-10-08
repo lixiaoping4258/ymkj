@@ -2,12 +2,17 @@ package service
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
-	khttp "github.com/go-kratos/kratos/v2/transport/http"
+	"github.com/go-kratos/kratos/v2/log"
 
 	v1 "github.com/lixiaoping4258/ymkj/api/xtravel/v1"
 	"github.com/lixiaoping4258/ymkj/internal/biz"
@@ -25,6 +30,11 @@ type MarketService struct {
 	archive       *biz.ArchiveUsecase
 	fee           *biz.FeeUsecase
 	purchaseState *biz.PurchaseStateUsecase
+	// rawCache 对应 RedisLockService（裸 Redis，无前缀），可与 PHP 共用键空间
+	rawCache biz.RawKeyCache
+	// stale 提供 stale-while-revalidate 语义，供 salesOn 使用
+	stale *biz.StaleCache
+	log   *log.Helper
 }
 
 func NewMarketService(
@@ -35,11 +45,15 @@ func NewMarketService(
 	archive *biz.ArchiveUsecase,
 	fee *biz.FeeUsecase,
 	purchaseState *biz.PurchaseStateUsecase,
+	rawCache biz.RawKeyCache,
+	stale *biz.StaleCache,
+	logger log.Logger,
 ) *MarketService {
 	return &MarketService{
 		market: market, purchase: purchase, sale: sale,
 		stock: stock, archive: archive, fee: fee,
-		purchaseState: purchaseState,
+		purchaseState: purchaseState, rawCache: rawCache, stale: stale,
+		log: log.NewHelper(logger),
 	}
 }
 
@@ -92,9 +106,7 @@ func (s *MarketService) PurchaseIndex(ctx context.Context, _ *v1.PurchaseIndexRe
 	// 传进 handler 的 ctx 就是 Kratos 内部那个实现了 http.Context 的 wrapper
 	// （见 transport/http/router.go: ctx := &wrapper{...}; h(ctx)）。
 	// 断言失败也不影响可用性：退化成"没传参数"，即默认分页第一页。
-	if h, ok := ctx.(khttp.Context); ok && h.Request() != nil {
-		q = h.Request().URL.Query()
-	}
+	q = httpx.QueryFrom(ctx)
 
 	page := biz.ParsePageParams(q)
 	query := biz.PurchaseFaceQuery{
@@ -134,9 +146,7 @@ func (s *MarketService) GetSaleCategories(
 // 参数获取方式与 PurchaseIndex 一致，见那里的说明。
 func (s *MarketService) SaleIndex(ctx context.Context, _ *v1.SaleIndexRequest) (*v1.RawData, error) {
 	q := url.Values{}
-	if h, ok := ctx.(khttp.Context); ok && h.Request() != nil {
-		q = h.Request().URL.Query()
-	}
+	q = httpx.QueryFrom(ctx)
 	page := biz.ParsePageParams(q)
 	query := biz.SaleFaceQuery{
 		Page:       page,
@@ -318,10 +328,18 @@ func (s *MarketService) ShowTotalAmount(
 // 与本文件其它接口一致，分页/筛选参数从原始 query 取。
 func (s *MarketService) PurchaseOut(ctx context.Context, in *v1.PurchaseOutRequest) (*v1.RawData, error) {
 	q := url.Values{}
-	if h, ok := ctx.(khttp.Context); ok && h.Request() != nil {
-		q = h.Request().URL.Query()
-	}
+	q = httpx.QueryFrom(ctx)
 	page := biz.ParsePageParams(q)
+
+	// 10 秒简单缓存，对应原实现的 RedisLockService::get/set（裸 Redis，可共用键）。
+	// 原实现在命中时直接返回整个信封；这里缓存 data 部分 ——
+	// 外层 {code,show,msg} 由 encoder 确定性补上，最终字节一致。
+	cacheKey := cacheKeyWithParams("purchase:salesOut:", q)
+	if v, err := s.rawCache.Get(ctx, cacheKey); err == nil && v != nil {
+		if s, ok := v.(string); ok && s != "" {
+			return &v1.RawData{Json: json.RawMessage(s)}, nil
+		}
+	}
 
 	raw, err := s.purchaseState.List(ctx, biz.MktPurchaseStateComplete, in.GetId(), page)
 	if err != nil {
@@ -331,25 +349,51 @@ func (s *MarketService) PurchaseOut(ctx context.Context, in *v1.PurchaseOutReque
 		}
 		return nil, bizFail(err)
 	}
+	if err := s.rawCache.Set(ctx, cacheKey, string(raw), salesOutCacheTTL); err != nil {
+		// 原实现同样不检查 RedisLockService::set 的返回值，所以这里也不让接口失败。
+		// 但不能像之前那样 `_ = err` 静默吞掉 —— 缓存整体失效是难查的问题。
+		s.log.WithContext(ctx).Warnf("写入 salesOut 缓存失败 key=%s: %v", cacheKey, err)
+	}
 	return &v1.RawData{Json: raw}, nil
 }
 
 // PurchaseOn 对应 PurchaseController::salesOn（state=WANTED）。
 //
-// 原实现比 salesOut 复杂：套了一层 stale-while-revalidate 缓存
-// （逻辑过期 5s + 物理 TTL 15s + 重建锁 5s，没抢到锁就用旧值顶着）。
-// 本批**未接缓存**，直接查库；业务行为（含分页后过滤）与原实现一致。
+// 原实现套的是 stale-while-revalidate：
 //
-// 与 PurchaseOut 的区别只有 state —— 两者共用同一个 usecase，
-// state 决定 where 分支、order by、以及是否做分页后过滤。
+//	$params = $this->request->get(); ksort($params);
+//	$cacheKey = 'purchase:salesOn:' . md5(json_encode($params));
+//	$lockKey  = 'lock:' . $cacheKey;
+//	$payload  = json_decode(RedisLockService::get($cacheKey), true);
+//	if ($payload && $payload['expire_at'] > time()) { return json($payload['value']); }
+//	$token = RedisLockService::tryLock($lockKey, 5000);
+//	if ($token === false) {
+//	    if ($payload) { return json($payload['value']); }   // 用旧值顶着，不排队
+//	    return $this->dataLists(new PurchaseStateLists(['state' => STATE_WANTED]));
+//	}
+//	try {
+//	    $data  = $this->dataLists(new PurchaseStateLists(['state' => STATE_WANTED]));
+//	    $value = $data->getData();
+//	    RedisLockService::set($cacheKey, json_encode(['value'=>$value,'expire_at'=>time()+5]), 15);
+//	    return json($value);
+//	} finally { RedisLockService::unlock($lockKey, $token); }
+//
+// 这些语义都在 biz.StaleCache 里（第 7 轮实现 + 8 条单测），这里只做参数装配。
 func (s *MarketService) PurchaseOn(ctx context.Context, in *v1.PurchaseOnRequest) (*v1.RawData, error) {
 	q := url.Values{}
-	if h, ok := ctx.(khttp.Context); ok && h.Request() != nil {
-		q = h.Request().URL.Query()
-	}
+	q = httpx.QueryFrom(ctx)
 	page := biz.ParsePageParams(q)
+	cacheKey := cacheKeyWithParams("purchase:salesOn:", q)
 
-	raw, err := s.purchaseState.List(ctx, biz.MktPurchaseStateWanted, in.GetId(), page)
+	raw, err := s.stale.Serve(ctx, biz.StaleOptions{
+		Key:         cacheKey,
+		LockKey:     "lock:" + cacheKey,
+		LogicalTTL:  5 * time.Second,
+		PhysicalTTL: 15 * time.Second,
+		LockTTL:     5 * time.Second,
+	}, func(bctx context.Context) (json.RawMessage, error) {
+		return s.purchaseState.List(bctx, biz.MktPurchaseStateWanted, in.GetId(), page)
+	})
 	if err != nil {
 		if errors.Is(err, biz.ErrPurchaseListNotFound) {
 			return nil, httpx.Fail("记录不存在")
@@ -357,4 +401,33 @@ func (s *MarketService) PurchaseOn(ctx context.Context, in *v1.PurchaseOnRequest
 		return nil, bizFail(err)
 	}
 	return &v1.RawData{Json: raw}, nil
+}
+
+// salesOutCacheTTL 对应原实现 RedisLockService::set($cacheKey, ..., 10)。
+const salesOutCacheTTL = 10 * time.Second
+
+// cacheKeyWithParams 复刻 PHP 的 md5(json_encode($_GET))。
+//
+// ⚠️ **与 PHP 算出的 hash 不同**：PHP 的 json_encode 保留数组插入顺序，
+// 同一个请求参数顺序不同就是两个 key（salesOn 里靠 ksort 缓解，salesOut 没有）。
+// 这里统一按键名排序再拼接，让语义相同的请求命中同一条缓存。
+//
+// 影响范围有限：键空间是共用裸 Redis 的，但两边各算各的 key，
+// **不会互相破坏，只是不共享**（同一请求会被缓存两份）。这是刻意的取舍：
+// 为了共用而精确复刻 PHP 的 json_encode 字节序，代价和风险都更高。
+func cacheKeyWithParams(prefix string, q url.Values) string {
+	keys := make([]string, 0, len(q))
+	for k := range q {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(strings.Join(q[k], ","))
+		b.WriteByte('&')
+	}
+	sum := md5.Sum([]byte(b.String()))
+	return prefix + hex.EncodeToString(sum[:])
 }

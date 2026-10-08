@@ -19,6 +19,17 @@ type Cache interface {
 	Set(ctx context.Context, key string, val any, ttl time.Duration) error
 }
 
+// RawKeyCache 的方法集与 Cache 完全相同，但**语义不同**：键不加前缀，
+// 与原项目的 RedisLockService 共用同一把键（phpredis 直连、无前缀、值就是 json_encode）。
+//
+// 为什么要单独一个类型：两者方法集一样，如果都注册成 biz.Cache，
+// wire 会报 "ProviderSet has multiple bindings for biz.Cache"。
+// 用独立类型既解决注入歧义，也让"这个依赖带不带前缀"在签名上一眼可见 ——
+// 带前缀（Cache）意味着只能自己管，无前缀（RawKeyCache）意味着和 PHP 共用。
+type RawKeyCache interface {
+	Cache
+}
+
 // 交易时段缓存键，与原项目 TradeConfigService 里的常量逐字一致。
 const (
 	CacheKeyTradePeriods = "trade:market:periods"
