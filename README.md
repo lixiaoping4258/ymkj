@@ -18,10 +18,21 @@
 | **Stage 3** | 白名单中间件 + 分页基础设施（77 个列表类的公共前置件） | ✅ 完成并验证 |
 | **Stage 3** | `market` 域第 2 批：`purchase` 列表接口 + **免登录白名单审计修正** | ✅ 完成并验证 |
 | **Stage 3** | `market` 域第 3 批：`sales/categories`、`sales` 列表 | ✅ 完成并验证 |
-| Stage 3+ | `market` 域其余 39 条（含全部写操作） | 待做 |
+| **Stage 3** | 第 4 批：`stock/lookall`、`purchase/info`、`sales/info` | ✅ 完成并验证 |
+| **Stage 3** | 第 5 批：费率计算内核（`calculateFeeRate`/`calcFeeTtl`） | ✅ 完成并验证 |
+| **Stage 3** | 第 6 批：`purchase/showTotalAmount`（接上费率解析） | ✅ 完成并验证 |
+| **Stage 3** | 第 7 批：兑换单列表数据层 + `purchase/out`、`purchase/on` | ✅ 完成并验证 |
+| **Stage 3** | 第 8 批：缓存层接入 + **修掉列表接口忽略 query 参数的 bug** | ✅ 完成并验证 |
+| Stage 3+ | `market` 域其余 33 条（含全部写操作） | 待做 |
 | Stage 4 | `wallet` / `payment` / `ticket` / `whitelist` | 待做 |
 | Stage 5 | `adminapi`（61 控制器，最大一块） | 待做 |
 | Stage 6 | `open` / `third` / 队列消费者 | 待做 |
+
+已迁接口：`v1/common/config`、`v1/common/trade/config`、`v1/user/info`、`v1/market/pay_way`、
+`v1/market/check/exchange`、`v1/market/purchase`、`v1/market/sales/categories`、`v1/market/sales`、
+`v1/market/stock/lookall`、`v1/market/purchase/info`、`v1/market/sales/info`、
+`v1/market/purchase/showTotalAmount`、`v1/market/purchase/out`、`v1/market/purchase/on`
+（共 11 条 market 路由 + 3 条非 market）。
 
 ### Stage 1 验证记录（真实数据库 `xmarket_test`）
 
@@ -324,6 +335,140 @@ $this->pageNo   = $this->request->get('page_no', 1) ?: 1;     // falsy 也取默
 另外注意 `page_type` **默认是 1（分页）**，这与 likeadmin 通用版本相反。
 
 ---
+
+### Stage 3 第六～八批：费率、缓存、以及一个攒了 13 轮的 bug
+
+这一节的每一条都是**跑真机才发现的**，不是读代码推出来的。
+
+#### 🔴 费率计算里有一条读代码推不出来的规则（涉及真金白银）
+
+`FeeAmountLogic::calculateFeeRate` 的第一行：
+
+```php
+if (bccomp($tradePrice, '0', 2) === 0) { return '0.00'; }
+//                ↑ scale = 2
+```
+
+`bccomp` 把两边**截断到 2 位小数**再比。所以 `'0.008'` 被当成 `'0.00'`，
+与 `'0'` 相等，**直接返回 `'0.00'`，根本不走后面的向上取整**。
+
+实际规则是：**价格 < 0.01 一律返回 0.00**。边界实测：
+`0.0001 / 0.001 / 0.002 / 0.005 / 0.008` 全 `0.00`，`0.01` 才开始 `0.01`。
+
+我按代码推导 `(rate=0.0600, price=0.001)` 时得出 `0.01`，真机给的是 `0.00`。
+**参数命名是"价格"，谁会想到它按分比较？**
+
+另外两条同样只有实测才确认：
+
+| 规则 | 实测 |
+|---|---|
+| `ceil((float)$multiplied)` 先转 **double** 再取整 | Go 侧刻意用 `ParseFloat` **复刻**精度损失，而不是"顺手修好" |
+| 最低 0.01 兜底使零费率也收费 | `calculateFeeRate('0','100') === '0.01'` —— rate=0 **仍然收 0.01** |
+
+`showTotalAmount` 还有两条：
+
+- 参数不合法时返回的是 **`'0'`**（没有小数位），合法路径才是 2 位小数字符串。
+  这决定 JSON 里是 `"0"` 还是 `"0.00"`。而且 `empty("0")` 与 `empty("0.0")` 不一样：
+  前者靠 `empty` 拦下，后者靠 `<= 0`。
+- 总价是**向上取整到分**（×100 → ceil → ÷100），不是四舍五入；手续费在取整后的总价上算。
+
+线上配置：`outFee='6.66'`（**6.66%**，不是 6%）。
+
+> 单测期望值全部取自 PHP CLI 真机输出（这两个函数是纯 bcmath，CLI 跑得动）。
+> `showTotalAmount` 整链依赖 `Cache::get`（redis 驱动，CLI 跑不了），
+> 所以在 PHP 里**复刻函数体、只把 `getFeeRate` 换成固定入参**来采集对照。
+
+#### 🔴 列表接口的分页/筛选参数被静默忽略（攒了 13 轮）
+
+`purchase` / `sales` / `purchase-out` / `purchase-on` 四个接口的
+`page_no`/`page_size`/`sort`/`keyword`/`price_*` **全部无效**，一律退回默认第一页 25 条。
+
+**根因**：service 里用 `ctx.(khttp.Context)` 取原始请求。Kratos 的中间件会用
+`context.WithValue` 包装 ctx，包装后的动态类型是 `*context.valueCtx`，
+**不再是那个实现了 `http.Context` 的 wrapper**，断言必然失败。
+
+**是我当时的注释把它掩盖了**：我在失败分支上写"断言失败也不影响可用性：
+退化成没传参数，即默认分页第一页"。这句话技术上对，但**把功能错误说成了可接受的降级**。
+
+**怎么暴露的**：接缓存时算缓存键，发现哈希是 `d41d8cd98f00b204e9800998ecf8427e`
+—— 这是**空字符串的 md5**。一个哈希长得像正常哈希，差点让我错过它。
+
+**为什么之前两次测试都没抓到**：第 4 轮测 `purchase` 列表时交易时段关闭，
+走的是**硬编码 `page_size=10`** 的分支，根本没经过参数解析；第 15/16 轮测
+`purchase/out`、`on` 时没传分页参数。**两次都"通过"了，但都没走到那条路径。**
+
+**修复**：`httpx.WithQuery` / `httpx.QueryFrom` + `server.RequestQueryMiddleware`，
+在**最外层中间件**（ctx 还是 wrapper 时）取出 query 存进 context。
+⚠️ **顺序必须在 `recovery`/`logging` 之前**，错了会静默退化成空 query。
+
+**同时补了 5 项"参数确实生效"的断言**（冒烟 64 → 69）。原来 64 项全绿却没发现这个 bug，
+问题不在覆盖广度，在**断言的类型**——清一色是"键存在""类型对""值等于常量"，
+**没有一条是"我传进去的参数改变了我看到的结果"**。
+
+> 教训：测试通过 ≠ 被测行为正确。**先问"这条断言在错误实现上会不会失败"，再问"它现在过不过"。**
+> 同一个病在这个项目里出现过三次：期望值抄自自己的错误实现（第 10 轮）、
+> 用例没编进去却以为在跑（第 12 轮）、断言类型覆盖不到行为（本轮）。
+
+#### 🔴 软删除过滤：ThinkPHP 隐式加，GORM 不会
+
+`MarketPurchase`、`PurchaseOrders` 都用了 `SoftDelete`，PHP 侧所有查询会隐式加
+`delete_time IS NULL`，**GORM 不会**。我在 `checkExchange` 的计数里漏了它，
+后果是软删除的兑换单也被算进"当前是否存在兑换单"，用户被**错误拦下**。
+
+实测 `x_market_purchase` 共 750 行，其中 **65 行软删除**。发现线索是
+`PurchaseStateLists` 源码第 90 行的注释里贴了一段真实 SQL，末尾带着
+`AND MarketPurchase.delete_time IS NULL`——**这条线索一直明写在原项目注释里**。
+
+⚠️ `delete_time` 的类型**并不统一**：`x_market_purchase` 是 `datetime`，
+`x_user` 是 `int unsigned`。判空写法一样，类型不同，模型里别混用。
+反之 `WarehouseDetail` 继承的是 `think\Model`（非 BaseModel），**表里没有 delete_time**，
+不需要过滤——**只能逐个核实，不能套用**。
+
+#### PHP 宽容语义：三个必须显式复刻的地方
+
+| 写法 | 陷阱 |
+|---|---|
+| `$stockNum == null`（`$stockNum=(int)redis->get()`） | **`0 == null` 为 true** —— "键不存在"和"库存恰好为 0"都走 `bcsub` 兜底。所以 `available_amount` 是**字符串 `"0"`** 而不是数字 `0` |
+| `empty("0")` vs `empty("0.0")` | 前者 true、后者 false（后者靠 `<= 0` 拦下）。两条路径不同 |
+| `$list['images'] ?: []` | images 为空串时是 `[]`（数组），不是 `null`；而 `grab_time` 为 NULL 时是 `null` |
+
+`StockNum` 因此返回 `(value, exists)` 而不是裸 `int`——**直接返回 int 会丢掉这个语义**。
+
+#### 两个同名不同物的 `getArchive`
+
+`MarketListPurchaseLogic::getArchive` 和 `SaleLogic::getArchive` **都用缓存键 `'archive:{id}'`**，
+但完全是两回事：
+
+| | `MarketListPurchaseLogic` | `SaleLogic` |
+|---|---|---|
+| 缓存机制 | `RedisLockService`（裸 Redis） | `cache()`（TP 缓存） |
+| 物理键 | `archive:{id}` | **`la:archive:{id}`** |
+| 字段 | **7 个**（含 `collection_id`/`platform_id`） | **5 个**（没有这两个） |
+| TTL | 600s | 3600s |
+| Go 侧 | **可共用** | **必须隔离** |
+
+物理键不同所以不互相覆盖，但**字段集不同**——谁"顺手统一"这两个函数，
+就会让其中一个接口静默拿到错的字段。
+
+#### 两套缓存机制，处理方式相反
+
+| 机制 | 形态 | 迁移处理 |
+|---|---|---|
+| `cache()`（ThinkPHP） | `la:` 前缀 + **TP 自己的序列化格式** | **必须隔离**（`xtravel:go:` 前缀） |
+| `RedisLockService` | **裸 phpredis、无前缀、值就是 `json_encode`** | **可与 PHP 共用同一把键** |
+
+代码里用 `biz.Cache`（带前缀）和 `biz.RawKeyCache`（不带前缀）两个类型区分——
+方法集相同，但语义相反，**签名上一眼可见**。用独立类型也解决了 wire
+"multiple bindings for biz.Cache" 的报错。
+
+⚠️ 当前 `salesOn` 的 SWR 缓存落到 `xtravel:go:` 而非裸键，与原实现不自洽（已记录，待统一）。
+
+#### GORM 的 `Table()` 不套用表前缀
+
+`Table("app_archive AS app_archive")` **不会**加 `NamingStrategy.TablePrefix`，
+用字符串拼表名时必须自己补，否则会去查不存在的 `app_archive`。
+这个项目里已经被"表前缀"咬了三次。前缀默认值是 `la_`，而本项目实际是 `x_`——
+**配错就是查错表，最难一眼看出的错误**。
 
 ## 二、快速开始
 
