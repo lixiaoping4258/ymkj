@@ -15,8 +15,9 @@
 | **Stage 1** | Kratos 骨架、基础设施、协议兼容层、`v1/common` 垂直切片 | ✅ 完成并验证 |
 | **Stage 2** | 鉴权中间件、token 生命周期、`v1/user/info`、单元测试 | ✅ 完成并验证 |
 | **Stage 3** | `market` 域第 1 批：`pay_way`、`check/exchange` + 契约修正 | ✅ 完成并验证 |
-| **Stage 3** | 白名单中间件 + 分页基础设施（77 个列表类的公共前置件） | ✅ 完成并验证（单测） |
-| Stage 3+ | `market` 域其余 42 条（含全部写操作） | 待做 |
+| **Stage 3** | 白名单中间件 + 分页基础设施（77 个列表类的公共前置件） | ✅ 完成并验证 |
+| **Stage 3** | `market` 域第 2 批：`purchase` 列表接口 + **免登录白名单审计修正** | ✅ 完成并验证 |
+| Stage 3+ | `market` 域其余 41 条（含全部写操作） | 待做 |
 | Stage 4 | `wallet` / `payment` / `ticket` / `whitelist` | 待做 |
 | Stage 5 | `adminapi`（61 控制器，最大一块） | 待做 |
 | Stage 6 | `open` / `third` / 队列消费者 | 待做 |
@@ -136,6 +137,77 @@ operation → 限制项 表。**改 proto 的 service/method 名时必须同步�
 
 > ⚠️ 白名单中间件目前**还没有挂到任何已迁接口上**（它要拦的 `GET /v1/market/purchase`
 > 还没迁），所以它只有单测覆盖、没有端到端验证。绑定表里已经预留了该 operation。
+
+### Stage 3 第三批：`purchase` 列表接口 + 两处免登录审计修正
+
+`GET /v1/market/purchase` 一次用上前面所有基础设施：
+**免登录 + 白名单 + 分页 + 交易时段判断 + 20 秒缓存**。
+
+**方法上的关键一步：不再靠读代码推断 SQL，而是让 PHP 直接吐出来。**
+
+ThinkPHP 能在 CLI 里启动：
+
+```php
+require __DIR__ . '/vendor/autoload.php';
+$app = new \think\App(); $app->initialize();
+
+// 生成 SQL 但不执行 —— 绕开 APP_DEBUG 和 userId 的依赖
+echo MarketListPurchase::hasWhere('archive', [], $field)->fetchSql(true)->select();
+
+// 或者直接跑列表类，再用 Db::getLastSql() 拿真实执行的 SQL
+$l = new \app\api\lists\market\purchase\PurchaseFaceLists();
+$l->lists(); Db::getLastSql();
+```
+
+这一步澄清了两个**猜不出来**的事实：
+
+1. `hasWhere()` 生成的是 **INNER JOIN**，不是 EXISTS 子查询
+2. `$where` 为空数组时（生产测试用户分支）**整个 WHERE 子句消失**，连 `state=1` 都不过滤
+
+同一次探测还拿到了 5 种排序的 `ORDER BY`、6 个筛选条件的 `WHERE`、最终响应信封、
+以及每一行的实际值形态。
+
+**验证**：`internal/data/purchase_integration_test.go` 连真实库跑等价查询，
+期望值全部来自上面那次 PHP 实测输出：
+
+```
+TestPurchaseFaceRepo_MatchesRealPHP   PASS
+TestPurchaseFaceRepo_SortVariants     PASS
+```
+
+count=3 与 PHP 一致；11 个字段逐字匹配（含 `issuer_time` 的 `Y-m-d H:i:s` 格式、
+`"--"` 替换、`images` 解码成数组）；键集合完全一致 —— 多一个少一个都是静默的契约破坏，
+所以断言了键数量并逐个核对键名。
+
+**列表接口的 `data` 出口**：用 `v1.RawData` 承载预先组装好的 JSON。
+列表行是任意结构（bigint 主键、decimal 字符串、json 数组、`0 转 --` 后处理），
+用 `google.protobuf.Struct` 会把数字转成 float64 而**丢掉 bigint 精度**
+（`id` 是 178056289901818 这个量级）。
+
+### 4.3 免登录白名单必须逐个对着 PHP 核，不能凭接口名猜
+
+原项目在控制器上声明 `$notNeedLogin`，而**同一个控制器里不同方法的公开性可能不同**：
+
+| 控制器 | `$notNeedLogin` | 结论 |
+|---|---|---|
+| `v1/common/ConfigController` | `['index']` | `GetConfig` **免登录** ✔ |
+| `IndexController` | `['test','index','config','policy','decorate']` | `GetTradeConfig` **需登录** ← Stage 1 误标为公开 |
+| `v1/user/UserController` | `['resetPassword']` | `GetUserInfo` 需登录 ✔ |
+| `v1/market/PurchaseController` | `['index']` | `PurchaseIndex` **免登录**；`CheckExchange`/`GetPayWay` 需登录 ✔ |
+
+**两个方向都踩了：**
+
+- `GetTradeConfig` 被标成公开 —— 该登录的没登录，是**未授权访问**
+- `PurchaseIndex` 忘了标公开 —— 该公开的要登录，**前端匿名访问直接 403**
+
+更值得记的是**为什么没被早发现**：Stage 1 的冒烟测试断言
+「`trade/config` 无 token 时 `code=1`」，而那个期望值是**从我自己（错误）的实现里抄的**——
+等于拿错误当标准去验证错误。**测试写得再全，期望值来源错了就白搭。**
+
+已修正断言，并补了反向断言（该公开的必须公开）。
+
+**规则**：每迁一个接口，先回 PHP 找它所属控制器的 `$notNeedLogin`，
+确认这个方法在不在里面，两个方向的错都要防。
 
 ### 4.2 分页参数的两个语义坑
 

@@ -33,9 +33,25 @@ import (
 // 原项目是在每个控制器上声明 $notNeedLogin，Kratos 里没有"控制器对象"这个概念，
 // 所以展开成 operation 全路径。这些路径由 proto 的 package.service/method 决定，
 // 改名时要同步改这里。
+//
+// ⚠️⚠️ 逐个对着 PHP 的 $notNeedLogin 数组核过，**不要凭接口名猜是否公开**：
+//
+//	app/api/controller/v1/common/ConfigController.php  $notNeedLogin = ['index']
+//	    -> GetConfig          免登录 ✔
+//	app/api/controller/IndexController.php             $notNeedLogin = ['test','index','config','policy','decorate']
+//	    -> GetTradeConfig     **不在列表里 -> 需要登录**（Stage 1 曾误标为公开）
+//	app/api/controller/v1/user/UserController.php      $notNeedLogin = ['resetPassword']
+//	    -> GetUserInfo        需要登录 ✔
+//	app/api/controller/v1/market/PurchaseController.php $notNeedLogin = ['index']
+//	    -> PurchaseIndex      免登录 ✔
+//	    -> CheckExchange / GetPayWay  需要登录 ✔
+//
+// 标错的后果：
+//   - 把该登录的标成公开 -> 未授权访问（安全）
+//   - 把公开的标成需登录 -> 前端匿名访问直接 403（功能不可用，本次踩的就是这个）
 var defaultPublicOps = map[string]struct{}{
-	"/xtravel.v1.CommonService/GetConfig":      {},
-	"/xtravel.v1.CommonService/GetTradeConfig": {},
+	"/xtravel.v1.CommonService/GetConfig":     {},
+	"/xtravel.v1.MarketService/PurchaseIndex": {},
 }
 
 // AuthMiddleware 构造鉴权中间件。

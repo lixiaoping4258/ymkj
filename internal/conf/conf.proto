@@ -85,6 +85,14 @@ message App {
   string env = 2;
   // 时区。原项目 .env 里有 DEFAULT_TIMEZONE，交易时段判断强依赖它
   string timezone = 3;
+  // 对应 .env 的 APP_DEBUG。
+  //
+  // ⚠️ 它不只是"调试开关"：原代码里有若干分支依赖它，例如
+  // PurchaseController::index 里
+  //   if (!env('APP_DEBUG') && in_array($userId, [6,7,1000])) { ... }
+  // 以及 PurchaseFaceLists::queryWhere 里同一判断会**去掉 state 过滤**。
+  // 所以配错会静默改变业务行为，不是只影响日志。
+  bool debug = 4;
 }
 
 message Log {

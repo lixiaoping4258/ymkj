@@ -3,6 +3,12 @@ syntax = "proto3";
 package xtravel.v1;
 
 import "google/api/annotations.proto";
+// RawData 定义在 common.proto（同属 xtravel.v1 包，但 protoc 仍要求显式 import）。
+//
+// ⚠️ 路径必须与生成脚本传给 protoc 的 target 形式**完全一致**（都是相对项目根的
+// api/xtravel/v1/...）。写成 "xtravel/v1/common.proto" 会被 -I./api 解析成同一物理
+// 文件的另一个规范名，protoc 会报 "already defined"。
+import "api/xtravel/v1/common.proto";
 
 option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
 
@@ -25,7 +31,21 @@ service MarketService {
   rpc CheckExchange(CheckExchangeRequest) returns (CheckExchangeReply) {
     option (google.api.http) = {get: "/v1/market/check/exchange"};
   }
+
+  // 兑换专区首页列表
+  // 原: PurchaseController::index -> PurchaseFaceLists
+  //     **免登录**（控制器 $notNeedLogin 放行了 index）
+  //     挂白名单 no_collection_trade
+  //     走交易时段判断；带 20 秒整包缓存
+  //
+  // 返回 RawData：列表行结构任意（bigint 主键 / decimal 字符串 / json 数组 /
+  // "0 转 --" 后处理），用 proto 建模会丢精度又拧巴，见 common.proto 的说明。
+  rpc PurchaseIndex(PurchaseIndexRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/market/purchase"};
+  }
 }
+
+message PurchaseIndexRequest {}
 
 message GetPayWayRequest {}
 

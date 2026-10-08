@@ -84,3 +84,19 @@ message GetTradeConfigReply {
   // 原: ConfigService::get('trade','limitTime')
   google.protobuf.Value limit_time = 2 [json_name = "limitTime"];
 }
+
+// RawData 承载**已经组装好的 JSON**，给列表类接口用。
+//
+// 为什么需要这个出口：
+//   - 列表接口的 data 是任意结构的行数组（几十个字段、类型混杂：
+//     bigint 主键、decimal 字符串、json 数组、datetime 字符串、"0 转 --" 这种后处理），
+//     用 proto 建模既不划算，也会因为 google.protobuf.Struct 把数字转成 float64
+//     而**丢掉 bigint 的精度**（id 是 178056289901818 这种量级）。
+//   - 但契约又必须精确到键名和类型（见 4.1 节四条规则），
+//     所以与其拧着 proto 走，不如让业务层直接产出 JSON。
+//
+// 用法：handler 返回 &v1.RawData{Json: <预先 marshal 好的 JSON>}，
+// 由 api/xtravel/v1/envelope.go 里的 Envelope() 把它摊成信封的 data。
+message RawData {
+  bytes json = 1;
+}

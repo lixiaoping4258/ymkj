@@ -99,9 +99,12 @@ $tsk = $data.tradeSwitch.PSObject.Properties.Name
 Check "tradeSwitch key 'isOpen' camelCase" ($tsk -contains 'isOpen') "keys=$($tsk -join ',')"
 Check "tradeSwitch key 'todayTypeStr' camelCase" ($tsk -contains 'todayTypeStr') "keys=$($tsk -join ',')"
 
-$tc = Get-Json "$Base/v1/common/trade/config" @{}
-Check "trade/config code=1" ($tc.body.code -eq 1) "code=$($tc.body.code)"
-Check "trade/config key 'limitTime' camelCase" ($tc.body.data.PSObject.Properties.Name -contains 'limitTime') $tc.raw
+# trade/config is NOT in IndexController::$notNeedLogin (['test','index','config',
+# 'policy','decorate']) so it REQUIRES login. Stage 1 wrongly marked it public and
+# this assertion used to encode that mistake -- never derive the expectation from
+# our own implementation, read the PHP.
+$tcNoTok = Get-Json "$Base/v1/common/trade/config" @{}
+Check "trade/config requires login (no token -> -403)" ($tcNoTok.body.code -eq -403) "code=$($tcNoTok.body.code)"
 
 # ---------------------------------------------------------------- auth failures
 $noTok = Get-Json "$Base/v1/user/info" @{}
@@ -118,6 +121,23 @@ Check "invalid token msg matches PHP verbatim" ($badTok.body.msg -eq $wantBadTok
 # market endpoints also require login
 $pwNoTok = Get-Json "$Base/v1/market/pay_way" @{}
 Check "market/pay_way requires login" ($pwNoTok.body.code -eq -403) "code=$($pwNoTok.body.code)"
+
+# BUT PurchaseController::$notNeedLogin = ['index'], so this one is PUBLIC.
+# Getting this backwards is exactly the bug Stage 1 had with trade/config.
+$piNoTok = Get-Json "$Base/v1/market/purchase?page_no=1&page_size=2" @{}
+Check "market/purchase is PUBLIC (no token -> code=1)" ($piNoTok.body.code -eq 1) "code=$($piNoTok.body.code) raw=$($piNoTok.raw)"
+$pkeys = $piNoTok.body.data.PSObject.Properties.Name
+foreach ($k in @('lists', 'count', 'page_no', 'page_size', 'extend')) {
+    Check "purchase data key '$k'" ($pkeys -contains $k) "keys=$($pkeys -join ',')"
+}
+Check "purchase has NO camelCase leak (pageNo/pageSize)" `
+      (($pkeys -notcontains 'pageNo') -and ($pkeys -notcontains 'pageSize')) "keys=$($pkeys -join ',')"
+# outside trading hours the controller returns an empty list with a HARDCODED page_size=10
+if ($piNoTok.body.data.count -eq 0) {
+    Check "closed-trading empty list uses hardcoded page_size=10" ($piNoTok.body.data.page_size -eq 10) "page_size=$($piNoTok.body.data.page_size)"
+    Check "closed-trading lists is an ARRAY" ($piNoTok.body.data.lists -is [array]) "type=$($piNoTok.body.data.lists.GetType().Name)"
+    Check "closed-trading extend is an ARRAY" ($piNoTok.body.data.extend -is [array]) "type=$($piNoTok.body.data.extend.GetType().Name)"
+}
 
 # ---------------------------------------------------------------- real token
 $mysql = Get-ChildItem 'D:\work\phpstudy_pro\Extensions' -Recurse -Filter mysql.exe -EA SilentlyContinue |
@@ -152,6 +172,11 @@ if ($tok.Length -ne 32) {
     Write-Host "  SKIP  valid-token checks (no live session found in db)" -ForegroundColor Yellow
 } else {
     $hdr = @{ token = $tok }
+
+    # trade/config needs a token (see the note where it is checked without one)
+    $tc = Get-Json "$Base/v1/common/trade/config" $hdr
+    Check "trade/config code=1 (with token)" ($tc.body.code -eq 1) "code=$($tc.body.code)"
+    Check "trade/config key 'limitTime' camelCase" ($tc.body.data.PSObject.Properties.Name -contains 'limitTime') $tc.raw
 
     # ------------------------------------------------------------ user/info
     $me = Get-Json "$Base/v1/user/info" $hdr

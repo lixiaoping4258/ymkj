@@ -40,8 +40,19 @@ foreach ($raw in Get-Content $envPath) {
         $k = $Matches[1].ToLower()
         $v = $Matches[2].Trim().Trim('"')
         $env2["$section.$k"] = $v
+        # Keys appearing before any [SECTION] header (APP_DEBUG, APP_TRACE...)
+        # land under a leading dot; also index them bare.
+        if ($section -eq '') { $env2[$k] = $v }
     }
 }
+
+# APP_DEBUG is not just a debug switch here: PurchaseController::index and
+# PurchaseFaceLists::queryWhere both branch on it, and the "prod test user"
+# path skips the trading-hours check AND drops the AppArchive.state filter.
+$appDebugRaw = $env2['app_debug']
+if (-not $appDebugRaw) { $appDebugRaw = $env2['.app_debug'] }
+$appDebug = 'false'
+if ("$appDebugRaw".ToLower() -in @('1', 'true', 'yes', 'on')) { $appDebug = 'true' }
 
 function Need($key) {
     if (-not $env2.ContainsKey($key) -or [string]::IsNullOrWhiteSpace($env2[$key])) {
@@ -110,6 +121,8 @@ app:
   name: xtravel
   env: test
   timezone: "$tz"
+  # mirrors .env APP_DEBUG. NOT only a debug flag -- see conf.proto App.debug
+  debug: $appDebug
 
 # mirrors config/project.php user_token + .env [PROJECT] UNIQUE_IDENTIFICATION
 auth:

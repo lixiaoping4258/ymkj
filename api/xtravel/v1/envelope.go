@@ -1,6 +1,8 @@
 package v1
 
-// 本文件让部分 reply 以「顶层数组」作为信封的 data 输出。
+import "encoding/json"
+
+// 本文件让部分 reply 以「顶层数组」或「预先组装的 JSON」作为信封的 data 输出。
 //
 // 背景：原 ThinkPHP 项目里不少接口直接 `return $this->data([...])`，
 // 数组会成为信封的 data，也就是：
@@ -27,4 +29,16 @@ func (r *GetPayWayReply) Envelope() (int, int, string, any) {
 // Envelope 让兑换校验以空数组返回（原实现是 `return $this->data([])`）。
 func (r *CheckExchangeReply) Envelope() (int, int, string, any) {
 	return 1, 0, "", []any{}
+}
+
+// Envelope 让 RawData 直接输出预先组装好的 JSON 作为 data。
+//
+// 返回 json.RawMessage 时，httpx 的 encoder 会用 json.Marshal 原样输出它
+// （RawMessage 实现了 json.Marshaler），不会二次转义。
+func (r *RawData) Envelope() (int, int, string, any) {
+	b := r.GetJson()
+	if len(b) == 0 {
+		return 1, 0, "", []any{}
+	}
+	return 1, 0, "", json.RawMessage(b)
 }

@@ -300,7 +300,17 @@ type App struct {
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Env   string                 `protobuf:"bytes,2,opt,name=env,proto3" json:"env,omitempty"`
 	// 时区。原项目 .env 里有 DEFAULT_TIMEZONE，交易时段判断强依赖它
-	Timezone      string `protobuf:"bytes,3,opt,name=timezone,proto3" json:"timezone,omitempty"`
+	Timezone string `protobuf:"bytes,3,opt,name=timezone,proto3" json:"timezone,omitempty"`
+	// 对应 .env 的 APP_DEBUG。
+	//
+	// ⚠️ 它不只是"调试开关"：原代码里有若干分支依赖它，例如
+	// PurchaseController::index 里
+	//
+	//	if (!env('APP_DEBUG') && in_array($userId, [6,7,1000])) { ... }
+	//
+	// 以及 PurchaseFaceLists::queryWhere 里同一判断会**去掉 state 过滤**。
+	// 所以配错会静默改变业务行为，不是只影响日志。
+	Debug         bool `protobuf:"varint,4,opt,name=debug,proto3" json:"debug,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -354,6 +364,13 @@ func (x *App) GetTimezone() string {
 		return x.Timezone
 	}
 	return ""
+}
+
+func (x *App) GetDebug() bool {
+	if x != nil {
+		return x.Debug
+	}
+	return false
 }
 
 type Log struct {
@@ -753,11 +770,12 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\bpassword\x18\x03 \x01(\tR\bpassword\x12\x0e\n" +
 	"\x02db\x18\x04 \x01(\x05R\x02db\x12<\n" +
 	"\fread_timeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\vreadTimeout\x12>\n" +
-	"\rwrite_timeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\"G\n" +
+	"\rwrite_timeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\"]\n" +
 	"\x03App\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03env\x18\x02 \x01(\tR\x03env\x12\x1a\n" +
-	"\btimezone\x18\x03 \x01(\tR\btimezone\"G\n" +
+	"\btimezone\x18\x03 \x01(\tR\btimezone\x12\x14\n" +
+	"\x05debug\x18\x04 \x01(\bR\x05debug\"G\n" +
 	"\x03Log\x12\x14\n" +
 	"\x05level\x18\x01 \x01(\tR\x05level\x12\x16\n" +
 	"\x06format\x18\x02 \x01(\tR\x06format\x12\x12\n" +

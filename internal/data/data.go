@@ -37,6 +37,8 @@ var ProviderSet = wire.NewSet(
 	NewRedisLocker,
 	NewMarketPurchaseRepo,
 	NewWhitelistRepo,
+	NewPurchaseFaceRepo,
+	NewAppFlags,
 )
 
 // gormWriter 把 GORM 的 SQL 日志转接到 Kratos 的 logger。

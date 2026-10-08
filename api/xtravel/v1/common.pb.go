@@ -362,6 +362,62 @@ func (x *GetTradeConfigReply) GetLimitTime() *structpb.Value {
 	return nil
 }
 
+// RawData 承载**已经组装好的 JSON**，给列表类接口用。
+//
+// 为什么需要这个出口：
+//   - 列表接口的 data 是任意结构的行数组（几十个字段、类型混杂：
+//     bigint 主键、decimal 字符串、json 数组、datetime 字符串、"0 转 --" 这种后处理），
+//     用 proto 建模既不划算，也会因为 google.protobuf.Struct 把数字转成 float64
+//     而**丢掉 bigint 的精度**（id 是 178056289901818 这种量级）。
+//   - 但契约又必须精确到键名和类型（见 4.1 节四条规则），
+//     所以与其拧着 proto 走，不如让业务层直接产出 JSON。
+//
+// 用法：handler 返回 &v1.RawData{Json: <预先 marshal 好的 JSON>}，
+// 由 api/xtravel/v1/envelope.go 里的 Envelope() 把它摊成信封的 data。
+type RawData struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Json          []byte                 `protobuf:"bytes,1,opt,name=json,proto3" json:"json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RawData) Reset() {
+	*x = RawData{}
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RawData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RawData) ProtoMessage() {}
+
+func (x *RawData) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RawData.ProtoReflect.Descriptor instead.
+func (*RawData) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_common_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *RawData) GetJson() []byte {
+	if x != nil {
+		return x.Json
+	}
+	return nil
+}
+
 var File_api_xtravel_v1_common_proto protoreflect.FileDescriptor
 
 const file_api_xtravel_v1_common_proto_rawDesc = "" +
@@ -388,7 +444,9 @@ const file_api_xtravel_v1_common_proto_rawDesc = "" +
 	"\x13GetTradeConfigReply\x12.\n" +
 	"\x06switch\x18\x01 \x01(\v2\x16.google.protobuf.ValueR\x06switch\x125\n" +
 	"\n" +
-	"limit_time\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\tlimitTime2\xe8\x01\n" +
+	"limit_time\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\tlimitTime\"\x1d\n" +
+	"\aRawData\x12\x12\n" +
+	"\x04json\x18\x01 \x01(\fR\x04json2\xe8\x01\n" +
 	"\rCommonService\x12`\n" +
 	"\tGetConfig\x12\x1c.xtravel.v1.GetConfigRequest\x1a\x1a.xtravel.v1.GetConfigReply\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/common/config\x12u\n" +
 	"\x0eGetTradeConfig\x12!.xtravel.v1.GetTradeConfigRequest\x1a\x1f.xtravel.v1.GetTradeConfigReply\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/common/trade/configB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
@@ -405,7 +463,7 @@ func file_api_xtravel_v1_common_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_common_proto_rawDescData
 }
 
-var file_api_xtravel_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_api_xtravel_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_api_xtravel_v1_common_proto_goTypes = []any{
 	(*GetConfigRequest)(nil),      // 0: xtravel.v1.GetConfigRequest
 	(*GetConfigReply)(nil),        // 1: xtravel.v1.GetConfigReply
@@ -413,16 +471,17 @@ var file_api_xtravel_v1_common_proto_goTypes = []any{
 	(*TradePeriod)(nil),           // 3: xtravel.v1.TradePeriod
 	(*GetTradeConfigRequest)(nil), // 4: xtravel.v1.GetTradeConfigRequest
 	(*GetTradeConfigReply)(nil),   // 5: xtravel.v1.GetTradeConfigReply
-	(*structpb.Value)(nil),        // 6: google.protobuf.Value
+	(*RawData)(nil),               // 6: xtravel.v1.RawData
+	(*structpb.Value)(nil),        // 7: google.protobuf.Value
 }
 var file_api_xtravel_v1_common_proto_depIdxs = []int32{
-	6, // 0: xtravel.v1.GetConfigReply.out_fee:type_name -> google.protobuf.Value
+	7, // 0: xtravel.v1.GetConfigReply.out_fee:type_name -> google.protobuf.Value
 	2, // 1: xtravel.v1.GetConfigReply.trade_switch:type_name -> xtravel.v1.TradeTimeStatus
-	6, // 2: xtravel.v1.GetConfigReply.buy_or_sale_config:type_name -> google.protobuf.Value
-	6, // 3: xtravel.v1.TradeTimeStatus.trade_switch:type_name -> google.protobuf.Value
+	7, // 2: xtravel.v1.GetConfigReply.buy_or_sale_config:type_name -> google.protobuf.Value
+	7, // 3: xtravel.v1.TradeTimeStatus.trade_switch:type_name -> google.protobuf.Value
 	3, // 4: xtravel.v1.TradeTimeStatus.periods:type_name -> xtravel.v1.TradePeriod
-	6, // 5: xtravel.v1.GetTradeConfigReply.switch:type_name -> google.protobuf.Value
-	6, // 6: xtravel.v1.GetTradeConfigReply.limit_time:type_name -> google.protobuf.Value
+	7, // 5: xtravel.v1.GetTradeConfigReply.switch:type_name -> google.protobuf.Value
+	7, // 6: xtravel.v1.GetTradeConfigReply.limit_time:type_name -> google.protobuf.Value
 	0, // 7: xtravel.v1.CommonService.GetConfig:input_type -> xtravel.v1.GetConfigRequest
 	4, // 8: xtravel.v1.CommonService.GetTradeConfig:input_type -> xtravel.v1.GetTradeConfigRequest
 	1, // 9: xtravel.v1.CommonService.GetConfig:output_type -> xtravel.v1.GetConfigReply
@@ -445,7 +504,7 @@ func file_api_xtravel_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_common_proto_rawDesc), len(file_api_xtravel_v1_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

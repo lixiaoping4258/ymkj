@@ -21,6 +21,7 @@ const _ = http.SupportPackageIsVersion1
 
 const OperationMarketServiceCheckExchange = "/xtravel.v1.MarketService/CheckExchange"
 const OperationMarketServiceGetPayWay = "/xtravel.v1.MarketService/GetPayWay"
+const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseIndex"
 
 type MarketServiceHTTPServer interface {
 	// CheckExchange 兑换前置校验
@@ -30,12 +31,22 @@ type MarketServiceHTTPServer interface {
 	// GetPayWay 支付方式列表
 	// 原: PurchaseController::payWay（硬编码，不查库；需要登录）
 	GetPayWay(context.Context, *GetPayWayRequest) (*GetPayWayReply, error)
+	// PurchaseIndex 兑换专区首页列表
+	// 原: PurchaseController::index -> PurchaseFaceLists
+	//     **免登录**（控制器 $notNeedLogin 放行了 index）
+	//     挂白名单 no_collection_trade
+	//     走交易时段判断；带 20 秒整包缓存
+	//
+	// 返回 RawData：列表行结构任意（bigint 主键 / decimal 字符串 / json 数组 /
+	// "0 转 --" 后处理），用 proto 建模会丢精度又拧巴，见 common.proto 的说明。
+	PurchaseIndex(context.Context, *PurchaseIndexRequest) (*RawData, error)
 }
 
 func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/v1/market/pay_way", _MarketService_GetPayWay0_HTTP_Handler(srv))
 	r.GET("/v1/market/check/exchange", _MarketService_CheckExchange0_HTTP_Handler(srv))
+	r.GET("/v1/market/purchase", _MarketService_PurchaseIndex0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -76,6 +87,25 @@ func _MarketService_CheckExchange0_HTTP_Handler(srv MarketServiceHTTPServer) fun
 	}
 }
 
+func _MarketService_PurchaseIndex0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in PurchaseIndexRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServicePurchaseIndex)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.PurchaseIndex(ctx, req.(*PurchaseIndexRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -84,6 +114,15 @@ type MarketServiceHTTPClient interface {
 	// GetPayWay 支付方式列表
 	// 原: PurchaseController::payWay（硬编码，不查库；需要登录）
 	GetPayWay(ctx context.Context, req *GetPayWayRequest, opts ...http.CallOption) (rsp *GetPayWayReply, err error)
+	// PurchaseIndex 兑换专区首页列表
+	// 原: PurchaseController::index -> PurchaseFaceLists
+	//     **免登录**（控制器 $notNeedLogin 放行了 index）
+	//     挂白名单 no_collection_trade
+	//     走交易时段判断；带 20 秒整包缓存
+	//
+	// 返回 RawData：列表行结构任意（bigint 主键 / decimal 字符串 / json 数组 /
+	// "0 转 --" 后处理），用 proto 建模会丢精度又拧巴，见 common.proto 的说明。
+	PurchaseIndex(ctx context.Context, req *PurchaseIndexRequest, opts ...http.CallOption) (rsp *RawData, err error)
 }
 
 type MarketServiceHTTPClientImpl struct {
@@ -118,6 +157,28 @@ func (c *MarketServiceHTTPClientImpl) GetPayWay(ctx context.Context, in *GetPayW
 	pattern := "/v1/market/pay_way"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServiceGetPayWay))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PurchaseIndex 兑换专区首页列表
+// 原: PurchaseController::index -> PurchaseFaceLists
+//
+//	**免登录**（控制器 $notNeedLogin 放行了 index）
+//	挂白名单 no_collection_trade
+//	走交易时段判断；带 20 秒整包缓存
+//
+// 返回 RawData：列表行结构任意（bigint 主键 / decimal 字符串 / json 数组 /
+// "0 转 --" 后处理），用 proto 建模会丢精度又拧巴，见 common.proto 的说明。
+func (c *MarketServiceHTTPClientImpl) PurchaseIndex(ctx context.Context, in *PurchaseIndexRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/market/purchase"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServicePurchaseIndex))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {
