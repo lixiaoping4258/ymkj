@@ -13,6 +13,33 @@ message Bootstrap {
   Data data = 2;
   App app = 3;
   Log log = 4;
+  Auth auth = 5;
+}
+
+// Auth 鉴权配置。对应原项目 config/project.php 的 user_token 段
+// 加上各控制器里的 $notNeedLogin 数组。
+message Auth {
+  // 免登录的操作白名单。原项目是控制器里的 $notNeedLogin = ['index', ...]，
+  // 这里展开成完整的 operation 路径（Kratos 的 operation 形如
+  // /xtravel.v1.CommonService/GetConfig）。
+  //
+  // 为空时使用代码里的默认白名单（见 server/middleware.go），
+  // 这样即便配置漏了也不会把所有接口锁死。
+  repeated string public_operations = 1;
+
+  // 以下三个对应 config/project.php 的 user_token 段
+  // 'expire_duration'    => 3600 * 24 * 7   用户 token 过期时长(秒)
+  // 'be_expire_duration' => 3600            临近过期自动续期窗口(秒)
+  int64 expire_duration = 2;
+  int64 be_expire_duration = 3;
+
+  // token 生成用的盐。原项目 env('project.unique_identification')，
+  // 也就是 .env [PROJECT] 段的 UNIQUE_IDENTIFICATION。
+  string unique_identification = 4;
+
+  // token 缓存键前缀。**必须与 ThinkPHP 隔离** —— 原项目走 BaseCache 的
+  // tag 机制，存的是 TP 自己的序列化格式，共用键会互相读出乱码。
+  string token_cache_prefix = 5;
 }
 
 message Server {

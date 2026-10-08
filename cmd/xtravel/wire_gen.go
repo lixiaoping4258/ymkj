@@ -28,7 +28,7 @@ import (
 // 依赖装配顺序：conf -> data(DB/Redis/Repo) -> biz(Usecase) -> service -> server -> App
 // 对应原项目里那些 static 单例和 think 容器的自动解析，但这里是编译期确定的，
 // 少一个依赖会直接编译不过，而不是运行时报错。
-func wireApp(confServer *conf.Server, confData *conf.Data, app *conf.App, confLog *conf.Log, logger log.Logger) (*kratos.App, func(), error) {
+func wireApp(confServer *conf.Server, confData *conf.Data, app *conf.App, confLog *conf.Log, auth *conf.Auth, logger log.Logger) (*kratos.App, func(), error) {
 	db, cleanup, err := data.NewDB(confData, logger)
 	if err != nil {
 		return nil, nil, err
@@ -46,7 +46,14 @@ func wireApp(confServer *conf.Server, confData *conf.Data, app *conf.App, confLo
 	location := data.NewLocation(app, logger)
 	tradeConfigUsecase := biz.NewTradeConfigUsecase(configUsecase, cache, tradeCalendarRepo, location, logger)
 	commonService := service.NewCommonService(configUsecase, tradeConfigUsecase)
-	httpServer := server.NewHTTPServer(confServer, commonService, logger)
+	userRepo := data.NewUserRepo(db)
+	userUsecase := biz.NewUserUsecase(userRepo, cache, logger)
+	userService := service.NewUserService(userUsecase)
+	userSessionRepo := data.NewUserSessionRepo(db)
+	authConfig := data.NewAuthConfig(auth, logger)
+	userTokenCache := data.NewUserTokenCache(client, authConfig)
+	userTokenUsecase := biz.NewUserTokenUsecase(userSessionRepo, userRepo, userTokenCache, authConfig, logger)
+	httpServer := server.NewHTTPServer(confServer, auth, commonService, userService, userTokenUsecase, logger)
 	kratosApp := newApp(logger, httpServer)
 	return kratosApp, func() {
 		cleanup2()

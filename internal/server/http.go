@@ -7,6 +7,7 @@ import (
 	"github.com/go-kratos/kratos/v2/transport/http"
 
 	v1 "github.com/lixiaoping4258/ymkj/api/xtravel/v1"
+	"github.com/lixiaoping4258/ymkj/internal/biz"
 	"github.com/lixiaoping4258/ymkj/internal/conf"
 	"github.com/lixiaoping4258/ymkj/internal/pkg/httpx"
 	"github.com/lixiaoping4258/ymkj/internal/service"
@@ -14,17 +15,28 @@ import (
 
 // NewHTTPServer 组装 HTTP 服务。
 //
-// 三个关键点：
-//  1. ResponseEncoder / ErrorEncoder 必须换成 httpx 的实现，
-//     否则响应信封不是原项目的 {code,show,msg,data}，前端全部解析失败。
-//  2. recovery 放最外层，保证 panic 不会打挂进程（原项目有全局异常处理）。
-//  3. logging.Server 记录 method/path/耗时，替代原项目塞在 log_path 里的访问日志。
-func NewHTTPServer(c *conf.Server, common *service.CommonService, logger log.Logger) *http.Server {
+// 中间件顺序很关键，从外到内：
+//  1. recovery    —— 最外层，保证 panic 不会打挂进程
+//  2. logging     —— 记录 method/path/耗时/错误码
+//  3. AuthMiddleware —— 鉴权，替代原项目的 LoginMiddleware
+//
+// Auth 必须在 logging 之内、业务之前：这样鉴权失败也会被 logged，
+// 而且业务 handler 一进来就能从 context 拿到 userId。
+func NewHTTPServer(
+	c *conf.Server,
+	auth *conf.Auth,
+	common *service.CommonService,
+	user *service.UserService,
+	tokens *biz.UserTokenUsecase,
+	logger log.Logger,
+) *http.Server {
 	var opts = []http.ServerOption{
 		http.Middleware(
 			recovery.Recovery(),
 			logging.Server(logger),
+			AuthMiddleware(tokens, auth, logger),
 		),
+		// 关键：换成原项目 JsonService 的信封，否则前端拿到的格式全变
 		http.ResponseEncoder(httpx.ResponseEncoder),
 		http.ErrorEncoder(httpx.ErrorEncoder),
 	}
@@ -41,5 +53,6 @@ func NewHTTPServer(c *conf.Server, common *service.CommonService, logger log.Log
 	}
 	srv := http.NewServer(opts...)
 	v1.RegisterCommonServiceHTTPServer(srv, common)
+	v1.RegisterUserServiceHTTPServer(srv, user)
 	return srv
 }

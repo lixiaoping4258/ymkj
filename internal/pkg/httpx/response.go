@@ -140,6 +140,30 @@ func Fail(msg string) error {
 	return errors.New(http.StatusOK, "BIZ_FAIL", msg)
 }
 
+// FailCode 自定义业务码与 show。
+//
+// 登录中间件需要它：原项目用的是
+//
+//	JsonService::fail('请求认证信息有误，请重新登录', [], -403, 0)
+//
+// 注意 code 是 **-403** 而不是 0，且 show=0（前端不弹这个提示，
+// 而是自己跳登录页）。body 里 code 必须是 -403，前端就是按它判断的。
+func FailCode(code, show int, msg string) error {
+	return &codedError{code: code, show: show, msg: msg}
+}
+
+type codedError struct {
+	code int
+	show int
+	msg  string
+}
+
+func (e *codedError) Error() string { return e.msg }
+
+func (e *codedError) Envelope() (int, int, string, any) {
+	return e.code, e.show, e.msg, nil
+}
+
 // FailWithData 业务失败但需要带 data（原项目 fail($msg, $data) 的用法）。
 //
 // ErrorEncoder 会识别 Enveloper，所以它最终输出

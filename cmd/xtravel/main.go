@@ -92,7 +92,7 @@ func main() {
 	helper := log.NewHelper(logger)
 	helper.Infof("%s %s 启动中，配置来源: %s", Name, Version, flagconf)
 
-	app, cleanup, err := wireApp(bc.Server, bc.Data, bc.App, bc.Log, logger)
+	app, cleanup, err := wireApp(bc.Server, bc.Data, bc.App, bc.Log, bc.Auth, logger)
 	if err != nil {
 		panic(err)
 	}

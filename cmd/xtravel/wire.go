@@ -29,6 +29,7 @@ func wireApp(
 	*conf.Data,
 	*conf.App,
 	*conf.Log,
+	*conf.Auth,
 	log.Logger,
 ) (*kratos.App, func(), error) {
 	panic(wire.Build(

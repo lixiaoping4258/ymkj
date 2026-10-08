@@ -9,4 +9,6 @@ import (
 var ProviderSet = wire.NewSet(
 	NewConfigUsecase,
 	NewTradeConfigUsecase,
+	NewUserTokenUsecase,
+	NewUserUsecase,
 )

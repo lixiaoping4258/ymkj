@@ -12,6 +12,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
 
+	"github.com/lixiaoping4258/ymkj/internal/biz"
 	"github.com/lixiaoping4258/ymkj/internal/conf"
 )
 
@@ -24,6 +25,14 @@ var ProviderSet = wire.NewSet(
 	NewTradeCalendarRepo,
 	NewProjectConfig,
 	NewLocation,
+	NewAuthConfig,
+	// userRepo 同时实现了两个接口，用 wire.Bind 各绑一次。
+	// 注意 NewUserRepo 必须返回具体类型，否则这里绑不了。
+	NewUserRepo,
+	wire.Bind(new(biz.UserProfileRepo), new(*userRepo)),
+	wire.Bind(new(biz.UserBriefRepo), new(*userRepo)),
+	NewUserSessionRepo,
+	NewUserTokenCache,
 )
 
 // gormWriter 把 GORM 的 SQL 日志转接到 Kratos 的 logger。
