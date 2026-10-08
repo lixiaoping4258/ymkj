@@ -685,6 +685,47 @@ b.WriteString(")")
 新增接口时，把新的 `fail()` 文案加进这个列表并重跑核对。
 **不要凭感觉写中文提示。**
 
+### 4.5 Redis 键名逐字核对（已全量验证过）
+
+**共享的键**（锁、`RedisLockService` 缓存）拼错一个字符就会**静默失效**：
+防重复点击不再生效、或两边各写各的缓存 —— 不会报错，只会"看起来正常"。
+
+核对方法同 4.4（读全树做 `Contains`）。检查了两遍：
+先抓所有含冒号的字符串字面量，再单独抓 `Sprintf` 拼出来的那些
+（第一遍会漏掉它们，因为可变部分用 `%d`/`%s` 占位）。
+
+**结果：全部一致。**
+
+| 键 | 机制 | PHP 出现 |
+|---|---|---|
+| `lock:` | 裸 Redis，共用 | 18 |
+| `click:` | 裸 Redis，共用（防重复点击） | 4 |
+| `app:` | 裸 Redis，共用（费率缓存） | 5 |
+| `archive:` | 裸 Redis，共用（档案缓存） | 2 |
+| `user:stock:lookAll:` | 裸 Redis，共用（库存汇总） | 1 |
+| `purchase:indexList:` | 裸 Redis，共用 | 1 |
+| `purchase:salesOn:` | 裸 Redis，共用（SWR） | 1 |
+| `purchase:salesOut:` | 裸 Redis，共用 | 1 |
+| `x_PurchaseOrder:Stock:lock:` | 裸 Redis，共用（库存数） | 1 |
+| `trade:market:periods` | TP 缓存，隔离 | 1 |
+| `trade:market:todayType` | TP 缓存，隔离 | 1 |
+| `whitelist:user_perm:` | TP 缓存，隔离 | 2 |
+| `config:` | TP 缓存，隔离 | 3 |
+| `token_user_` | TP 缓存，隔离 | 1 |
+| `user:exchange:check:` | 裸 Redis，共用 | 1 |
+| `xtravel:go:` | **Go 自有前缀**，PHP 里没有 | 0（预期） |
+
+两条**预期为 0** 的，不是漏项：
+
+- `x_PurchaseOrder:Stock:lock:{purchaseId}`、`warehouse:unlock:goods:` ——
+  PHP 用变量/常量拼接（`"...lock:$purchaseId"`、`'warehouse:unlock:goods'` 再拼 `':'`），
+  所以带完整后辍的字面量搜不到。已分别对照源码确认。
+- `project:` —— 那是 `config('project.{type}.{name}')` 的**配置数组**查找，不是 Redis 键。
+
+> 顺带提醒：`column:*` 那一大片是 GORM 的 struct tag（`gorm:"column:id"`），
+> 不是 Redis 键。用"含冒号"去抓会误捕，看结果时别被吓到。
+
+
 ## 五、鉴权机制（Stage 2）
 
 对应原项目的三个文件，逐行对照实现：
