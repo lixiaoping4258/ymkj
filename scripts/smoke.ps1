@@ -192,6 +192,39 @@ if ($tok.Length -ne 32) {
     Check "trade/config code=1 (with token)" ($tc.body.code -eq 1) "code=$($tc.body.code)"
     Check "trade/config key 'limitTime' camelCase" ($tc.body.data.PSObject.Properties.Name -contains 'limitTime') $tc.raw
 
+    # ---------------------------------------------------- query params take effect
+    #
+    # These assertions exist because of a real bug: list endpoints ignored the
+    # query string entirely (ctx.(khttp.Context) never matched once a middleware
+    # had wrapped the context), so page_size was always the default 25.
+    #
+    # The old assertions all passed while that bug was live, because they only
+    # checked "key exists" / "type is right" -- never "the value I passed in
+    # actually changed anything". Always assert the INPUT round-trips.
+    #
+    # /v1/market/sales is the carrier: it echoes page_no/page_size and needs no
+    # rows to exist (count is 0 in this database).
+    $pg = Get-Json "$Base/v1/market/sales?page_no=3&page_size=7" $hdr
+    Check "sales echoes page_size=7 (params are not ignored)" ($pg.body.data.page_size -eq 7) `
+          "page_size=$($pg.body.data.page_size) (25 == default, means params were dropped)"
+    Check "sales echoes page_no=3" ($pg.body.data.page_no -eq 3) "page_no=$($pg.body.data.page_no)"
+
+    # page_size must be a NUMBER, not a string
+    Check "sales page_size is a number" ($pg.body.data.page_size -is [int] -or $pg.body.data.page_size -is [long]) `
+          "type=$($pg.body.data.page_size.GetType().Name)"
+
+    # and a different page_size must give a different echo (guards against a
+    # hardcoded value looking "correct" by coincidence)
+    $pg2 = Get-Json "$Base/v1/market/sales?page_size=1" $hdr
+    Check "sales page_size=1 differs from page_size=7" ($pg2.body.data.page_size -eq 1) `
+          "page_size=$($pg2.body.data.page_size)"
+
+    # page_type=0 means "not paginated"; the original forces page_size to a huge
+    # value. Assert it does NOT come back as the default 25.
+    $pg3 = Get-Json "$Base/v1/market/sales?page_type=0" $hdr
+    Check "sales page_type=0 is not treated as absent" ($pg3.body.data.page_size -ne 25) `
+          "page_size=$($pg3.body.data.page_size)"
+
     # ------------------------------------------------------------ user/info
     $me = Get-Json "$Base/v1/user/info" $hdr
     Check "valid token accepted" ($me.body.code -eq 1) "code=$($me.body.code)"
