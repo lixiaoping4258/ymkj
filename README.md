@@ -507,6 +507,9 @@ if (bccomp($tradePrice, '0', 2) === 0) { return '0.00'; }
 
 ### 🚩 交接摘要：从哪继续读、从哪继续做
 
+> 📄 **迁移范围与免登录清单请看 [docs/ROUTES-AND-AUTH.md](docs/ROUTES-AND-AUTH.md)**
+> —— C 端 141 条路由 × 是否免登录 × 是否已迁，交叉表。
+>
 > 📄 **前端对接请看 [`docs/API-SAMPLES.md`](docs/API-SAMPLES.md)** —— 14 条已迁接口的
 > 真实请求/响应样例（由实际调用生成，非手写）。
 >> ### 🎯 迁移范围（第 41 轮用户指令）
