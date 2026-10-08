@@ -729,9 +729,29 @@ if ($value === 0 || $value === '0') {...}   // 严格比较
 
    加错方向的代价：缓存共用会读出乱码；锁隔离会让"防重复点击"在迁移期失效。
 
-9. **`market` 域只迁了 2/44 条路由，且都是只读。** 剩下的里有下单、支付、
+9. **`market` 域迁了 11/44 条路由，且全部是只读。** 剩下的里有下单、支付、
    兑换、划转等**涉及资金**的写操作，必须单独评估（幂等、并发、事务边界、
    与 PHP 并存时的双写问题），不能顺手一起做。
+
+10. **兑换单列表里读库存 Redis 失败时，不再让整个接口失败。**
+    原实现在 `PurchaseStateLists::lists()` 里逐行调
+    `PurchaseOrderStockLogic::getNum($id)`，而那个调用在 try/catch 之内 ——
+    Redis 一抖，controller 的 `catch (\Exception)` 接住 → 整个列表返回 fail()。
+    这里改成**记日志后走 `bcsub($amount, $receive_amount)` 兜底**。
+
+    **这是行为差异**：极端情况下原系统报错，Go 返回数据（库存字段退化）。
+    理由：`available_amount` 只是展示用的一个字段，不该让整个列表挂掉。
+    如果要求与原实现逐字一致，改回返回错误即可。
+
+11. **`stale-while-revalidate` 的缓存键与 PHP 不共享（但键空间已对齐）。**
+    `salesOn` 的 SWR 键是裸键（`purchase:salesOn:{md5}`，与 `RedisLockService` 同空间），
+    但**哈希算法与 PHP 不同**：PHP 是 `md5(json_encode($_GET))`（保留数组插入顺序），
+    这里是按键名排序后拼接再取 md5。所以同一个请求两边各存一份缓存。
+
+    取舍理由：为了共用而精确复刻 PHP 的 `json_encode` 字节序（转义、Unicode 处理）
+    代价和风险都更高，收益只是省一份缓存。**不会互相破坏，只是不共享。**
+    注意 PHP 自己在 `salesOn` 里做了 `ksort($params)`、`salesOut` 里没做 ——
+    连它自己都不一致。
 
 ---
 
