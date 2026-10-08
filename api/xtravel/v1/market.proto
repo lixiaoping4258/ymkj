@@ -104,6 +104,21 @@ service MarketService {
   rpc ShowTotalAmount(ShowTotalAmountRequest) returns (ShowTotalAmountReply) {
     option (google.api.http) = {get: "/v1/market/purchase/showTotalAmount"};
   }
+
+  // 兑换售出列表（state=COMPLETE）
+  // 原: PurchaseController::salesOut -> PurchaseStateLists(['state'=>'COMPLETE'])
+  //     需要登录；结果按参数 md5 缓存 10 秒（简单 TTL，无锁）
+  //
+  // ⚠️ count 与 lists 可能对不上：lists 在 SQL 层过滤，但原实现对 WANTED 状态
+  //    还有一次**分页之后**的过滤；COMPLETE 分支没有那次过滤。
+  rpc PurchaseOut(PurchaseOutRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/market/purchase/out"};
+  }
+}
+
+message PurchaseOutRequest {
+  // 兑换专区列表 id（原 validate 的字段名是 id），用它反查 archive_id
+  string id = 1 [json_name = "id"];
 }
 
 message ShowTotalAmountRequest {

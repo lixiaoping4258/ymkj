@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strconv"
 	"strings"
@@ -17,12 +18,13 @@ import (
 // MarketService 对应原项目 app/api/controller/v1/market/PurchaseController.php。
 type MarketService struct {
 	v1.UnimplementedMarketServiceServer
-	market   *biz.MarketUsecase
-	purchase *biz.PurchaseFaceUsecase
-	sale     *biz.SaleFaceUsecase
-	stock    *biz.StockUsecase
-	archive  *biz.ArchiveUsecase
-	fee      *biz.FeeUsecase
+	market        *biz.MarketUsecase
+	purchase      *biz.PurchaseFaceUsecase
+	sale          *biz.SaleFaceUsecase
+	stock         *biz.StockUsecase
+	archive       *biz.ArchiveUsecase
+	fee           *biz.FeeUsecase
+	purchaseState *biz.PurchaseStateUsecase
 }
 
 func NewMarketService(
@@ -32,10 +34,12 @@ func NewMarketService(
 	stock *biz.StockUsecase,
 	archive *biz.ArchiveUsecase,
 	fee *biz.FeeUsecase,
+	purchaseState *biz.PurchaseStateUsecase,
 ) *MarketService {
 	return &MarketService{
 		market: market, purchase: purchase, sale: sale,
 		stock: stock, archive: archive, fee: fee,
+		purchaseState: purchaseState,
 	}
 }
 
@@ -294,4 +298,38 @@ func (s *MarketService) ShowTotalAmount(
 		return nil, bizFail(err)
 	}
 	return &v1.ShowTotalAmountReply{TotalAmount: total}, nil
+}
+
+// PurchaseOut 对应 PurchaseController::salesOut。
+//
+// 原实现：
+//
+//	(new PurchaseSaleValidate())->get()->goCheck();
+//	try {
+//	    $params = md5(json_encode($this->request->get()));
+//	    $cacheKey = sprintf('purchase:salesOut:%s', $params);
+//	    $cache = RedisLockService::get($cacheKey);
+//	    if ($cache) { return json(json_decode($cache, true)); }     // 缓存的是完整信封
+//	    $data = $this->dataLists(new PurchaseStateLists(['state' => MarketPurchaseEnum::STATE_COMPLETE]));
+//	    RedisLockService::set($cacheKey, json_encode($data->getData()), 10);
+//	    return $data;
+//	} catch (\Exception $e) { return $this->fail($e->getMessage()); }
+//
+// 与本文件其它接口一致，分页/筛选参数从原始 query 取。
+func (s *MarketService) PurchaseOut(ctx context.Context, in *v1.PurchaseOutRequest) (*v1.RawData, error) {
+	q := url.Values{}
+	if h, ok := ctx.(khttp.Context); ok && h.Request() != nil {
+		q = h.Request().URL.Query()
+	}
+	page := biz.ParsePageParams(q)
+
+	raw, err := s.purchaseState.List(ctx, biz.MktPurchaseStateComplete, in.GetId(), page)
+	if err != nil {
+		if errors.Is(err, biz.ErrPurchaseListNotFound) {
+			// 对应原实现 throw Exception('记录不存在') 被 catch 后的 fail()
+			return nil, httpx.Fail("记录不存在")
+		}
+		return nil, bizFail(err)
+	}
+	return &v1.RawData{Json: raw}, nil
 }

@@ -24,6 +24,7 @@ const OperationMarketServiceGetPayWay = "/xtravel.v1.MarketService/GetPayWay"
 const OperationMarketServiceGetSaleCategories = "/xtravel.v1.MarketService/GetSaleCategories"
 const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseIndex"
 const OperationMarketServicePurchaseInfo = "/xtravel.v1.MarketService/PurchaseInfo"
+const OperationMarketServicePurchaseOut = "/xtravel.v1.MarketService/PurchaseOut"
 const OperationMarketServiceSaleIndex = "/xtravel.v1.MarketService/SaleIndex"
 const OperationMarketServiceSaleInfo = "/xtravel.v1.MarketService/SaleInfo"
 const OperationMarketServiceShowTotalAmount = "/xtravel.v1.MarketService/ShowTotalAmount"
@@ -54,6 +55,13 @@ type MarketServiceHTTPServer interface {
 	// 原: PurchaseController::purchaseInfo -> MarketListPurchaseLogic::getArchive
 	//     **需要登录**；结果按 archive id 缓存 600 秒
 	PurchaseInfo(context.Context, *PurchaseInfoRequest) (*PurchaseInfoReply, error)
+	// PurchaseOut 兑换售出列表（state=COMPLETE）
+	// 原: PurchaseController::salesOut -> PurchaseStateLists(['state'=>'COMPLETE'])
+	//     需要登录；结果按参数 md5 缓存 10 秒（简单 TTL，无锁）
+	//
+	// ⚠️ count 与 lists 可能对不上：lists 在 SQL 层过滤，但原实现对 WANTED 状态
+	//    还有一次**分页之后**的过滤；COMPLETE 分支没有那次过滤。
+	PurchaseOut(context.Context, *PurchaseOutRequest) (*RawData, error)
 	// SaleIndex 秒转专区首页列表
 	// 原: SaleController::index -> SaleFaceLists
 	//     **需要登录**（不在 $notNeedLogin 里）
@@ -100,6 +108,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/purchase/info", _MarketService_PurchaseInfo0_HTTP_Handler(srv))
 	r.GET("/v1/market/sales/info", _MarketService_SaleInfo0_HTTP_Handler(srv))
 	r.GET("/v1/market/purchase/showTotalAmount", _MarketService_ShowTotalAmount0_HTTP_Handler(srv))
+	r.GET("/v1/market/purchase/out", _MarketService_PurchaseOut0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -273,6 +282,25 @@ func _MarketService_ShowTotalAmount0_HTTP_Handler(srv MarketServiceHTTPServer) f
 	}
 }
 
+func _MarketService_PurchaseOut0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in PurchaseOutRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServicePurchaseOut)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.PurchaseOut(ctx, req.(*PurchaseOutRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -298,6 +326,13 @@ type MarketServiceHTTPClient interface {
 	// 原: PurchaseController::purchaseInfo -> MarketListPurchaseLogic::getArchive
 	//     **需要登录**；结果按 archive id 缓存 600 秒
 	PurchaseInfo(ctx context.Context, req *PurchaseInfoRequest, opts ...http.CallOption) (rsp *PurchaseInfoReply, err error)
+	// PurchaseOut 兑换售出列表（state=COMPLETE）
+	// 原: PurchaseController::salesOut -> PurchaseStateLists(['state'=>'COMPLETE'])
+	//     需要登录；结果按参数 md5 缓存 10 秒（简单 TTL，无锁）
+	//
+	// ⚠️ count 与 lists 可能对不上：lists 在 SQL 层过滤，但原实现对 WANTED 状态
+	//    还有一次**分页之后**的过滤；COMPLETE 分支没有那次过滤。
+	PurchaseOut(ctx context.Context, req *PurchaseOutRequest, opts ...http.CallOption) (rsp *RawData, err error)
 	// SaleIndex 秒转专区首页列表
 	// 原: SaleController::index -> SaleFaceLists
 	//     **需要登录**（不在 $notNeedLogin 里）
@@ -421,6 +456,27 @@ func (c *MarketServiceHTTPClientImpl) PurchaseInfo(ctx context.Context, in *Purc
 	pattern := "/v1/market/purchase/info"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServicePurchaseInfo))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PurchaseOut 兑换售出列表（state=COMPLETE）
+// 原: PurchaseController::salesOut -> PurchaseStateLists(['state'=>'COMPLETE'])
+//
+//	需要登录；结果按参数 md5 缓存 10 秒（简单 TTL，无锁）
+//
+// ⚠️ count 与 lists 可能对不上：lists 在 SQL 层过滤，但原实现对 WANTED 状态
+//
+//	还有一次**分页之后**的过滤；COMPLETE 分支没有那次过滤。
+func (c *MarketServiceHTTPClientImpl) PurchaseOut(ctx context.Context, in *PurchaseOutRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/market/purchase/out"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServicePurchaseOut))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {
