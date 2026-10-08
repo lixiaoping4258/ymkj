@@ -143,3 +143,48 @@ catch (\Exception $e) { Log::error('登录异常'.$e->getMessage()); self::setEr
 | 盐 `UNIQUE_IDENTIFICATION` | ✅ `biz.AuthConfig.UniqueIdent` |
 | `UserTerminalEnum`（terminal） | ⬜ 未迁（值需从 PHP 枚举抄） |
 | `LoginEnum`（scene 常量） | ⬜ 未迁 |
+
+## 附：枚举值与 `getFileUrl` 规则（19:40 补查）
+
+### `LoginEnum`（scene）
+
+```php
+const ACCOUNT_PASSWORD = 1;
+const MOBILE_CAPTCHA   = 2;
+const THIRD_LOGIN      = 3;
+```
+
+> 注意：`login()` 的 `switch` 用的是这些**整数常量**，但 `UserAccounts.type`
+> 里存的也是 1/2/3，两者含义不同但数值恰好对应，**实现时别混用同一个常量**。
+
+### `UserTerminalEnum`（terminal）
+
+```php
+const WECHAT_MMP = 1;   // 微信小程序
+const WECHAT_OA  = 2;   // 微信公众号
+const H5         = 3;   // 手机H5登录
+const PC         = 4;   // 电脑PC
+const IOS        = 5;   // 苹果app
+const ANDROID    = 6;   // 安卓app
+// OTHER = 0 被注释掉了
+```
+
+> 实测库里的活跃会话 `terminal = 3`（H5），与 `x_user_session.terminal` 一致。
+
+### `FileService::getFileUrl($uri, $type)`
+
+```php
+if (strstr($uri, 'http://'))  return $uri;      // 已是完整 URL 直接返回
+if (strstr($uri, 'https://')) return $uri;
+$default = Cache::get('STORAGE_DEFAULT');       // 存储驱动：local / oss / ...
+if (!$default) { $default = ConfigService::get('storage','default','local');
+                 Cache::set('STORAGE_DEFAULT', $default); }
+if ($default === 'local') { ... }
+```
+
+要点：
+- 已带 `http://` / `https://` 的**原样返回**（不做任何处理）
+- 存储驱动从 `ConfigService::get('storage','default','local')` 读，并缓存到 **TP 缓存**
+  的 `STORAGE_DEFAULT` 键
+- `$type == 'public_path'` 时返回 `public_path() . $uri`
+- **`local` 之外的分支（oss 等）未读完** —— 实现前要看完整，否则头像 URL 拼接会不一致
