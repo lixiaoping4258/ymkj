@@ -1,7 +1,17 @@
 # xTravel → Kratos 重构工程
 
 把 `D:\work\phpstudy_pro\WWW\xTravel`（ThinkPHP 8，**754 个 PHP 文件 / 64,588 行**）
-用 Kratos v2 重构。本仓库只在 `develop` 分支改动，不推远端。
+用 Kratos v2 重构。本仓库只在 `develop` 分支改动。
+
+> **远端同步政策（第 37 轮更新）**：已完成并验证的工作**推送到 `origin/develop`**。
+> 这条取代了早期"不推远端"的约定 —— 迁移期两套系统并行，需要让远端保持最新。
+>
+> 边界（授权的是"推 develop"，不是"随便操作远端"）：
+> - **不得强推**（`--force` / `--force-with-lease`）；推送前先确认远端是本地祖先
+> - **不得动 `master` 或其他分支**
+> - 推送前确认工作区干净、**没有凭据文件被跟踪**（`configs/config.local.yaml` 在 .gitignore 内）
+>
+> 如果 `git ls-remote` 显示远端不在本地历史里，**停下来问人**，不要强推。
 
 ---
 
