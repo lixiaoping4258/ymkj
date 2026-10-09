@@ -65,3 +65,8 @@ func (r *AccountLoginReply) Envelope() (int, int, string, any) {
 func (r *GetCaptchaReply) Envelope() (int, int, string, any) {
 	return 1, 0, "", r
 }
+
+// Envelope 让文章列表返回 {title, lists}。原实现用 $this->data($result)。
+func (r *ArticleListReply) Envelope() (int, int, string, any) {
+	return 1, 0, "", r
+}

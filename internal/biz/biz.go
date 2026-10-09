@@ -23,4 +23,5 @@ var ProviderSet = wire.NewSet(
 	NewLoginUsecase,
 	NewLoginValidator,
 	NewCaptchaUsecase,
+	NewArticleUsecase,
 )
