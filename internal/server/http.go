@@ -28,6 +28,7 @@ func NewHTTPServer(
 	common *service.CommonService,
 	user *service.UserService,
 	market *service.MarketService,
+	account *service.AccountService,
 	tokens *biz.UserTokenUsecase,
 	whitelist *biz.WhitelistUsecase,
 	logger log.Logger,
@@ -58,6 +59,7 @@ func NewHTTPServer(
 	}
 	srv := http.NewServer(opts...)
 	v1.RegisterCommonServiceHTTPServer(srv, common)
+	v1.RegisterAccountServiceHTTPServer(srv, account)
 	v1.RegisterUserServiceHTTPServer(srv, user)
 	v1.RegisterMarketServiceHTTPServer(srv, market)
 	return srv

@@ -53,6 +53,11 @@ var defaultPublicOps = map[string]struct{}{
 	"/xtravel.v1.CommonService/GetConfig":         {},
 	"/xtravel.v1.MarketService/PurchaseIndex":     {},
 	"/xtravel.v1.MarketService/GetSaleCategories": {},
+	// ⚠️ 不要凭接口名猜！这一条来自：
+	//   app/api/controller/v1/account/LoginController.php  $notNeedLogin 含 'account'
+	//   路由：POST /v1/login/account（account.php 里 Route::group('/v1/login', ...)）
+	// 见 docs/ROUTES-AND-AUTH.md 的免登录清单。
+	"/xtravel.v1.AccountService/AccountLogin": {},
 }
 
 // AuthMiddleware 构造鉴权中间件。

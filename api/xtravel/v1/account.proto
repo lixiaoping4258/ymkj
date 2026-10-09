@@ -45,6 +45,14 @@ message AccountLoginRequest {
   string account = 3 [json_name = "account"];
   // scene=1 时必填
   string password = 4 [json_name = "password"];
+  // 图形验证码 ID。scene=1 时必填。
+  // ⚠️ json_name 必须是 `captchaId`（小写 d）—— 原实现读的是 $data['captchaId']，
+  //    用 protojson 默认的 `captchaId` 恰好一致，但仍显式写死以免以后被改名。
+  string captcha_id = 5 [json_name = "captchaId"];
+  // 图形验证码内容。scene=1 时使用。
+  string captcha = 6 [json_name = "captcha"];
+  // 手机验证码。scene=2 时必填（对应 $data['code']）。
+  string code = 7 [json_name = "code"];
 }
 
 // AccountLoginReply 对应 LoginLogic::login 的返回值：

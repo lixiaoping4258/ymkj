@@ -20,4 +20,6 @@ var ProviderSet = wire.NewSet(
 	NewFeeUsecase,
 	NewPurchaseStateUsecase,
 	NewStaleCache,
+	NewLoginUsecase,
+	NewLoginValidator,
 )

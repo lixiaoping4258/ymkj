@@ -3,6 +3,8 @@ package biz
 import (
 	"context"
 	"errors"
+
+	"github.com/lixiaoping4258/ymkj/internal/conf"
 )
 
 // 本文件对应原项目 app/api/validate/LoginAccountValidate.php。
@@ -114,10 +116,17 @@ type LoginValidator struct {
 	safe     SafeCacheRepo
 	// salt 对应 Config::get('project.unique_identification')，
 	// 实测 .env 覆盖为 "aaaa123"（7 位）。
+	// 从 *conf.Auth 读取（wire 无法注入裸 string）。
 	salt string
 }
 
-func NewLoginValidator(p PasswordRepo, c CaptchaRepo, s SafeCacheRepo, salt string) *LoginValidator {
+// NewLoginValidator 构造登录校验器。
+// salt 取自 conf.Auth.UniqueIdentification，与 data.NewLoginRepo 用的是同一个来源。
+func NewLoginValidator(p PasswordRepo, c CaptchaRepo, s SafeCacheRepo, auth *conf.Auth) *LoginValidator {
+	salt := ""
+	if auth != nil {
+		salt = auth.UniqueIdentification
+	}
 	return &LoginValidator{password: p, captcha: c, safe: s, salt: salt}
 }
 

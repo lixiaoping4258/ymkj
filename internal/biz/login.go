@@ -126,22 +126,13 @@ type LoginUsecase struct {
 	repo   LoginRepo
 	tokens *UserTokenUsecase
 	ids    IDGenerator
-	// avatarPrefix 对应 FileService::getFileUrl 的域名拼接。
-	//
-	// ⚠️ 原实现里 local 驱动下 $domain = request()->domain()，**取自当前请求**，
-	// 不是配置里的固定域名。所以这里传入的是 handler 从 Host 头推导出的值。
-	avatarPrefix string
-	log          *log.Helper
+	log    *log.Helper
 }
 
 func NewLoginUsecase(
-	repo LoginRepo, tokens *UserTokenUsecase, ids IDGenerator,
-	avatarPrefix string, logger log.Logger,
+	repo LoginRepo, tokens *UserTokenUsecase, ids IDGenerator, logger log.Logger,
 ) *LoginUsecase {
-	return &LoginUsecase{
-		repo: repo, tokens: tokens, ids: ids,
-		avatarPrefix: avatarPrefix, log: log.NewHelper(logger),
-	}
+	return &LoginUsecase{repo: repo, tokens: tokens, ids: ids, log: log.NewHelper(logger)}
 }
 
 // LoginByAccountPassword 对应 scene = ACCOUNT_PASSWORD(1) 且**密码已在验证器层校验通过**。
@@ -170,7 +161,8 @@ func NewLoginUsecase(
 //	// app_id == 2 时触发 ThirdNotify
 //	return ['nickname'=>..., 'sn'=>..., 'mobile'=>..., 'avatar'=>$avatar, 'token'=>...];
 func (uc *LoginUsecase) LoginByAccountPassword(
-	ctx context.Context, account string, terminal int32, clientIP, defaultAvatar string,
+	ctx context.Context, account string, terminal int32,
+	clientIP, defaultAvatar, avatarPrefix string,
 ) (*LoginResult, error) {
 	const appID = 1 // 账号密码场景固定 app_id = 1
 
@@ -248,7 +240,7 @@ func (uc *LoginUsecase) LoginByAccountPassword(
 	if avatar == "" {
 		avatar = defaultAvatar
 	}
-	avatar = joinFileURL(uc.avatarPrefix, avatar)
+	avatar = joinFileURL(avatarPrefix, avatar)
 
 	// 8. 条件副作用：app_id == 2 时记一条三方通知
 	//

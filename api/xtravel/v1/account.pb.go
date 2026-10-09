@@ -39,7 +39,16 @@ type AccountLoginRequest struct {
 	Scene   int32  `protobuf:"varint,2,opt,name=scene,proto3" json:"scene,omitempty"`
 	Account string `protobuf:"bytes,3,opt,name=account,proto3" json:"account,omitempty"`
 	// scene=1 时必填
-	Password      string `protobuf:"bytes,4,opt,name=password,proto3" json:"password,omitempty"`
+	Password string `protobuf:"bytes,4,opt,name=password,proto3" json:"password,omitempty"`
+	// 图形验证码 ID。scene=1 时必填。
+	// ⚠️ json_name 必须是 `captchaId`（小写 d）—— 原实现读的是 $data['captchaId']，
+	//
+	//	用 protojson 默认的 `captchaId` 恰好一致，但仍显式写死以免以后被改名。
+	CaptchaId string `protobuf:"bytes,5,opt,name=captcha_id,json=captchaId,proto3" json:"captcha_id,omitempty"`
+	// 图形验证码内容。scene=1 时使用。
+	Captcha string `protobuf:"bytes,6,opt,name=captcha,proto3" json:"captcha,omitempty"`
+	// 手机验证码。scene=2 时必填（对应 $data['code']）。
+	Code          string `protobuf:"bytes,7,opt,name=code,proto3" json:"code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -98,6 +107,27 @@ func (x *AccountLoginRequest) GetAccount() string {
 func (x *AccountLoginRequest) GetPassword() string {
 	if x != nil {
 		return x.Password
+	}
+	return ""
+}
+
+func (x *AccountLoginRequest) GetCaptchaId() string {
+	if x != nil {
+		return x.CaptchaId
+	}
+	return ""
+}
+
+func (x *AccountLoginRequest) GetCaptcha() string {
+	if x != nil {
+		return x.Captcha
+	}
+	return ""
+}
+
+func (x *AccountLoginRequest) GetCode() string {
+	if x != nil {
+		return x.Code
 	}
 	return ""
 }
@@ -193,12 +223,16 @@ var File_api_xtravel_v1_account_proto protoreflect.FileDescriptor
 const file_api_xtravel_v1_account_proto_rawDesc = "" +
 	"\n" +
 	"\x1capi/xtravel/v1/account.proto\x12\n" +
-	"xtravel.v1\x1a\x1cgoogle/api/annotations.proto\"}\n" +
+	"xtravel.v1\x1a\x1cgoogle/api/annotations.proto\"\xca\x01\n" +
 	"\x13AccountLoginRequest\x12\x1a\n" +
 	"\bterminal\x18\x01 \x01(\x05R\bterminal\x12\x14\n" +
 	"\x05scene\x18\x02 \x01(\x05R\x05scene\x12\x18\n" +
 	"\aaccount\x18\x03 \x01(\tR\aaccount\x12\x1a\n" +
-	"\bpassword\x18\x04 \x01(\tR\bpassword\"\x85\x01\n" +
+	"\bpassword\x18\x04 \x01(\tR\bpassword\x12\x1d\n" +
+	"\n" +
+	"captcha_id\x18\x05 \x01(\tR\tcaptchaId\x12\x18\n" +
+	"\acaptcha\x18\x06 \x01(\tR\acaptcha\x12\x12\n" +
+	"\x04code\x18\a \x01(\tR\x04code\"\x85\x01\n" +
 	"\x11AccountLoginReply\x12\x1a\n" +
 	"\bnickname\x18\x01 \x01(\tR\bnickname\x12\x0e\n" +
 	"\x02sn\x18\x02 \x01(\x04R\x02sn\x12\x16\n" +
