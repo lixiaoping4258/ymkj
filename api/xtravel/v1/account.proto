@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package xtravel.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
+
+// AccountService 登录相关。
+// 对应原项目 app/api/controller/v1/account/LoginController.php
+// 路由分组：app/api/route/account.php 里的 Route::group('/v1/login', ...)
+// ⚠️ 所以路径是 /v1/login/xxx，**不是** /account/xxx。
+service AccountService {
+  // 账号/密码、手机验证码登录
+  // 原: LoginController::account
+  //   $params = (new LoginAccountValidate())->post()->goCheck();
+  //   $params['app_id'] = 1;
+  //   $result = LoginLogic::login($params);
+  //   if (false === $result) return $this->fail(LoginLogic::getError());
+  //   return $this->data($result);          // <- data() = success('', $data, 1, 0)
+  //
+  // 免登录（LoginController::$notNeedLogin 含 'account'）。
+  rpc AccountLogin(AccountLoginRequest) returns (AccountLoginReply) {
+    option (google.api.http) = {
+      post: "/v1/login/account"
+      body: "*"
+    };
+  }
+}
+
+// AccountLoginRequest 对应 LoginAccountValidate 的规则：
+//
+//	'terminal' => 'require|in:1,2,3,4,5,6',
+//	'scene'    => 'require|in:1,2|checkConfig',
+//	'account'  => 'require',
+//	// password 在 checkConfig 里按 scene 动态要求
+//
+// ⚠️ 校验顺序与错误信息必须与 PHP 一致（见 message 定义），
+// 否则前端拿到的提示会变。字段名是 **snake-free 的小写单词**，原样透传。
+message AccountLoginRequest {
+  // 1 微信小程序 / 2 微信公众号 / 3 手机H5 / 4 电脑PC / 5 苹果app / 6 安卓app
+  int32 terminal = 1 [json_name = "terminal"];
+  // 1 账号密码 / 2 手机验证码
+  int32 scene = 2 [json_name = "scene"];
+  string account = 3 [json_name = "account"];
+  // scene=1 时必填
+  string password = 4 [json_name = "password"];
+}
+
+// AccountLoginReply 对应 LoginLogic::login 的返回值：
+//
+//	return ['nickname'=>$userInfo['nickname'], 'sn'=>$userInfo['sn'],
+//	        'mobile'=>$userInfo['mobile'], 'avatar'=>$avatar, 'token'=>$userInfo['token']];
+//
+// ⚠️ 五个键都是**全小写单词**（没有下划线也没有驼峰），json_name 原样即可。
+// ⚠️ nickname / sn / mobile 取自 **$userInfo（token 缓存里的值）**，不是 $user。
+message AccountLoginReply {
+  string nickname = 1 [json_name = "nickname"];
+  // x_user.sn 是 bigint(20)。protojson 会把 int64 输出成字符串，
+  // 由 httpx.unquoteInt64 还原成数字（原契约里是数字）。
+  uint64 sn = 2 [json_name = "sn"];
+  string mobile = 3 [json_name = "mobile"];
+  // 已经过 FileService::getFileUrl 处理（完整 URL 原样返回，相对路径拼域名）
+  string avatar = 4 [json_name = "avatar"];
+  string token = 5 [json_name = "token"];
+}

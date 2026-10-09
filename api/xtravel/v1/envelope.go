@@ -47,3 +47,15 @@ func (r *RawData) Envelope() (int, int, string, any) {
 	}
 	return 1, 0, "", json.RawMessage(b)
 }
+
+// Envelope 让账号登录返回 {nickname, sn, mobile, avatar, token}。
+//
+// 原实现：`return $this->data($result);`
+// → BaseLikeAdminController::data() → JsonService::data() = success(”, $data, 1, 0)
+// → code=1, show=0, msg=""
+//
+// ⚠️ 注意**不是** `$this->success(...)`：success() 的 msg 默认是 'success'，
+// 而 data() 显式传了空串。两者返回的 msg 不同。
+func (r *AccountLoginReply) Envelope() (int, int, string, any) {
+	return 1, 0, "", r
+}

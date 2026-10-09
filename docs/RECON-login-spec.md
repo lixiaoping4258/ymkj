@@ -391,3 +391,96 @@ public function handle($params) {
 **另有两项实现前需要看（本轮新识别）**：
 - `OpenAppsNotifyLogic::create` 的字段与目标表
 - `public_path()` 在 Go 侧对应什么（`getFileUrl($uri,'public_path')` 分支）
+## 🔴 补查（第 44 轮）：账号密码登录**需要图形验证码**，且有**失败锁定**
+
+之前我只读了 `LoginLogic::login`，**没有读验证器**。补读 `LoginAccountValidate` 后发现两处遗漏，
+**都会影响安全性，所以不能在补齐前接线 service**。
+
+### 一、`checkConfig` 要求图形验证码（scene = ACCOUNT_PASSWORD）
+
+`app/api/validate/LoginAccountValidate.php:75`
+
+```php
+$config = ConfigService::get('login', 'login_way');
+if (!in_array($scene, $config)) { return '不支持的登录方式'; }
+
+switch ($scene) {
+    case LoginEnum::MOBILE_CAPTCHA:                     // scene = 2
+        if (!isset($data['code'])) { return '请输入手机验证码'; }
+        return $this->checkCode($data['code'], [], $data);
+
+    case LoginEnum::ACCOUNT_PASSWORD:                   // scene = 1
+        if (!isset($data['password'])) { return '请输入密码'; }
+        // 验证图形验证码
+        $captchaId = $data['captchaId'] ?? '';
+        if (empty($captchaId)) { return '图形验证码ID不正确'; }
+        $captcha = $data['captcha'] ?? '';
+        if (!CaptchaLogic::verifyCaptcha($captchaId, $captcha)) { return '图形验证码不正确'; }
+        return $this->checkPassword($data['password'], [], $data);
+}
+```
+
+**结论**：`POST /v1/login/account` 在 `scene=1` 时必须带 `captchaId` 与 `captcha`，
+否则连密码都不会校验就直接失败。**这是我不知道的依赖**（`CaptchaLogic` + 验证码的生成/存储未迁）。
+
+顺带说明：登录方式本身还受配置控制 —— `ConfigService::get('login','login_way')` 里没有的 scene 直接报"不支持的登录方式"。
+
+### 二、`checkPassword` 有账号安全锁定
+
+`LoginAccountValidate.php:125`
+
+```php
+$userAccountSafeCache = new UserAccountSafeCache();
+if (!$userAccountSafeCache->isSafe()) {
+    return '密码连续' . $userAccountSafeCache->count . '次输入错误，请' . $userAccountSafeCache->minute . '分钟后重试';
+}
+
+$condition = ['app_id'=>1, 'type'=>1, 'account'=>$data['account'], 'state'=>'ENABLE'];
+$account = UserAccounts::where($condition)->field('user_id')->find();
+if (!$account)            { return '用户账户不存在'; }          // ← 注意这条
+
+$userInfo = User::where(['id'=>$account->user_id])->field(['password,is_disable'])->findOrEmpty();
+if ($userInfo->isEmpty()) { return '用户不存在'; }
+if ($userInfo['is_disable'] === YesNoEnum::YES) { return '用户已禁用'; }
+if (empty($userInfo['password'])) { $userAccountSafeCache->record(); return '用户不存在'; }
+
+$passwordSalt = Config::get('project.unique_identification');
+if ($userInfo['password'] !== create_password($password, $passwordSalt)) {
+    $userAccountSafeCache->record();                        // ← 记一次失败
+    return '密码错误';
+}
+```
+
+**要点**：
+
+| 点 | 说明 |
+|---|---|
+| **锁定机制存在** | `UserAccountSafeCache`（`isSafe()` / `record()` / `count` / `minute`），**未迁，实现前必须读** |
+| 错误信息共 5 条 | `用户账户不存在`、`用户不存在`、`用户已禁用`、`密码错误`、`密码连续N次输入错误，请M分钟后重试` |
+| **查询带 `state='ENABLE'`** | 与 `LoginLogic::login` 里的 `state != 'ENABLE'` 检查**重复但位置不同**：这里查不到会报 `用户账户不存在`，而 `login()` 里报 `账号当前不可用`。**同一个账号状态问题，两条路径的提示不同** |
+| `$\rightarrowfield(['password,is_disable'])` | ⚠️ 这里写的是**一个字符串** `'password,is_disable'` 而不是数组 —— ThinkPHP 会把整串当成**一个字段名**。实际会怎样需实测（可能查不出 `is_disable`，导致禁用检查失效）。**这是个潜在缺陷，按"不改动原逻辑"应照搬，但必须先实测确认行为** |
+
+### 三、这对已完成的 biz/data 层意味着什么
+
+`internal/biz/login.go` 实现的是 **`LoginLogic::login` 那一层**（密码已校验通过之后的部分），
+这一层本身是对的。
+
+**但 handler 还缺三层**：
+
+```
+① 参数校验（terminal / scene / account 的 require|in）  ← 未做
+② checkConfig：登录方式白名单 + 图形验证码 + 密码比对 + 锁定  ← 未做，且依赖未迁
+③ LoginLogic::login  ← ✅ 已做（biz 层）
+```
+
+**所以现在接线 service 会做出一个跳过验证码与锁定保护的登录接口 —— 不能接。**
+
+### 四、新增的待办
+
+| # | 项 | 阻塞什么 |
+|---|---|---|
+| 1 | `CaptchaLogic` + 验证码的生成/存储（Redis 键？） | scene=1 登录 |
+| 2 | `UserAccountSafeCache`（锁定计数、时长、键名） | scene=1 登录 |
+| 3 | `ConfigService::get('login','login_way')` 的实际值 | 登录方式白名单 |
+| 4 | `field(['password,is_disable'])` 的实际行为实测 | 禁用检查是否真的生效 |
+| 5 | `SmsController::sendCode` + `checkCode` | scene=2 登录 |
