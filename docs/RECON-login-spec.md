@@ -484,3 +484,112 @@ if ($userInfo['password'] !== create_password($password, $passwordSalt)) {
 | 3 | `ConfigService::get('login','login_way')` 的实际值 | 登录方式白名单 |
 | 4 | `field(['password,is_disable'])` 的实际行为实测 | 禁用检查是否真的生效 |
 | 5 | `SmsController::sendCode` + `checkCode` | scene=2 登录 |
+## 补查（第 45 轮）：`UserAccountSafeCache` 与 `CaptchaLogic` —— **键无法共用**
+
+### 一、`UserAccountSafeCache`（`app/common/cache/UserAccountSafeCache.php`，81 行）
+
+```php
+class UserAccountSafeCache extends BaseCache
+{
+    private string $key;       // 缓存次数名称
+    public int $minute = 15;   // 锁定 15 分钟
+    public int $count  = 15;   // 15 次错误后锁定
+
+    public function __construct() {
+        parent::__construct();
+        $ip = \request()->ip();
+        $this->key = $this->tagName . $ip;      // ← tagName + IP
+    }
+    public function record(): void {
+        if ($this->get($this->key)) { $this->inc($this->key, 1); }     // 已存在 -> 自增
+        else { $this->set($this->key, 1, $this->minute * 60); }        // 首次 -> 设 900s TTL
+    }
+    public function isSafe(): bool { return !($this->get($this->key) >= $this->count); }
+    public function relieve(): void { $this->delete($this->key); }
+}
+```
+
+**要点**：
+
+| 点 | 说明 |
+|---|---|
+| **按 IP 锁定，不是按账号** | `$this->key = $tagName . request()->ip()` —— 同一 IP 后面所有账号共享计数 |
+| **15 次 / 15 分钟** | 与注释一致 |
+| **TTL 只在首次设置** | `inc()` 不续期 → 窗口是"第一次失败起的 15 分钟"，不是滑动窗口 |
+| `$tagName` | `BaseCache::__construct` 里 `= get_class($this)` = `app\common\cache\UserAccountSafeCache` |
+
+### 二、🔴 `BaseCache::set()` 走 ThinkPHP 的 **tag 机制**
+
+```php
+abstract class BaseCache extends Cache          // 继承 think\Cache（不是某个 driver）
+{
+    public function set($key, $value, $ttl = null): bool {
+        return $this->store()->tag($this->tagName)->set($key, $value, $ttl);
+    }
+}
+```
+
+`tag()` 会让 ThinkPHP 用**标签索引 + 键派生**来存，**不是简单的 `前缀 + key`**。
+所以 Go 侧**无法用"拼一个键名"的方式共用这个锁定计数**。
+
+### 三、`CaptchaLogic`（`app/api/logic/CaptchaLogic.php`，76 行）
+
+```php
+public static function getCaptcha(int $w = 150, int $h = 40): array {
+    $cacheKey = sprintf('captcha:%s', $id);
+    cache($cacheKey, $phrase, 300);            // TTL 300 秒
+    ...
+}
+public static function verifyCaptcha(string $id, string $captchaValue): bool {
+    $cacheKey = sprintf('captcha:%s', $id);
+    $captcha = cache($cacheKey);
+    cache($cacheKey, null);                    // ← 校验后立即删除（一次性）
+    ...
+}
+```
+
+- 键形如 `captcha:{id}`，走全局 `cache()` 助手（默认 store）
+- **TTL 300 秒**
+- **校验后立刻删除** —— 一次性使用，重放无效
+
+### 四、缓存驱动确认
+
+```php
+// config/cache.php
+'default' => env('cache.driver', 'file'),
+'stores'  => ['file' => ['prefix'=>'la'], 'redis' => ['prefix'=>'la:']]
+```
+
+`.env` 的 `[cache]` 段设了 `driver = redis`，**实测确认**（PHP CLI 打印 `cache.default = redis`、`env CACHE_DRIVER = 'redis'`）。
+
+⚠️ 所以 `config/cache.php` 里那个 `'file'` 默认值**是被 `.env` 覆盖的**，别被它误导。
+（Redis 里扫不到 `*captcha*` / `*UserAccountSafe*` 只是因为当前没有存活记录，不是"存在文件里"。）
+
+### 五、🔴 由此得出的结论：**这两个状态 Go 无法与 PHP 共用**
+
+| 状态 | 能否共用 | 原因 |
+|---|---|---|
+| 锁定计数 | ❌ | 走 TP tag 机制，键名是派生的，不是可拼的 |
+| 图形验证码 | ⚠️ 理论上可（键是 `la:captcha:{id}`），但**业务上不该共用** | 验证码**图片是某一侧生成的**；A 侧生成的验证码 B 侧没有对应的明文，除非共用同一个键。而共用又要求两侧对同一 id 的存取完全一致 —— 一旦 Go 也实现 `/v1/captcha` 就会互相覆盖 |
+
+**因此迁移期的行为必然是**：
+
+- **锁定**：PHP 侧 15 次 + Go 侧 15 次 = **同一个 IP 共 30 次机会**。**保护被削弱一半**，这是共存期的固有限制，**必须记录**。
+- **验证码**：哪一侧签发 `/v1/captcha`，就必须由同一侧校验登录。**不能一半用 PHP 一半用 Go。**
+
+### 六、这不违反"不改动原项目逻辑"
+
+- **业务规则完全照搬**：15 次 / 15 分钟 / 按 IP / 首次设 TTL / 验证码 TTL 300s / 校验后删除 —— 一条不改
+- **变的只是存储位置**（Go 用自己的键），这属于**基础设施必需**，与已有的
+  "Redis 键前缀隔离（Go 读不了 ThinkPHP 的序列化格式）"是同一类
+- 但**必须把"共存期保护减半"如实记录**，不能悄悄放过
+
+### 七、仍然待查
+
+| # | 项 | 说明 |
+|---|---|---|
+| 1 | `CaptchaLogic::verifyCaptcha` 的**完整比对逻辑** | 只读了前 4 行，是否大小写敏感 / 是否兼容旧格式未知 |
+| 2 | 验证码图片库 `Mickeywaugh\Captcha` | Go 侧需要等价的图形验证码生成 |
+| 3 | `UserAccountSafeCache::relieve()` 的**调用点** | 登录成功是否清除计数？没清除的话成功登录后计数仍在 |
+| 4 | `ConfigService::get('login','login_way')` 的实际值 | 决定哪些 scene 可用 |
+| 5 | `field(['password,is_disable'])` 的实际行为 | 潜在缺陷，需实测 |
