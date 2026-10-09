@@ -104,18 +104,25 @@ func TestPurchaseFaceRepo_MatchesRealPHP(t *testing.T) {
 	if first["issuer_time"] != "2026-04-17 17:39:39" {
 		t.Errorf("issuer_time = %#v（应为 2026-04-17 17:39:39，不是 RFC3339）", first["issuer_time"])
 	}
-	if first["purchase_amount"] != int64(0) {
-		t.Errorf("purchase_amount = %#v", first["purchase_amount"])
+	// purchase_amount 也是**会变的真实数据**（实测从 0 变成 1），
+	// 这里只断言存在且是整数，不断言具体值。
+	if _, ok := first["purchase_amount"].(int64); !ok {
+		t.Errorf("purchase_amount 应为整数，实际 %#v", first["purchase_amount"])
 	}
-	// purchase_lists 在 DB 里是 0，PHP 用 ?: 把它变成 "--"，并连带把两个单价也变成 "--"
-	if first["purchase_lists"] != "--" {
-		t.Errorf("purchase_lists = %#v, 应为 \"--\"", first["purchase_lists"])
+	// ⚠️ `purchase_lists` / 两个单价的 "--" 替换逻辑**不在这里断言** ——
+	// 那几行数据在库里是会变的（实测 purchase_lists 从 0 变成了 1），
+	// 对着 rows[0] 硬编码期望值会让测试因为数据变化而失败。
+	// 该逻辑已改为用合成行在 purchase_face_tomap_test.go 里验证。
+	//
+	// 这里只断言**与数据无关的形状约束**：
+	if _, ok := first["purchase_lists"]; !ok {
+		t.Error("缺少键 purchase_lists")
 	}
-	if first["low_unit_price"] != "--" {
-		t.Errorf("low_unit_price = %#v, 应为 \"--\"", first["low_unit_price"])
+	if _, ok := first["low_unit_price"]; !ok {
+		t.Error("缺少键 low_unit_price")
 	}
-	if first["max_unit_price"] != "--" {
-		t.Errorf("max_unit_price = %#v, 应为 \"--\"", first["max_unit_price"])
+	if _, ok := first["max_unit_price"]; !ok {
+		t.Error("缺少键 max_unit_price")
 	}
 	if first["platform_name"] != "元梦典藏" {
 		t.Errorf("platform_name = %#v", first["platform_name"])
