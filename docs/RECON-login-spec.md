@@ -310,3 +310,84 @@ public static function gen(int $offset = 0): int
 但**键名必须与 PHP 完全一致**，写错一个字符会导致 ID 重复（这是数据损坏级的问题）。
 
 **实现前必须做**：拿 PHP 生成的 ID 序列与 Go 生成的序列**交叉验证**（交替调用，确认无重复、单调）。
+## 补查（续）：`FileService::getFileUrl` 与 `ThirdNotify`（第 2、3 个未知项）
+
+### `FileService::getFileUrl($uri, $type)` —— 完整规则
+
+`app/common/service/FileService.php:42`
+
+```php
+if (strstr($uri, 'http://'))  return $uri;       // 已是完整 URL -> 原样返回
+if (strstr($uri, 'https://')) return $uri;
+
+$default = Cache::get('STORAGE_DEFAULT');
+if (!$default) { $default = ConfigService::get('storage','default','local');
+                 Cache::set('STORAGE_DEFAULT', $default); }
+
+if ($default === 'local') {
+    if ($type == 'public_path') { return public_path() . $uri; }
+    $domain = request()->domain();               // ← 🔴 取自【当前请求】的域名
+} else {
+    $storage = Cache::get('STORAGE_ENGINE') ?: ConfigService::get('storage', $default);
+    $domain  = $storage ? $storage['domain'] : '';
+}
+return self::format($domain, $uri);
+```
+
+`FileService::format($domain, $uri)`（L98）：
+
+```php
+// 去掉 domain 末尾的 '/'
+if ('/' == substr($domain, -1)) { $domain = substr_replace($domain,'',-1,1); }
+// 去掉 uri 开头的 '/'
+if ('/' == substr($uri, 0, 1))  { $uri    = substr_replace($uri,'',0,1); }
+return trim($domain) . '/' . trim($uri);
+```
+
+**🔴 迁移要点**：
+
+| 点 | 说明 |
+|---|---|
+| **`local` 时域名来自请求** | `request()->domain()` 是**当前请求的域名**（含协议），Go 侧必须从 **`Host` 头 + 协议**推导。**这是请求相关的，不是配置** —— 用配置里的固定域名会导致头像 URL 与实际访问域名不一致 |
+| **`STORAGE_DEFAULT` 走 TP 缓存** | 实测该键在 Redis 里是 **`s:5:"local";`（PHP 序列化）**，Go **读不了**。但它的值等价于 `ConfigService::get('storage','default','local')`，**Go 侧直接读配置即可**，不要试图解析那个键 |
+| 两张缓存键 | `STORAGE_DEFAULT`（驱动名）、`STORAGE_ENGINE`（驱动详细配置） |
+| 已是完整 URL | 带 `http://` / `https://` 的**原样返回**，不做任何处理（所以 `avatar` 若是外部 URL，前缀逻辑完全不参与） |
+
+### `ThirdNotify` → 是**写库**，不是发 HTTP（比我预想的简单）
+
+`app/event.php` 的 `listen` 段：
+```php
+'ThirdNotify' => [AppNotifyListener::class],
+```
+
+`app/common/listener/AppNotifyListener.php`（28 行）：
+```php
+public function handle($params) {
+    $action=..., $app_id=..., $user_id=..., $body=..., $requestId=...;
+    $result = OpenAppsNotifyLogic::create($action, $app_id, $user_id, $body, $requestId);
+    if (false === $result) { Log::write('三方通知信息入库失败:'...); return false; }
+    return true;
+}
+```
+
+**结论**：`ThirdNotify` 只是**把通知记一条到库里**（`OpenAppsNotifyLogic::create`），
+**不发外部 HTTP 请求**。真正的投递应该在别处（队列消费者）。
+
+**对迁移的影响**：
+- 登录时 `app_id == 2` 需要**插一条通知记录** → 属于"写操作"，需要与 `login` 的其他写在同一事务语义里考虑
+- 失败只记日志、**不影响登录结果**（`handle` 返回 false，但 `LoginLogic` 没检查返回值）
+- ⚠️ **`OpenAppsNotifyLogic::create` 的字段与目标表未查** —— 实现前需要看
+
+### 剩余未知项（原 4 项 -> 现 1 项）
+
+| # | 项 | 状态 |
+|---|---|---|
+| 1 | 密码算法 | ✅ 已解决（`biz/password.go` + 真机 6/6） |
+| 2 | `Id::gen` | ✅ 已解决（`data/idgen.go` + 真机交叉验证） |
+| 3 | `getFileUrl` | ✅ 本轮解决（含"域名取自请求"这个关键点） |
+| 4 | `ThirdNotify` | ✅ 本轮解决（是写库不是 HTTP） |
+| **5** | **`MOBILE_CAPTCHA` 的验证码校验** | ⬜ **仍缺** —— 手机验证码登录分支用不了 |
+
+**另有两项实现前需要看（本轮新识别）**：
+- `OpenAppsNotifyLogic::create` 的字段与目标表
+- `public_path()` 在 Go 侧对应什么（`getFileUrl($uri,'public_path')` 分支）
