@@ -45,6 +45,8 @@ func NewHTTPServer(
 		// 关键：换成原项目 JsonService 的信封，否则前端拿到的格式全变
 		http.ResponseEncoder(httpx.ResponseEncoder),
 		http.ErrorEncoder(httpx.ErrorEncoder),
+		// 让 POST 接口同时接受 JSON / form-data / urlencoded（对齐 ThinkPHP 的 $request->post()）
+		http.RequestDecoder(RequestDecoder),
 	}
 	if c != nil && c.Http != nil {
 		if c.Http.Network != "" {
