@@ -119,9 +119,37 @@ func clientIPFrom(ctx context.Context) string {
 		if ip := tr.Header.Get("Client-Ip"); ip != "" {
 			return ip
 		}
-		return tr.RemoteAddr
+		// ⚠️⚠️ RemoteAddr 形如 "127.0.0.1:52288"（**带端口**），而 PHP 的
+		// request()->ip() 只返回 IP。直接用 RemoteAddr 会让**每个 TCP 连接
+		// 得到一把独立的锁定计数键**，锁定彻底失效（攻击者重连即可重置）。
+		// 这是实测发现的：Redis 里曾同时存在
+		//   xtravel:go:login:safe:127.0.0.1:52288
+		//   xtravel:go:login:safe:127.0.0.1:52228
+		// 两个键。必须剥掉端口。
+		return stripPort(tr.RemoteAddr)
 	}
 	return ""
+}
+
+// stripPort 去掉 "host:port" 里的端口。
+//
+// 注意 IPv6 形如 "[::1]:52288"，要按最后一个 ':' 切，且保留方括号内的冒号。
+func stripPort(addr string) string {
+	if addr == "" {
+		return ""
+	}
+	// IPv6: [::1]:52288
+	if strings.HasPrefix(addr, "[") {
+		if i := strings.LastIndex(addr, "]"); i >= 0 {
+			return addr[1:i]
+		}
+		return addr
+	}
+	// IPv4 / hostname: host:port
+	if i := strings.LastIndex(addr, ":"); i >= 0 {
+		return addr[:i]
+	}
+	return addr
 }
 
 // domainFrom 对应 PHP 的 request()->domain() —— 返回 `scheme://host`。
