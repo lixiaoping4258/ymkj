@@ -593,3 +593,90 @@ public static function verifyCaptcha(string $id, string $captchaValue): bool {
 | 3 | `UserAccountSafeCache::relieve()` 的**调用点** | 登录成功是否清除计数？没清除的话成功登录后计数仍在 |
 | 4 | `ConfigService::get('login','login_way')` 的实际值 | 决定哪些 scene 可用 |
 | 5 | `field(['password,is_disable'])` 的实际行为 | 潜在缺陷，需实测 |
+## 补查（第 46 轮）：`login_way` 配置与 `relieve()` 调用点
+
+### 一、`UserAccountSafeCache` 的使用点只有一处
+
+全项目搜索（排除 vendor）：
+
+```
+app\api\validate\LoginAccountValidate.php    relieve=1  record=2  isSafe=1
+app\common\cache\UserAccountSafeCache.php    （定义处）
+```
+
+所以：**锁定机制只在登录验证器里生效**，没有别的调用方。
+
+### 二、⚠️ 我上一轮的一个担心是不成立的（更正）
+
+上一轮我发现 `x_config` 表里**没有 `type='login'` 的行**：
+
+```
+type        n
+recharge    2
+sms         2
+tabbar      1
+trade      10
+website     12
+```
+
+于是怀疑 `ConfigService::get('login','login_way')` 返回 null，导致 `in_array($scene, null)` 抛 TypeError，
+**整个账号密码登录都是坏的**。
+
+**这个推断是错的。** 读完 `ConfigService::get` 的完整实现后发现它有**本地配置文件兜底**：
+
+```php
+if ($default_value !== null) { return $default_value; }
+// 返回本地配置文件中的值
+return config('project.' . $type . '.' . $name);        // ← L93
+```
+
+`config/project.php`（L84）：
+
+```php
+'login' => [
+    // 登录方式：1-账号密码登录；2-手机短信验证码登录
+    'login_way'       => ['1', '2'],
+    'coerce_mobile'   => 1,
+    'third_auth'      => 1,
+    'wechat_auth'     => 1,
+    'qq_auth'         => 0,
+    'login_agreement' => 1,
+],
+```
+
+**所以 `login_way = ['1','2']`，登录方式白名单是 1 和 2，登录没有坏。**
+
+错因：我看到"DB 里没有配置"就下了"会返回 null"的结论，**没有读完 `ConfigService::get` 的全部返回路径**。
+（这与第 41 轮"没读被调函数就推断跨函数行为"是同一类错误 —— **第二次犯**。）
+
+### 三🔴、`in_array` 的**宽松比较**必须复刻
+
+`login_way` 是**字符串数组** `['1','2']`，而 `$scene` 是**整数**（`post()` 提交的 JSON 数字）。
+
+```php
+in_array($scene, $config)      // 未传第三个参数 -> $strict = false -> 宽松比较
+```
+
+- `in_array(1, ['1','2'])` → **true**（1 == '1' 宽松成立）
+- 如果 Go 侧写成严格比较 `scene == 1 || scene == 2`，结果一样；但如果写成"字符串比较"就会全部失败
+
+**实现建议**：直接按整数判断 `scene == 1 || scene == 2`，与宽松比较的结果一致。
+**不要**去读那个配置再跟字符串比 —— 那样会因为类型不匹配而全部拒绝。
+
+### 四、顺带确认的两个配置值
+
+| 用途 | 来源 | 值 |
+|---|---|---|
+| 密码盐 | `project.unique_identification`（`env('project.unique_identification','likeadmin')`） | **实测 `.env` 覆盖为 `aaaa123`**（7 位） |
+| 默认头像 | `project.default_image.user_avatar` | `resource/image/adminapi/default/default_avatar.png` |
+
+⚠️ 注意 `login()` 里用的是 `Config::get('project.default_image.user_avatar')`，
+而 `register()` 里用的是 `ConfigService::get('default_image','user_avatar')` ——
+**两者写法不同但最终都指向 `project.default_image.user_avatar`**（`Config::get` 直接读配置文件，
+`ConfigService::get` 走 DB→兜底→同一配置）。**值相同，不需要分别处理。**
+
+### 五、README 第七节第 3 条可以更新
+
+原记录："`config/project.php` 的兜底未迁移"。
+**现在至少要迁 `project.login.login_way` 和 `project.default_image.user_avatar` 这两项**，
+因为登录链路依赖它们。其余项按需再迁。
