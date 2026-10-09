@@ -35,6 +35,8 @@ var (
 	ErrCaptchaWrong     = errors.New("图形验证码不正确")
 	ErrLoginWayInvalid  = errors.New("不支持的登录方式")
 	ErrCodeRequired     = errors.New("请输入手机验证码")
+	// checkCode 里 `return '验证码错误';`
+	ErrSmsCodeWrong = errors.New("验证码错误")
 	// checkPassword 里的 5 条
 	ErrAccountNotExist = errors.New("用户账户不存在")
 	ErrUserNotExist    = errors.New("用户不存在")
@@ -119,16 +121,18 @@ type LoginValidator struct {
 	// 实测 .env 覆盖为 "aaaa123"（7 位）。
 	// 从 *conf.Auth 读取（wire 无法注入裸 string）。
 	salt string
+	// sms 用于 scene=2（手机验证码）的校验
+	sms *SmsUsecase
 }
 
 // NewLoginValidator 构造登录校验器。
 // salt 取自 conf.Auth.UniqueIdentification，与 data.NewLoginRepo 用的是同一个来源。
-func NewLoginValidator(p PasswordRepo, c CaptchaRepo, s SafeCacheRepo, auth *conf.Auth) *LoginValidator {
+func NewLoginValidator(p PasswordRepo, c CaptchaRepo, s SafeCacheRepo, auth *conf.Auth, sms *SmsUsecase) *LoginValidator {
 	salt := ""
 	if auth != nil {
 		salt = auth.UniqueIdentification
 	}
-	return &LoginValidator{password: p, captcha: c, safe: s, salt: salt}
+	return &LoginValidator{password: p, captcha: c, safe: s, salt: salt, sms: sms}
 }
 
 // LoginParams 是 POST /v1/login/account 的入参。
@@ -184,9 +188,24 @@ func (v *LoginValidator) CheckConfig(ctx context.Context, p *LoginParams, client
 		if p.Code == "" {
 			return ErrCodeRequired
 		}
-		// ⚠️ checkCode($data['code'], [], $data) 的实现**还没读**，
-		// 这里明确返回错误而不是放行 —— 静默放行会让手机验证码形同虚设。
-		return errors.New("手机验证码校验未实现：需先读 LoginAccountValidate::checkCode 与 SmsController::sendCode")
+		// 对应 checkCode($data['code'], [], $data)：
+		//
+		//	$smsDriver = new SmsDriver();
+		//	$result = $smsDriver->verify($data['account'], $code, NoticeEnum::LOGIN_CAPTCHA);
+		//	if($result) { return true; }
+		//	return '验证码错误';
+		//
+		// ⚠️ 注意 verify 的第一个参数是 **$data['account']（即手机号）**，
+		//    不是单独的 mobile 字段。
+		// ⚠️ sceneId 传 NoticeEnum::LOGIN_CAPTCHA = 101。
+		ok, err := v.sms.Verify(ctx, p.Account, p.Code, NoticeLoginCaptcha)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrSmsCodeWrong
+		}
+		return nil
 
 	case int32(LoginSceneAccountPassword):
 		// ① 密码存在性
