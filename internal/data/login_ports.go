@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -137,27 +138,46 @@ func (c *captchaRepo) key(id string) string {
 	return c.prefix + "captcha:" + id
 }
 
-// Verify 取出后**立即删除**再比对，顺序与原实现一致
-// （原实现是先 `$captcha = cache($cacheKey)` 再 `cache($cacheKey, null)`，
+// Verify 逐字对应 CaptchaLogic::verifyCaptcha：
 //
-//	所以无论比对结果如何，验证码都会被消费掉 —— 这一点必须照搬，
-//	否则攻击者可以在同一个验证码上无限次试密码）。
+//	$cacheKey = sprintf('captcha:%s', $id);
+//	$captcha  = cache($cacheKey);
+//	if (!$captcha) { return false; }
+//	if (strcasecmp($captcha, $captchaValue) != 0) { return false; }
+//	cache($cacheKey, null);          // ← **只在比对成功时**才删除
+//	return true;
+//
+// ⚠️⚠️ 两处我第一版写错、读全源码后才纠正的地方（都是真 bug）：
+//
+//  1. **大小写不敏感**：原实现用 `strcasecmp`，不是精确比较。
+//     验证码字符集是大写字母+数字，但用户输入小写也应通过。
+//     用 strings.EqualFold 对应 strcasecmp。
+//
+//  2. **只在成功时删除**：原实现失败路径**直接 return false，不删缓存** ——
+//     也就是说**同一个验证码在输错后仍然有效，可以反复试**。
+//     我第一版写成"无论成败都消费掉"，还在注释里论证它是"必须照搬的语义"，
+//     实际是**反的**。按"不改动原项目逻辑"的要求必须照搬原行为（失败不删）。
+//
+//     （这确实削弱了防爆破能力，但配合按 IP 的失败锁定，原设计如此。）
 func (c *captchaRepo) Verify(ctx context.Context, id, value string) (bool, error) {
 	k := c.key(id)
 	stored, ok, err := c.cli.Get(ctx, k)
 	if err != nil {
 		return false, err
 	}
-	// 无论是否存在都删除（消费掉）
+	// if (!$captcha) { return false; }
+	if !ok || stored == "" {
+		return false, nil
+	}
+	// if (strcasecmp($captcha, $captchaValue) != 0) { return false; }   ← 不删除
+	if !strings.EqualFold(stored, value) {
+		return false, nil
+	}
+	// cache($cacheKey, null);   ← 只有走到这里（比对成功）才消费
 	if err := c.cli.Del(ctx, k); err != nil {
 		return false, err
 	}
-	if !ok {
-		return false, nil
-	}
-	// ⚠️ 比对规则：原实现 verifyCaptcha 的完整比对逻辑尚未读到
-	//（是否大小写敏感未确认）。这里按**精确匹配**实现，并留 TODO。
-	return stored == value, nil
+	return true, nil
 }
 
 /* ---------------------------------------------------------------- 密码查询 */
