@@ -88,9 +88,10 @@ const (
 //	$captcha = cache($cacheKey);
 //	cache($cacheKey, null);              // 校验后**立即删除**（一次性）
 type CaptchaRepo interface {
-	// Verify 取出并删除验证码，与传入值比对。
-	// 返回 (是否匹配, 是否不存在, error)。不存在与不匹配必须分开 —— 原实现里
-	// verifyCaptcha 对两者都返回 false，但调用方只关心 false。
+	// Set 对应 `cache('captcha:'.$id, $phrase, 300)` —— TTL 300 秒。
+	Set(ctx context.Context, id, phrase string) error
+	// Verify 对应 CaptchaLogic::verifyCaptcha。
+	// 语义见 data/login_ports.go 的实现说明（大小写不敏感、只在成功时消费）。
 	Verify(ctx context.Context, id, value string) (bool, error)
 }
 

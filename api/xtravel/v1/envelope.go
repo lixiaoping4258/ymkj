@@ -59,3 +59,9 @@ func (r *RawData) Envelope() (int, int, string, any) {
 func (r *AccountLoginReply) Envelope() (int, int, string, any) {
 	return 1, 0, "", r
 }
+
+// Envelope 让图形验证码返回 {id, image}。
+// 原实现用 $this->data($result)，即 success(”, $data, 1, 0)。
+func (r *GetCaptchaReply) Envelope() (int, int, string, any) {
+	return 1, 0, "", r
+}

@@ -62,6 +62,7 @@ func NewHTTPServer(
 	srv := http.NewServer(opts...)
 	v1.RegisterCommonServiceHTTPServer(srv, common)
 	v1.RegisterAccountServiceHTTPServer(srv, account)
+	v1.RegisterCaptchaServiceHTTPServer(srv, account)
 	v1.RegisterUserServiceHTTPServer(srv, user)
 	v1.RegisterMarketServiceHTTPServer(srv, market)
 	return srv

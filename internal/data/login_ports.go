@@ -48,6 +48,7 @@ type redisClient interface {
 	Get(ctx context.Context, key string) (string, bool, error)
 	Incr(ctx context.Context, key string) (int64, error)
 	SetWithTTL(ctx context.Context, key string, val int64, ttl time.Duration) error
+	SetStringWithTTL(ctx context.Context, key string, val string, ttl time.Duration) error
 	Del(ctx context.Context, key string) error
 }
 
@@ -136,6 +137,11 @@ const captchaTTL = 300 * time.Second
 
 func (c *captchaRepo) key(id string) string {
 	return c.prefix + "captcha:" + id
+}
+
+// Set 对应 `cache('captcha:'.$id, $phrase, 300)` —— TTL 300 秒。
+func (c *captchaRepo) Set(ctx context.Context, id, phrase string) error {
+	return c.cli.SetStringWithTTL(ctx, c.key(id), phrase, captchaTTL)
 }
 
 // Verify 逐字对应 CaptchaLogic::verifyCaptcha：
@@ -305,6 +311,10 @@ func (r *rawRedis) Incr(ctx context.Context, key string) (int64, error) {
 }
 
 func (r *rawRedis) SetWithTTL(ctx context.Context, key string, val int64, ttl time.Duration) error {
+	return r.cli.Set(ctx, key, val, ttl).Err()
+}
+
+func (r *rawRedis) SetStringWithTTL(ctx context.Context, key string, val string, ttl time.Duration) error {
 	return r.cli.Set(ctx, key, val, ttl).Err()
 }
 

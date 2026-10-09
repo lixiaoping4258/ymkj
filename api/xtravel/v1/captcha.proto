@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package xtravel.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
+
+// CaptchaService 图形验证码。
+// 对应原项目 app/api/controller/CaptchaController.php
+// 路由在 app/api/route/common.php：Route::get('captcha', [CaptchaController::class, 'index'])
+// 分组前缀 v1/common/ -> 完整路径 /v1/common/captcha
+//
+// ⚠️⚠️ 修正：我第一版按文件名推导成 /v1/captcha，**是错的**。
+// 实际要跟踪 Route::group 的前缀（common.php 的 group 是 'v1/common/'）。
+service CaptchaService {
+  // 获取图形验证码
+  //
+  // 原实现：
+  //
+  //	$w = $this->request->get('w/d', 150);
+  //	if($w < 1 || $w > 300) { $w = 150; }     // 越界回默认，不是 clamp
+  //	$h = $this->request->get('h/d', 40);
+  //	if($h < 1 || $h > 300) { $h = 40; }
+  //	$result = CaptchaLogic::getCaptcha($w, $h);
+  //	return $this->data($result);
+  //
+  // 免登录（CaptchaController::$notNeedLogin = ['index','captcha']）。
+  rpc GetCaptcha(GetCaptchaRequest) returns (GetCaptchaReply) {
+    option (google.api.http) = {get: "/v1/common/captcha"};
+  }
+}
+
+// GetCaptchaRequest 对应 query 参数 w / h。
+//
+// ⚠️ 原实现用的是 `$this->request->get('w/d', 150)` —— `/d` 是 ThinkPHP 的
+// **强制整数转换**：非数字会变成 0，而 0 触发了"越界回默认值"的分支。
+// 所以传 w=abc 与不传 w 的结果相同（都是 150）。Go 侧用 int32 直接接收，
+// 非数字会被 Kratos 解析失败 —— 行为差异见下方说明。
+message GetCaptchaRequest {
+  int32 w = 1 [json_name = "w"];
+  int32 h = 2 [json_name = "h"];
+}
+
+// GetCaptchaReply 对应 CaptchaLogic::getCaptcha 的返回值：
+//
+//	return ['id' => $id, 'image' => $image];
+//
+// image 是 `data:image/png;base64,...`（CaptchaBuilder::inline 的格式）。
+message GetCaptchaReply {
+  // Id::uuid() 生成的 8-4-4-4-12 十六进制串。前端回传时不透明使用。
+  string id = 1 [json_name = "id"];
+  string image = 2 [json_name = "image"];
+}

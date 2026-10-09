@@ -17,13 +17,35 @@ import (
 // 不是 /account/account。
 type AccountService struct {
 	v1.UnimplementedAccountServiceServer
-	login *biz.LoginUsecase
-	val   *biz.LoginValidator
-	log   *log.Helper
+	login   *biz.LoginUsecase
+	val     *biz.LoginValidator
+	captcha *biz.CaptchaUsecase
+	log     *log.Helper
 }
 
-func NewAccountService(login *biz.LoginUsecase, val *biz.LoginValidator, logger log.Logger) *AccountService {
-	return &AccountService{login: login, val: val, log: log.NewHelper(logger)}
+func NewAccountService(
+	login *biz.LoginUsecase, val *biz.LoginValidator,
+	captcha *biz.CaptchaUsecase, logger log.Logger,
+) *AccountService {
+	return &AccountService{login: login, val: val, captcha: captcha, log: log.NewHelper(logger)}
+}
+
+// GetCaptcha 对应 CaptchaController::index（GET /v1/common/captcha）。
+//
+// 原实现：
+//
+//	$w = $this->request->get('w/d', 150);
+//	if($w < 1 || $w > 300) { $w = 150; }      // 越界回默认
+//	$h = $this->request->get('h/d', 40);
+//	if($h < 1 || $h > 300) { $h = 40; }
+//	$result = CaptchaLogic::getCaptcha($w, $h);
+//	return $this->data($result);
+func (s *AccountService) GetCaptcha(ctx context.Context, req *v1.GetCaptchaRequest) (*v1.GetCaptchaReply, error) {
+	res, err := s.captcha.GetCaptcha(ctx, int(req.GetW()), int(req.GetH()))
+	if err != nil {
+		return nil, err
+	}
+	return &v1.GetCaptchaReply{Id: res.ID, Image: res.Image}, nil
 }
 
 // AccountLogin 对应 LoginController::account。

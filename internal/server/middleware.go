@@ -58,6 +58,8 @@ var defaultPublicOps = map[string]struct{}{
 	//   路由：POST /v1/login/account（account.php 里 Route::group('/v1/login', ...)）
 	// 见 docs/ROUTES-AND-AUTH.md 的免登录清单。
 	"/xtravel.v1.AccountService/AccountLogin": {},
+	// CaptchaController::$notNeedLogin = ['index','captcha']
+	"/xtravel.v1.CaptchaService/GetCaptcha": {},
 }
 
 // AuthMiddleware 构造鉴权中间件。
