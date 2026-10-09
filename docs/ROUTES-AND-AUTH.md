@@ -1,62 +1,55 @@
-# C 端 `app/api` 路由 × 免登录 × 迁移状态
+# C 端 `app/api` 路由 × 免登录 × 迁移状态（由 scripts/gen-routes-php.ps1 生成）
 
-> 由静态解析生成：从 16 个路由文件按 **group 分组** 解析 `Route::` 声明
-> （**必须跟踪 group 前缀** —— 各文件的 group 各不相同，用文件名当前缀会得到错误路径），
-> 再从 33 个控制器抽 `notNeedLogin` 数组交叉得出。
+> 静态解析原 PHP 项目：从路由文件按 **`Route::group` 分组** 解析 `Route::` 声明
+> （**必须跟踪 group 前缀**，且**必须排除注释行**），
+> 再从控制器抽 `$notNeedLogin` 交叉得出。
 
-> **共 140 条唯一路由，其中免登录 26 条，已迁 14 条。**
+> **共 131 条有效路由，其中免登录 24 条，已迁 23 条。**
 
-> ⚠️ **这是迁移时最容易标错的地方**，且两个方向都会出事：
+> ⚠️ **这是迁移时最容易标错的地方**，两个方向都会出事：
 > 把该登录的标成公开 = 未授权访问；把该公开的标成需登录 = 前端匿名访问直接 403。
-> **不要凭接口名猜** —— 这张表是唯一依据。改 proto 的 service/method 名时要同步改 `internal/server/middleware.go` 的 `defaultPublicOps`。
+> **不要凭接口名猜。**
 
 ## 各路由文件的 group 前缀（路径由它决定）
 
-| 文件 | group 前缀 |
-|---|---|
-| `account.php` | `/v1/login` |
-| `article.php` | `/v1/article` |
-| `common.php` | `v1/common/` |
-| `index.php` | `/v1/index` |
-| `market.php` | `v1/market` |
-| `open.php` | `v1/open/` |
-| `payment.php` | `v1/payment` |
-| `search.php` | `/v1/search` |
-| `security.php` | `v1/security/` |
-| `sms.php` | `/v1/sms` |
-| `Tao.php` | `v1/tao` |
-| `ticket.php` | `v1/ticket` |
-| `upload.php` | `/v1/upload` |
-| `user.php` | `/v1/user` |
-| `wallet.php` | `v1/wallet` |
-| `whitelist.php` | `/v1/whitelist``, ``trade/``, ``wallet/` |
+| 文件 | 有效路由 | 被注释 | group 前缀 |
+|---|---|---|---|
+| `account.php` | 12 | 0 | `/v1/login` |
+| `article.php` | 3 | 6 | `/v1/article` |
+| `common.php` | 6 | 0 | `v1/common/` |
+| `index.php` | 5 | 0 | `/v1/index` |
+| `market.php` | 44 | 0 | `v1/market` |
+| `open.php` | 13 | 0 | `v1/open/` |
+| `payment.php` | 1 | 0 | `v1/payment` |
+| `search.php` | 1 | 0 | `/v1/search` |
+| `security.php` | 3 | 0 | `v1/security/` |
+| `sms.php` | 2 | 0 | `/v1/sms` |
+| `Tao.php` | 4 | 0 | `v1/tao` |
+| `ticket.php` | 11 | 0 | `v1/ticket` |
+| `upload.php` | 1 | 0 | `/v1/upload` |
+| `user.php` | 21 | 0 | `/v1/user` |
+| `wallet.php` | 1 | 0 | `v1/wallet` |
+| `whitelist.php` | 9 | 0 | `/v1/whitelist``, ``trade/``, ``wallet/` |
 
 ## 全量路由表
 
 | 方法 | 完整路径 | 控制器::方法 | 免登录 | 已迁 |
 |---|---|---|---|---|
-| POST | `/trade/buy` | TradeController::buy | 否 |  |
-| POST | `/trade/sell` | TradeController::sell | 否 |  |
-| GET | `/v1/article/about` | ArticleController::about | 否 |  |
-| GET | `/v1/article/addCollect` | ArticleController::addCollect | 否 |  |
-| GET | `/v1/article/cancelCollect` | ArticleController::cancelCollect | 否 |  |
-| GET | `/v1/article/cate` | ArticleController::cate | **是** |  |
-| GET | `/v1/article/collect` | ArticleController::collect | 否 |  |
+| GET | `/v1/article/about` | ArticleController::about | 否 | ✅ |
 | GET | `/v1/article/detail` | ArticleController::detail | **是** |  |
-| GET | `/v1/article/licenses` | ArticleController::license | 否 |  |
-| GET | `/v1/article/lists` | ArticleController::lists | **是** |  |
-| GET | `/v1/common/captcha` | CaptchaController::index | **是** |  |
+| GET | `/v1/article/licenses` | ArticleController::license | 否 | ✅ |
+| GET | `/v1/common/captcha` | CaptchaController::index | **是** | ✅ |
 | GET | `/v1/common/config` | ConfigController::index | **是** | ✅ |
 | GET | `/v1/common/notice` | NoticeController::index | 否 |  |
-| GET | `/v1/common/platform/lists` | PlatformController::index | 否 |  |
-| GET | `/v1/common/protocol` | IndexController::policy | **是** |  |
+| GET | `/v1/common/platform/lists` | PlatformController::index | 否 | ✅ |
+| GET | `/v1/common/protocol` | IndexController::policy | **是** | ✅ |
 | GET | `/v1/common/trade/config` | IndexController::tradeConfig | 否 | ✅ |
-| GET | `/v1/index/bannerList` | BannerController::getList | **是** |  |
+| GET | `/v1/index/bannerList` | BannerController::getList | **是** | ✅ |
 | GET | `/v1/index/config` | IndexController::config | **是** |  |
-| GET | `/v1/index/decorate` | IndexController::decorate | **是** |  |
-| GET | `/v1/index/index` | IndexController::index | **是** |  |
+| GET | `/v1/index/decorate` | IndexController::decorate | **是** | ✅ |
+| GET | `/v1/index/index` | IndexController::index | **是** | ✅ |
 | GET | `/v1/index/test` | IndexController::test | **是** |  |
-| POST | `/v1/login/account` | LoginController::account | **是** |  |
+| POST | `/v1/login/account` | LoginController::account | **是** | ✅ |
 | GET | `/v1/login/codeUrl` | LoginController::codeUrl | **是** |  |
 | GET | `/v1/login/logout` | LoginController::logout | **是** |  |
 | POST | `/v1/login/mnpAuthBind` | LoginController::mnpAuthBind | 否 |  |
@@ -173,15 +166,11 @@
 | GET | `/v1/whitelist/check` | WhitelistController::check | 否 |  |
 | GET | `/v1/whitelist/group` | WhitelistController::group | 否 |  |
 | GET | `/v1/whitelist/permissions` | WhitelistController::permissions | 否 |  |
-| POST | `/wallet/transfer` | WalletController::transfer | 否 |  |
-| POST | `/wallet/withdraw` | WalletController::withdraw | 否 |  |
 
-## 免登录接口清单（逐个核对用）
+## 免登录接口清单
 
 ```
-GET /v1/article/cate
 GET /v1/article/detail
-GET /v1/article/lists
 GET /v1/common/captcha
 GET /v1/common/config
 GET /v1/common/protocol
