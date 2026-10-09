@@ -26,4 +26,5 @@ var ProviderSet = wire.NewSet(
 	NewArticleUsecase,
 	NewSmsUsecase,
 	NewPlatformUsecase,
+	NewIndexUsecase,
 )

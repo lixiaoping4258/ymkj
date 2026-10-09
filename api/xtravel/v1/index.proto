@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package xtravel.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
+
+// IndexService 首页相关。
+// 对应原项目 app/api/route/index.php（Route::group('/v1/index', ...)）
+//   Route::get('index',      [IndexController::class,  'index']);
+//   Route::get('decorate',   [IndexController::class,  'decorate']);
+//   Route::get('config',     [IndexController::class,  'config']);     <- 未实现
+//   Route::get('bannerList', [BannerController::class, 'getList']);
+//   Route::get('test',       [IndexController::class,  'test']);       <- 未实现，见下
+//
+// ⚠️ IndexController::$notNeedLogin = ['test','index','config','policy','decorate']
+//    BannerController::$notNeedLogin = ['getList']
+//    -> 本文件的 4 条**全部免登录**。
+service IndexService {
+  // 首页聚合数据（装修页 + 最新 20 篇文章）
+  // 原: IndexLogic::getIndexData()
+  //
+  //	return ['page' => $decoratePage, 'article' => $article];
+  rpc GetIndex(GetIndexRequest) returns (GetIndexReply) {
+    option (google.api.http) = {get: "/v1/index/index"};
+  }
+
+  // 装修页详情
+  // 原: IndexLogic::getDecorate($id)
+  //   DecoratePage::field(['type','name','data','meta'])->findOrEmpty($id)->toArray()
+  rpc GetDecorate(GetDecorateRequest) returns (GetDecorateReply) {
+    option (google.api.http) = {get: "/v1/index/decorate"};
+  }
+
+  // 轮播图列表
+  // 原: GetListLogic::getList()（有 10 秒缓存，键 'banner:list'，与 PHP 共用）
+  rpc GetBannerList(GetBannerListRequest) returns (GetBannerListReply) {
+    option (google.api.http) = {get: "/v1/index/bannerList"};
+  }
+}
+
+message GetIndexRequest {}
+
+// GetIndexReply 对应 ['page'=>..., 'article'=>[...]]。
+message GetIndexReply {
+  DecoratePage page = 1 [json_name = "page"];
+  repeated HomeArticle article = 2 [json_name = "article"];
+}
+
+// DecoratePage 对应 DecoratePage::field(['type','name','data','meta'])->toArray()。
+//
+// ⚠️ data / meta 是 text 列且模型**没有 json 转换**，所以 PHP 输出的是
+//    **原始 JSON 字符串**，不是数组。这里也用 string。
+// ⚠️ 主键 id **不在** field 列表里，所以响应里没有 id。
+message DecoratePage {
+  int32 type = 1 [json_name = "type"];
+  string name = 2 [json_name = "name"];
+  string data = 3 [json_name = "data"];
+  string meta = 4 [json_name = "meta"];
+}
+
+// HomeArticle 对应 getIndexData 里文章的对外形态（8 个键）。
+//
+// ⚠️ click_actual / click_virtual 被 `->hidden([...])` 藏掉了，
+//    对外只有计算列 **click**（= click_actual + click_virtual）。
+message HomeArticle {
+  int64 id = 1 [json_name = "id"];
+  string title = 2 [json_name = "title"];
+  // ⚠️ 列名就叫 desc（SQL 保留字），PHP 的 toArray() 键名也是 "desc"
+  string desc = 3 [json_name = "desc"];
+  string abstract = 4 [json_name = "abstract"];
+  string image = 5 [json_name = "image"];
+  string author = 6 [json_name = "author"];
+  // x_article.create_time 是 int(11) -> PHP 输出数字
+  int64 create_time = 7 [json_name = "create_time"];
+  int64 click = 8 [json_name = "click"];
+}
+
+message GetDecorateRequest {
+  // 对应 `$this->request->get('id/d')` —— 强制整数
+  int32 id = 1 [json_name = "id"];
+}
+
+message GetDecorateReply {
+  DecoratePage page = 1 [json_name = "page"];
+}
+
+message GetBannerListRequest {}
+
+// GetBannerListReply 顶层数组（原实现直接 return $lists）。
+message GetBannerListReply {
+  repeated BannerItem items = 1;
+}
+
+// BannerItem 对应 field(['id','title','image','jump_url','sort','create_time'])。
+message BannerItem {
+  int64 id = 1 [json_name = "id"];
+  string title = 2 [json_name = "title"];
+  // 已经过 get_image_url 处理（完整 URL 原样返回）
+  string image = 3 [json_name = "image"];
+  string jump_url = 4 [json_name = "jump_url"];
+  int32 sort = 5 [json_name = "sort"];
+  // datetime -> PHP 的 'Y-m-d H:i:s' 字符串
+  string create_time = 6 [json_name = "create_time"];
+}

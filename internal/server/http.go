@@ -30,6 +30,7 @@ func NewHTTPServer(
 	market *service.MarketService,
 	account *service.AccountService,
 	articles *service.ArticleService,
+	index *service.IndexService,
 	tokens *biz.UserTokenUsecase,
 	whitelist *biz.WhitelistUsecase,
 	logger log.Logger,
@@ -65,6 +66,7 @@ func NewHTTPServer(
 	v1.RegisterAccountServiceHTTPServer(srv, account)
 	v1.RegisterCaptchaServiceHTTPServer(srv, account)
 	v1.RegisterArticleServiceHTTPServer(srv, articles)
+	v1.RegisterIndexServiceHTTPServer(srv, index)
 	v1.RegisterUserServiceHTTPServer(srv, user)
 	v1.RegisterMarketServiceHTTPServer(srv, market)
 	return srv

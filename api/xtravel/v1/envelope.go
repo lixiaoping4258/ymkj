@@ -76,3 +76,8 @@ func (r *ArticleListReply) Envelope() (int, int, string, any) {
 func (r *GetPlatformListsReply) Envelope() (int, int, string, any) {
 	return 1, 0, "", r.GetItems()
 }
+
+// Envelope 让轮播图以顶层数组返回（原实现直接 return $lists）。
+func (r *GetBannerListReply) Envelope() (int, int, string, any) {
+	return 1, 0, "", r.GetItems()
+}

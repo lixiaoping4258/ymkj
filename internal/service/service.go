@@ -10,7 +10,7 @@ import (
 )
 
 // ProviderSet 是 service 层的依赖注入集合。
-var ProviderSet = wire.NewSet(NewCommonService, NewUserService, NewMarketService, NewAccountService, NewArticleService)
+var ProviderSet = wire.NewSet(NewCommonService, NewUserService, NewMarketService, NewAccountService, NewArticleService, NewIndexService)
 
 // bizFail 把 biz 层的业务错误翻译成原项目的 fail 信封，其它错误原样上抛。
 //
