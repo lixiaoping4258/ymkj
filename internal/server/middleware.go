@@ -60,6 +60,8 @@ var defaultPublicOps = map[string]struct{}{
 	"/xtravel.v1.AccountService/AccountLogin": {},
 	// CaptchaController::$notNeedLogin = ['index','captcha']
 	"/xtravel.v1.CaptchaService/GetCaptcha": {},
+	// IndexController::$notNeedLogin 含 'policy'（路由是 /v1/common/protocol）
+	"/xtravel.v1.CommonService/GetProtocol": {},
 }
 
 // AuthMiddleware 构造鉴权中间件。

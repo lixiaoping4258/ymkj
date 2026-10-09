@@ -418,6 +418,237 @@ func (x *RawData) GetJson() []byte {
 	return nil
 }
 
+type GetProtocolRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 对应 $this->request->get('type/s', ”) —— 字符串，默认空串
+	Type          string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetProtocolRequest) Reset() {
+	*x = GetProtocolRequest{}
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetProtocolRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetProtocolRequest) ProtoMessage() {}
+
+func (x *GetProtocolRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetProtocolRequest.ProtoReflect.Descriptor instead.
+func (*GetProtocolRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_common_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GetProtocolRequest) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+// GetProtocolReply 对应 ['title'=>..., 'content'=>...]，两者都可能为空串。
+type GetProtocolReply struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Title         string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
+	Content       string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetProtocolReply) Reset() {
+	*x = GetProtocolReply{}
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetProtocolReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetProtocolReply) ProtoMessage() {}
+
+func (x *GetProtocolReply) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetProtocolReply.ProtoReflect.Descriptor instead.
+func (*GetProtocolReply) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_common_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GetProtocolReply) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *GetProtocolReply) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+type GetPlatformListsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPlatformListsRequest) Reset() {
+	*x = GetPlatformListsRequest{}
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPlatformListsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPlatformListsRequest) ProtoMessage() {}
+
+func (x *GetPlatformListsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPlatformListsRequest.ProtoReflect.Descriptor instead.
+func (*GetPlatformListsRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_common_proto_rawDescGZIP(), []int{9}
+}
+
+// GetPlatformListsReply 对应 field('name,flag')->select()->toArray() —— **顶层数组**。
+type GetPlatformListsReply struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*PlatformItem        `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPlatformListsReply) Reset() {
+	*x = GetPlatformListsReply{}
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPlatformListsReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPlatformListsReply) ProtoMessage() {}
+
+func (x *GetPlatformListsReply) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPlatformListsReply.ProtoReflect.Descriptor instead.
+func (*GetPlatformListsReply) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_common_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *GetPlatformListsReply) GetItems() []*PlatformItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+type PlatformItem struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Flag          string                 `protobuf:"bytes,2,opt,name=flag,proto3" json:"flag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlatformItem) Reset() {
+	*x = PlatformItem{}
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlatformItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlatformItem) ProtoMessage() {}
+
+func (x *PlatformItem) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlatformItem.ProtoReflect.Descriptor instead.
+func (*PlatformItem) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_common_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *PlatformItem) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PlatformItem) GetFlag() string {
+	if x != nil {
+		return x.Flag
+	}
+	return ""
+}
+
 var File_api_xtravel_v1_common_proto protoreflect.FileDescriptor
 
 const file_api_xtravel_v1_common_proto_rawDesc = "" +
@@ -446,10 +677,23 @@ const file_api_xtravel_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"limit_time\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\tlimitTime\"\x1d\n" +
 	"\aRawData\x12\x12\n" +
-	"\x04json\x18\x01 \x01(\fR\x04json2\xe8\x01\n" +
+	"\x04json\x18\x01 \x01(\fR\x04json\"(\n" +
+	"\x12GetProtocolRequest\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\"B\n" +
+	"\x10GetProtocolReply\x12\x14\n" +
+	"\x05title\x18\x01 \x01(\tR\x05title\x12\x18\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\"\x19\n" +
+	"\x17GetPlatformListsRequest\"G\n" +
+	"\x15GetPlatformListsReply\x12.\n" +
+	"\x05items\x18\x01 \x03(\v2\x18.xtravel.v1.PlatformItemR\x05items\"6\n" +
+	"\fPlatformItem\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04flag\x18\x02 \x01(\tR\x04flag2\xd1\x03\n" +
 	"\rCommonService\x12`\n" +
 	"\tGetConfig\x12\x1c.xtravel.v1.GetConfigRequest\x1a\x1a.xtravel.v1.GetConfigReply\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/common/config\x12u\n" +
-	"\x0eGetTradeConfig\x12!.xtravel.v1.GetTradeConfigRequest\x1a\x1f.xtravel.v1.GetTradeConfigReply\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/common/trade/configB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
+	"\x0eGetTradeConfig\x12!.xtravel.v1.GetTradeConfigRequest\x1a\x1f.xtravel.v1.GetTradeConfigReply\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/common/trade/config\x12h\n" +
+	"\vGetProtocol\x12\x1e.xtravel.v1.GetProtocolRequest\x1a\x1c.xtravel.v1.GetProtocolReply\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/common/protocol\x12}\n" +
+	"\x10GetPlatformLists\x12#.xtravel.v1.GetPlatformListsRequest\x1a!.xtravel.v1.GetPlatformListsReply\"!\x82\xd3\xe4\x93\x02\x1b\x12\x19/v1/common/platform/listsB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
 
 var (
 	file_api_xtravel_v1_common_proto_rawDescOnce sync.Once
@@ -463,34 +707,44 @@ func file_api_xtravel_v1_common_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_common_proto_rawDescData
 }
 
-var file_api_xtravel_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_api_xtravel_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_api_xtravel_v1_common_proto_goTypes = []any{
-	(*GetConfigRequest)(nil),      // 0: xtravel.v1.GetConfigRequest
-	(*GetConfigReply)(nil),        // 1: xtravel.v1.GetConfigReply
-	(*TradeTimeStatus)(nil),       // 2: xtravel.v1.TradeTimeStatus
-	(*TradePeriod)(nil),           // 3: xtravel.v1.TradePeriod
-	(*GetTradeConfigRequest)(nil), // 4: xtravel.v1.GetTradeConfigRequest
-	(*GetTradeConfigReply)(nil),   // 5: xtravel.v1.GetTradeConfigReply
-	(*RawData)(nil),               // 6: xtravel.v1.RawData
-	(*structpb.Value)(nil),        // 7: google.protobuf.Value
+	(*GetConfigRequest)(nil),        // 0: xtravel.v1.GetConfigRequest
+	(*GetConfigReply)(nil),          // 1: xtravel.v1.GetConfigReply
+	(*TradeTimeStatus)(nil),         // 2: xtravel.v1.TradeTimeStatus
+	(*TradePeriod)(nil),             // 3: xtravel.v1.TradePeriod
+	(*GetTradeConfigRequest)(nil),   // 4: xtravel.v1.GetTradeConfigRequest
+	(*GetTradeConfigReply)(nil),     // 5: xtravel.v1.GetTradeConfigReply
+	(*RawData)(nil),                 // 6: xtravel.v1.RawData
+	(*GetProtocolRequest)(nil),      // 7: xtravel.v1.GetProtocolRequest
+	(*GetProtocolReply)(nil),        // 8: xtravel.v1.GetProtocolReply
+	(*GetPlatformListsRequest)(nil), // 9: xtravel.v1.GetPlatformListsRequest
+	(*GetPlatformListsReply)(nil),   // 10: xtravel.v1.GetPlatformListsReply
+	(*PlatformItem)(nil),            // 11: xtravel.v1.PlatformItem
+	(*structpb.Value)(nil),          // 12: google.protobuf.Value
 }
 var file_api_xtravel_v1_common_proto_depIdxs = []int32{
-	7, // 0: xtravel.v1.GetConfigReply.out_fee:type_name -> google.protobuf.Value
-	2, // 1: xtravel.v1.GetConfigReply.trade_switch:type_name -> xtravel.v1.TradeTimeStatus
-	7, // 2: xtravel.v1.GetConfigReply.buy_or_sale_config:type_name -> google.protobuf.Value
-	7, // 3: xtravel.v1.TradeTimeStatus.trade_switch:type_name -> google.protobuf.Value
-	3, // 4: xtravel.v1.TradeTimeStatus.periods:type_name -> xtravel.v1.TradePeriod
-	7, // 5: xtravel.v1.GetTradeConfigReply.switch:type_name -> google.protobuf.Value
-	7, // 6: xtravel.v1.GetTradeConfigReply.limit_time:type_name -> google.protobuf.Value
-	0, // 7: xtravel.v1.CommonService.GetConfig:input_type -> xtravel.v1.GetConfigRequest
-	4, // 8: xtravel.v1.CommonService.GetTradeConfig:input_type -> xtravel.v1.GetTradeConfigRequest
-	1, // 9: xtravel.v1.CommonService.GetConfig:output_type -> xtravel.v1.GetConfigReply
-	5, // 10: xtravel.v1.CommonService.GetTradeConfig:output_type -> xtravel.v1.GetTradeConfigReply
-	9, // [9:11] is the sub-list for method output_type
-	7, // [7:9] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	12, // 0: xtravel.v1.GetConfigReply.out_fee:type_name -> google.protobuf.Value
+	2,  // 1: xtravel.v1.GetConfigReply.trade_switch:type_name -> xtravel.v1.TradeTimeStatus
+	12, // 2: xtravel.v1.GetConfigReply.buy_or_sale_config:type_name -> google.protobuf.Value
+	12, // 3: xtravel.v1.TradeTimeStatus.trade_switch:type_name -> google.protobuf.Value
+	3,  // 4: xtravel.v1.TradeTimeStatus.periods:type_name -> xtravel.v1.TradePeriod
+	12, // 5: xtravel.v1.GetTradeConfigReply.switch:type_name -> google.protobuf.Value
+	12, // 6: xtravel.v1.GetTradeConfigReply.limit_time:type_name -> google.protobuf.Value
+	11, // 7: xtravel.v1.GetPlatformListsReply.items:type_name -> xtravel.v1.PlatformItem
+	0,  // 8: xtravel.v1.CommonService.GetConfig:input_type -> xtravel.v1.GetConfigRequest
+	4,  // 9: xtravel.v1.CommonService.GetTradeConfig:input_type -> xtravel.v1.GetTradeConfigRequest
+	7,  // 10: xtravel.v1.CommonService.GetProtocol:input_type -> xtravel.v1.GetProtocolRequest
+	9,  // 11: xtravel.v1.CommonService.GetPlatformLists:input_type -> xtravel.v1.GetPlatformListsRequest
+	1,  // 12: xtravel.v1.CommonService.GetConfig:output_type -> xtravel.v1.GetConfigReply
+	5,  // 13: xtravel.v1.CommonService.GetTradeConfig:output_type -> xtravel.v1.GetTradeConfigReply
+	8,  // 14: xtravel.v1.CommonService.GetProtocol:output_type -> xtravel.v1.GetProtocolReply
+	10, // 15: xtravel.v1.CommonService.GetPlatformLists:output_type -> xtravel.v1.GetPlatformListsReply
+	12, // [12:16] is the sub-list for method output_type
+	8,  // [8:12] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_api_xtravel_v1_common_proto_init() }
@@ -504,7 +758,7 @@ func file_api_xtravel_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_common_proto_rawDesc), len(file_api_xtravel_v1_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

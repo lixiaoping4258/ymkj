@@ -70,3 +70,9 @@ func (r *GetCaptchaReply) Envelope() (int, int, string, any) {
 func (r *ArticleListReply) Envelope() (int, int, string, any) {
 	return 1, 0, "", r
 }
+
+// Envelope 让第三方平台列表以顶层数组返回
+// （原实现 `->field('name,flag')->select()->toArray()` 直接就是数组）。
+func (r *GetPlatformListsReply) Envelope() (int, int, string, any) {
+	return 1, 0, "", r.GetItems()
+}

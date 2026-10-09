@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/go-kratos/kratos/v2/log"
 
 	v1 "github.com/lixiaoping4258/ymkj/api/xtravel/v1"
 	"github.com/lixiaoping4258/ymkj/internal/biz"
@@ -15,12 +16,17 @@ import (
 type CommonService struct {
 	v1.UnimplementedCommonServiceServer
 
-	config *biz.ConfigUsecase
-	trade  *biz.TradeConfigUsecase
+	config   *biz.ConfigUsecase
+	trade    *biz.TradeConfigUsecase
+	platform *biz.PlatformUsecase
+	log      *log.Helper
 }
 
-func NewCommonService(config *biz.ConfigUsecase, trade *biz.TradeConfigUsecase) *CommonService {
-	return &CommonService{config: config, trade: trade}
+func NewCommonService(
+	config *biz.ConfigUsecase, trade *biz.TradeConfigUsecase,
+	platform *biz.PlatformUsecase, logger log.Logger,
+) *CommonService {
+	return &CommonService{config: config, trade: trade, platform: platform, log: log.NewHelper(logger)}
 }
 
 // GetConfig 对应 ConfigController::index。
@@ -101,4 +107,78 @@ func toTradeTimeStatus(st *biz.TradeTimeStatus) *v1.TradeTimeStatus {
 		Periods:      periods,
 		Tips:         st.Tips,
 	}
+}
+
+// GetProtocol 对应 IndexController::policy（GET /v1/common/protocol）。
+//
+// 原实现：
+//
+//	$type = $this->request->get('type/s', '');
+//	$result = IndexLogic::getPolicyByType($type);
+//	return $this->data($result);
+//
+// 而 getPolicyByType 是：
+//
+//	return [
+//	    'title'   => ConfigService::get('agreement', $type.'_title', ''),
+//	    'content' => ConfigService::get('agreement', $type.'_content', ''),
+//	];
+//
+// ⚠️ 配置缺失时两个键都是**空字符串**（默认值 ”），不是 null ——
+//
+//	所以用 GetDefault(..., "") 而不是 Get(...)。
+func (s *CommonService) GetProtocol(
+	ctx context.Context, req *v1.GetProtocolRequest,
+) (*v1.GetProtocolReply, error) {
+	typ := req.GetType()
+
+	title, err := s.config.GetDefault(ctx, "agreement", typ+"_title", "")
+	if err != nil {
+		return nil, err
+	}
+	content, err := s.config.GetDefault(ctx, "agreement", typ+"_content", "")
+	if err != nil {
+		return nil, err
+	}
+	return &v1.GetProtocolReply{
+		Title:   toStr(title),
+		Content: toStr(content),
+	}, nil
+}
+
+// GetPlatformLists 对应 PlatformController::index（GET /v1/common/platform/lists）。
+//
+// 原实现：
+//
+//	$data = OpenAppLogic::getThirdAppsList();
+//	return $this->data($data);
+func (s *CommonService) GetPlatformLists(
+	ctx context.Context, _ *v1.GetPlatformListsRequest,
+) (*v1.GetPlatformListsReply, error) {
+	items, err := s.platform.ListThirdApps(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*v1.PlatformItem, 0, len(items))
+	for _, x := range items {
+		out = append(out, &v1.PlatformItem{Name: x.Name, Flag: x.Flag})
+	}
+	return &v1.GetPlatformListsReply{Items: out}, nil
+}
+
+// toStr 把配置值转成字符串。
+//
+// ⚠️ 配置值可能是 JSON 解出来的任意类型（ConfigService::get 会 json_decode）。
+// 原实现直接把它塞进数组，json_encode 时按实际类型输出。
+// 这里统一转字符串是因为 proto 字段是 string —— 若某个 agreement 配置存的是
+// 数字或数组，输出形态会与 PHP 不同。当前 agreement 类型在库里**没有任何行**，
+// 所以实际走不到；等真正配上内容时要复核这一点。
+func toStr(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }

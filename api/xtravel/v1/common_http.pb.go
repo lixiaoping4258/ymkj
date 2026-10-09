@@ -20,12 +20,31 @@ var _ = binding.EncodeURL
 const _ = http.SupportPackageIsVersion1
 
 const OperationCommonServiceGetConfig = "/xtravel.v1.CommonService/GetConfig"
+const OperationCommonServiceGetPlatformLists = "/xtravel.v1.CommonService/GetPlatformLists"
+const OperationCommonServiceGetProtocol = "/xtravel.v1.CommonService/GetProtocol"
 const OperationCommonServiceGetTradeConfig = "/xtravel.v1.CommonService/GetTradeConfig"
 
 type CommonServiceHTTPServer interface {
 	// GetConfig 手续费/交易开关等基础配置
 	// 原: ConfigController::index  (免登录)
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigReply, error)
+	// GetPlatformLists 第三方平台列表
+	//
+	// 原实现 OpenAppLogic::getThirdAppsList($state = 1)：
+	//   App::where(['state' => $state, 'type' => 2])->field('name,flag')->select()->toArray();
+	//
+	// type = 2 是硬编码；state 默认 1 但控制器没传参，所以恒为 1。
+	GetPlatformLists(context.Context, *GetPlatformListsRequest) (*GetPlatformListsReply, error)
+	// GetProtocol 服务协议
+	//
+	// 原实现 IndexLogic::getPolicyByType($type)：
+	//   title   => ConfigService::get('agreement', $type . '_title', '')
+	//   content => ConfigService::get('agreement', $type . '_content', '')
+	//
+	// 配置缺失时两个键都是**空字符串**（默认 ''），不是 null。
+	// 路由在 common.php（group 'v1/common/'），方法却在 IndexController —— 跨文件。
+	// IndexController::$notNeedLogin 含 'policy' -> 免登录。
+	GetProtocol(context.Context, *GetProtocolRequest) (*GetProtocolReply, error)
 	// GetTradeConfig 交易配置（开关 + 限制时段）
 	// 原: IndexController::tradeConfig  (免登录)
 	GetTradeConfig(context.Context, *GetTradeConfigRequest) (*GetTradeConfigReply, error)
@@ -35,6 +54,8 @@ func RegisterCommonServiceHTTPServer(s *http.Server, srv CommonServiceHTTPServer
 	r := s.Route("/")
 	r.GET("/v1/common/config", _CommonService_GetConfig0_HTTP_Handler(srv))
 	r.GET("/v1/common/trade/config", _CommonService_GetTradeConfig0_HTTP_Handler(srv))
+	r.GET("/v1/common/protocol", _CommonService_GetProtocol0_HTTP_Handler(srv))
+	r.GET("/v1/common/platform/lists", _CommonService_GetPlatformLists0_HTTP_Handler(srv))
 }
 
 func _CommonService_GetConfig0_HTTP_Handler(srv CommonServiceHTTPServer) func(ctx http.Context) error {
@@ -75,10 +96,65 @@ func _CommonService_GetTradeConfig0_HTTP_Handler(srv CommonServiceHTTPServer) fu
 	}
 }
 
+func _CommonService_GetProtocol0_HTTP_Handler(srv CommonServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetProtocolRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationCommonServiceGetProtocol)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetProtocol(ctx, req.(*GetProtocolRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetProtocolReply)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _CommonService_GetPlatformLists0_HTTP_Handler(srv CommonServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetPlatformListsRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationCommonServiceGetPlatformLists)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetPlatformLists(ctx, req.(*GetPlatformListsRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetPlatformListsReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type CommonServiceHTTPClient interface {
 	// GetConfig 手续费/交易开关等基础配置
 	// 原: ConfigController::index  (免登录)
 	GetConfig(ctx context.Context, req *GetConfigRequest, opts ...http.CallOption) (rsp *GetConfigReply, err error)
+	// GetPlatformLists 第三方平台列表
+	//
+	// 原实现 OpenAppLogic::getThirdAppsList($state = 1)：
+	//   App::where(['state' => $state, 'type' => 2])->field('name,flag')->select()->toArray();
+	//
+	// type = 2 是硬编码；state 默认 1 但控制器没传参，所以恒为 1。
+	GetPlatformLists(ctx context.Context, req *GetPlatformListsRequest, opts ...http.CallOption) (rsp *GetPlatformListsReply, err error)
+	// GetProtocol 服务协议
+	//
+	// 原实现 IndexLogic::getPolicyByType($type)：
+	//   title   => ConfigService::get('agreement', $type . '_title', '')
+	//   content => ConfigService::get('agreement', $type . '_content', '')
+	//
+	// 配置缺失时两个键都是**空字符串**（默认 ''），不是 null。
+	// 路由在 common.php（group 'v1/common/'），方法却在 IndexController —— 跨文件。
+	// IndexController::$notNeedLogin 含 'policy' -> 免登录。
+	GetProtocol(ctx context.Context, req *GetProtocolRequest, opts ...http.CallOption) (rsp *GetProtocolReply, err error)
 	// GetTradeConfig 交易配置（开关 + 限制时段）
 	// 原: IndexController::tradeConfig  (免登录)
 	GetTradeConfig(ctx context.Context, req *GetTradeConfigRequest, opts ...http.CallOption) (rsp *GetTradeConfigReply, err error)
@@ -99,6 +175,49 @@ func (c *CommonServiceHTTPClientImpl) GetConfig(ctx context.Context, in *GetConf
 	pattern := "/v1/common/config"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationCommonServiceGetConfig))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetPlatformLists 第三方平台列表
+//
+// 原实现 OpenAppLogic::getThirdAppsList($state = 1)：
+//
+//	App::where(['state' => $state, 'type' => 2])->field('name,flag')->select()->toArray();
+//
+// type = 2 是硬编码；state 默认 1 但控制器没传参，所以恒为 1。
+func (c *CommonServiceHTTPClientImpl) GetPlatformLists(ctx context.Context, in *GetPlatformListsRequest, opts ...http.CallOption) (*GetPlatformListsReply, error) {
+	var out GetPlatformListsReply
+	pattern := "/v1/common/platform/lists"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationCommonServiceGetPlatformLists))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetProtocol 服务协议
+//
+// 原实现 IndexLogic::getPolicyByType($type)：
+//
+//	title   => ConfigService::get('agreement', $type . '_title', '')
+//	content => ConfigService::get('agreement', $type . '_content', '')
+//
+// 配置缺失时两个键都是**空字符串**（默认 ”），不是 null。
+// 路由在 common.php（group 'v1/common/'），方法却在 IndexController —— 跨文件。
+// IndexController::$notNeedLogin 含 'policy' -> 免登录。
+func (c *CommonServiceHTTPClientImpl) GetProtocol(ctx context.Context, in *GetProtocolRequest, opts ...http.CallOption) (*GetProtocolReply, error) {
+	var out GetProtocolReply
+	pattern := "/v1/common/protocol"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationCommonServiceGetProtocol))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

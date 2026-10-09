@@ -19,8 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CommonService_GetConfig_FullMethodName      = "/xtravel.v1.CommonService/GetConfig"
-	CommonService_GetTradeConfig_FullMethodName = "/xtravel.v1.CommonService/GetTradeConfig"
+	CommonService_GetConfig_FullMethodName        = "/xtravel.v1.CommonService/GetConfig"
+	CommonService_GetTradeConfig_FullMethodName   = "/xtravel.v1.CommonService/GetTradeConfig"
+	CommonService_GetProtocol_FullMethodName      = "/xtravel.v1.CommonService/GetProtocol"
+	CommonService_GetPlatformLists_FullMethodName = "/xtravel.v1.CommonService/GetPlatformLists"
 )
 
 // CommonServiceClient is the client API for CommonService service.
@@ -43,6 +45,25 @@ type CommonServiceClient interface {
 	// 交易配置（开关 + 限制时段）
 	// 原: IndexController::tradeConfig  (免登录)
 	GetTradeConfig(ctx context.Context, in *GetTradeConfigRequest, opts ...grpc.CallOption) (*GetTradeConfigReply, error)
+	// 服务协议
+	//
+	// 原实现 IndexLogic::getPolicyByType($type)：
+	//
+	//	title   => ConfigService::get('agreement', $type . '_title', '')
+	//	content => ConfigService::get('agreement', $type . '_content', '')
+	//
+	// 配置缺失时两个键都是**空字符串**（默认 ”），不是 null。
+	// 路由在 common.php（group 'v1/common/'），方法却在 IndexController —— 跨文件。
+	// IndexController::$notNeedLogin 含 'policy' -> 免登录。
+	GetProtocol(ctx context.Context, in *GetProtocolRequest, opts ...grpc.CallOption) (*GetProtocolReply, error)
+	// 第三方平台列表
+	//
+	// 原实现 OpenAppLogic::getThirdAppsList($state = 1)：
+	//
+	//	App::where(['state' => $state, 'type' => 2])->field('name,flag')->select()->toArray();
+	//
+	// type = 2 是硬编码；state 默认 1 但控制器没传参，所以恒为 1。
+	GetPlatformLists(ctx context.Context, in *GetPlatformListsRequest, opts ...grpc.CallOption) (*GetPlatformListsReply, error)
 }
 
 type commonServiceClient struct {
@@ -73,6 +94,26 @@ func (c *commonServiceClient) GetTradeConfig(ctx context.Context, in *GetTradeCo
 	return out, nil
 }
 
+func (c *commonServiceClient) GetProtocol(ctx context.Context, in *GetProtocolRequest, opts ...grpc.CallOption) (*GetProtocolReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetProtocolReply)
+	err := c.cc.Invoke(ctx, CommonService_GetProtocol_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *commonServiceClient) GetPlatformLists(ctx context.Context, in *GetPlatformListsRequest, opts ...grpc.CallOption) (*GetPlatformListsReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlatformListsReply)
+	err := c.cc.Invoke(ctx, CommonService_GetPlatformLists_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CommonServiceServer is the server API for CommonService service.
 // All implementations must embed UnimplementedCommonServiceServer
 // for forward compatibility.
@@ -93,6 +134,25 @@ type CommonServiceServer interface {
 	// 交易配置（开关 + 限制时段）
 	// 原: IndexController::tradeConfig  (免登录)
 	GetTradeConfig(context.Context, *GetTradeConfigRequest) (*GetTradeConfigReply, error)
+	// 服务协议
+	//
+	// 原实现 IndexLogic::getPolicyByType($type)：
+	//
+	//	title   => ConfigService::get('agreement', $type . '_title', '')
+	//	content => ConfigService::get('agreement', $type . '_content', '')
+	//
+	// 配置缺失时两个键都是**空字符串**（默认 ”），不是 null。
+	// 路由在 common.php（group 'v1/common/'），方法却在 IndexController —— 跨文件。
+	// IndexController::$notNeedLogin 含 'policy' -> 免登录。
+	GetProtocol(context.Context, *GetProtocolRequest) (*GetProtocolReply, error)
+	// 第三方平台列表
+	//
+	// 原实现 OpenAppLogic::getThirdAppsList($state = 1)：
+	//
+	//	App::where(['state' => $state, 'type' => 2])->field('name,flag')->select()->toArray();
+	//
+	// type = 2 是硬编码；state 默认 1 但控制器没传参，所以恒为 1。
+	GetPlatformLists(context.Context, *GetPlatformListsRequest) (*GetPlatformListsReply, error)
 	mustEmbedUnimplementedCommonServiceServer()
 }
 
@@ -108,6 +168,12 @@ func (UnimplementedCommonServiceServer) GetConfig(context.Context, *GetConfigReq
 }
 func (UnimplementedCommonServiceServer) GetTradeConfig(context.Context, *GetTradeConfigRequest) (*GetTradeConfigReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTradeConfig not implemented")
+}
+func (UnimplementedCommonServiceServer) GetProtocol(context.Context, *GetProtocolRequest) (*GetProtocolReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetProtocol not implemented")
+}
+func (UnimplementedCommonServiceServer) GetPlatformLists(context.Context, *GetPlatformListsRequest) (*GetPlatformListsReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPlatformLists not implemented")
 }
 func (UnimplementedCommonServiceServer) mustEmbedUnimplementedCommonServiceServer() {}
 func (UnimplementedCommonServiceServer) testEmbeddedByValue()                       {}
@@ -166,6 +232,42 @@ func _CommonService_GetTradeConfig_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CommonService_GetProtocol_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetProtocolRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommonServiceServer).GetProtocol(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CommonService_GetProtocol_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommonServiceServer).GetProtocol(ctx, req.(*GetProtocolRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CommonService_GetPlatformLists_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlatformListsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommonServiceServer).GetPlatformLists(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CommonService_GetPlatformLists_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommonServiceServer).GetPlatformLists(ctx, req.(*GetPlatformListsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CommonService_ServiceDesc is the grpc.ServiceDesc for CommonService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -180,6 +282,14 @@ var CommonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTradeConfig",
 			Handler:    _CommonService_GetTradeConfig_Handler,
+		},
+		{
+			MethodName: "GetProtocol",
+			Handler:    _CommonService_GetProtocol_Handler,
+		},
+		{
+			MethodName: "GetPlatformLists",
+			Handler:    _CommonService_GetPlatformLists_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

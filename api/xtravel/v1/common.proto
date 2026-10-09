@@ -28,6 +28,29 @@ service CommonService {
   rpc GetTradeConfig(GetTradeConfigRequest) returns (GetTradeConfigReply) {
     option (google.api.http) = {get: "/v1/common/trade/config"};
   }
+
+  // 服务协议
+  //
+  // 原实现 IndexLogic::getPolicyByType($type)：
+  //   title   => ConfigService::get('agreement', $type . '_title', '')
+  //   content => ConfigService::get('agreement', $type . '_content', '')
+  //
+  // 配置缺失时两个键都是**空字符串**（默认 ''），不是 null。
+  // 路由在 common.php（group 'v1/common/'），方法却在 IndexController —— 跨文件。
+  // IndexController::$notNeedLogin 含 'policy' -> 免登录。
+  rpc GetProtocol(GetProtocolRequest) returns (GetProtocolReply) {
+    option (google.api.http) = {get: "/v1/common/protocol"};
+  }
+
+  // 第三方平台列表
+  //
+  // 原实现 OpenAppLogic::getThirdAppsList($state = 1)：
+  //   App::where(['state' => $state, 'type' => 2])->field('name,flag')->select()->toArray();
+  //
+  // type = 2 是硬编码；state 默认 1 但控制器没传参，所以恒为 1。
+  rpc GetPlatformLists(GetPlatformListsRequest) returns (GetPlatformListsReply) {
+    option (google.api.http) = {get: "/v1/common/platform/lists"};
+  }
 }
 
 message GetConfigRequest {}
@@ -99,4 +122,27 @@ message GetTradeConfigReply {
 // 由 api/xtravel/v1/envelope.go 里的 Envelope() 把它摊成信封的 data。
 message RawData {
   bytes json = 1;
+}
+
+message GetProtocolRequest {
+  // 对应 $this->request->get('type/s', '') —— 字符串，默认空串
+  string type = 1 [json_name = "type"];
+}
+
+// GetProtocolReply 对应 ['title'=>..., 'content'=>...]，两者都可能为空串。
+message GetProtocolReply {
+  string title = 1 [json_name = "title"];
+  string content = 2 [json_name = "content"];
+}
+
+message GetPlatformListsRequest {}
+
+// GetPlatformListsReply 对应 field('name,flag')->select()->toArray() —— **顶层数组**。
+message GetPlatformListsReply {
+  repeated PlatformItem items = 1;
+}
+
+message PlatformItem {
+  string name = 1 [json_name = "name"];
+  string flag = 2 [json_name = "flag"];
 }
