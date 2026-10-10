@@ -44,14 +44,19 @@
 | **Stage 3** | 第 8 批：缓存层接入 + **修掉列表接口忽略 query 参数的 bug** | ✅ 完成并验证 |
 | Stage 3+ | `market` 域其余 33 条（含全部写操作） | 待做 |
 | Stage 4 | `wallet` / `payment` / `ticket` / `whitelist` | 待做 |
-| Stage 5 | `adminapi`（61 控制器，最大一块） | 待做 |
-| Stage 6 | `open` / `third` / 队列消费者 | 待做 |
+| ~~Stage 5~~ | ~~`adminapi`（61 控制器）~~ | **已按用户指令移出范围** |
+| ~~Stage 6~~ | ~~`open` / `third` / 队列消费者~~ | **已移出范围** |
 
-已迁接口：`v1/common/config`、`v1/common/trade/config`、`v1/user/info`、`v1/market/pay_way`、
-`v1/market/check/exchange`、`v1/market/purchase`、`v1/market/sales/categories`、`v1/market/sales`、
-`v1/market/stock/lookall`、`v1/market/purchase/info`、`v1/market/sales/info`、
-`v1/market/purchase/showTotalAmount`、`v1/market/purchase/out`、`v1/market/purchase/on`
-（共 11 条 market 路由 + 3 条非 market）。
+**已迁接口 24 条**（完整清单与鉴权状态见 [`docs/ROUTES.md`](docs/ROUTES.md)，由 `scripts/gen-routes.ps1` 从 proto 自动生成）：
+
+- **登录（C 端入口，闭环已通）**：`GET /v1/common/captcha`、`POST /v1/login/account`
+  （scene=1 账号密码 / scene=2 手机验证码；JSON / form-data / urlencoded 三种提交都支持）
+- **common**：`/v1/common/config`、`trade/config`、`protocol`、`platform/lists`、`captcha`
+- **index**：`/v1/index/index`、`decorate`、`bannerList`
+- **article**：`/v1/article/about`、`licenses`、`detail`（⚠️ 会写库，click_actual +1）
+- **market**（11 条，全只读）：`pay_way`、`check/exchange`、`purchase`、`sales`、`sales/categories`、
+  `sales/info`、`stock/lookall`、`purchase/info`、`purchase/showTotalAmount`、`purchase/out`、`purchase/on`
+- **user**：`/v1/user/info`
 
 ### Stage 1 验证记录（真实数据库 `xmarket_test`）
 
@@ -508,9 +513,9 @@ if (bccomp($tradePrice, '0', 2) === 0) { return '0.00'; }
 ### 🚩 交接摘要：从哪继续读、从哪继续做
 
 > 📄 **迁移范围与免登录清单请看 [docs/ROUTES-AND-AUTH.md](docs/ROUTES-AND-AUTH.md)**
-> —— C 端 141 条路由 × 是否免登录 × 是否已迁，交叉表。
+> —— C 端 **131** 条有效路由 × 是否免登录 × 是否已迁，交叉表。
 >
-> 📄 **前端对接请看 [`docs/API-SAMPLES.md`](docs/API-SAMPLES.md)** —— 14 条已迁接口的
+> 📄 **前端对接请看 [`docs/API-SAMPLES.md`](docs/API-SAMPLES.md)** —— 早期 14 条已迁接口的
 > 真实请求/响应样例（由实际调用生成，非手写）。
 >> ### 🎯 迁移范围（第 41 轮用户指令）
 >
@@ -568,8 +573,8 @@ if (bccomp($tradePrice, '0', 2) === 0) { return '0.00'; }
 > |---|---|
 > | 分支 / 提交 | `develop` @ `14a1b10`（共 44 个提交），已推送，远端一致 |
 > | 质量门 | `build` ✔ `vet` ✔ `go test` **80 项用例** ✔ 冒烟 **85 项** ✔ |
-> | 已迁接口 | **14 条 GET 路由**，路由覆盖 14/14（已核验） |
-> | 进度 | `market` **11/44**；其余领域未开始 |
+> | 已迁接口 | **24 条**（23 GET + 1 POST），全部有冒烟或真机验证 |
+> | 进度 | **24 / 131 = 18.3%**（统计已排除被注释的路由；见 `docs/ROUTES.md`） |
 > | 代码 | 手写 `.go` 67 个 / 单测文件 13 个 / proto 11 个 / 本 README 1159 行 |
 > | 凭据 | `configs/config.local.yaml` 未被跟踪 ✔ |
 >
@@ -983,7 +988,7 @@ if ($value === 0 || $value === '0') {...}   // 严格比较
 
    加错方向的代价：缓存共用会读出乱码；锁隔离会让"防重复点击"在迁移期失效。
 
-9. **`market` 域迁了 11/44 条路由，且全部是只读。** 剩下的里有下单、支付、
+9. **`market` 域迁了 11/44 条路由，且全部是只读。**（全局进度见 `docs/ROUTES.md`） 剩下的里有下单、支付、
    兑换、划转等**涉及资金**的写操作，必须单独评估（幂等、并发、事务边界、
    与 PHP 并存时的双写问题），不能顺手一起做。
 
