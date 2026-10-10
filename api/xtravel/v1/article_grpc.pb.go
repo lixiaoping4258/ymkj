@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	ArticleService_GetArticleAbout_FullMethodName    = "/xtravel.v1.ArticleService/GetArticleAbout"
+	ArticleService_GetArticleDetail_FullMethodName   = "/xtravel.v1.ArticleService/GetArticleDetail"
 	ArticleService_GetArticleLicenses_FullMethodName = "/xtravel.v1.ArticleService/GetArticleLicenses"
 )
 
@@ -59,6 +60,26 @@ type ArticleServiceClient interface {
 	//
 	// 原实现 ArticleLogic::license()：与 about 同构，只是 cid=3、title='资质证照'。
 	// ⚠️ 同样**需登录**。
+	// 文章详情
+	//
+	// 原实现 ArticleLogic::detail($articleId, $userId)：
+	//
+	//	$article = Article::getArticleDetailArr($articleId);
+	//	$article['collect'] = ArticleCollect::isCollectArticle($userId, $articleId);
+	//	return $article;
+	//
+	// 而 getArticleDetailArr 是：
+	//
+	//	$article = Article::where(['id'=>$id,'is_show'=>YES])->findOrEmpty();
+	//	if ($article->isEmpty()) { return []; }          // 不存在时返回**空数组**
+	//	$article->click_actual += 1; $article->save();   // 🔴 会写库！
+	//	return $article->append(['click'])->hidden(['click_virtual','click_actual'])->toArray();
+	//
+	// ⚠️⚠️ 这个接口**不是只读的** —— 每请求一次点击量 +1。
+	// ⚠️ 免登录（ArticleController::$notNeedLogin 含 'detail'）；
+	//
+	//	未登录时 $userId = 0，仍会拿 user_id=0 去查收藏。
+	GetArticleDetail(ctx context.Context, in *GetArticleDetailRequest, opts ...grpc.CallOption) (*GetArticleDetailReply, error)
 	GetArticleLicenses(ctx context.Context, in *GetArticleLicensesRequest, opts ...grpc.CallOption) (*ArticleListReply, error)
 }
 
@@ -74,6 +95,16 @@ func (c *articleServiceClient) GetArticleAbout(ctx context.Context, in *GetArtic
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ArticleListReply)
 	err := c.cc.Invoke(ctx, ArticleService_GetArticleAbout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *articleServiceClient) GetArticleDetail(ctx context.Context, in *GetArticleDetailRequest, opts ...grpc.CallOption) (*GetArticleDetailReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetArticleDetailReply)
+	err := c.cc.Invoke(ctx, ArticleService_GetArticleDetail_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -126,6 +157,26 @@ type ArticleServiceServer interface {
 	//
 	// 原实现 ArticleLogic::license()：与 about 同构，只是 cid=3、title='资质证照'。
 	// ⚠️ 同样**需登录**。
+	// 文章详情
+	//
+	// 原实现 ArticleLogic::detail($articleId, $userId)：
+	//
+	//	$article = Article::getArticleDetailArr($articleId);
+	//	$article['collect'] = ArticleCollect::isCollectArticle($userId, $articleId);
+	//	return $article;
+	//
+	// 而 getArticleDetailArr 是：
+	//
+	//	$article = Article::where(['id'=>$id,'is_show'=>YES])->findOrEmpty();
+	//	if ($article->isEmpty()) { return []; }          // 不存在时返回**空数组**
+	//	$article->click_actual += 1; $article->save();   // 🔴 会写库！
+	//	return $article->append(['click'])->hidden(['click_virtual','click_actual'])->toArray();
+	//
+	// ⚠️⚠️ 这个接口**不是只读的** —— 每请求一次点击量 +1。
+	// ⚠️ 免登录（ArticleController::$notNeedLogin 含 'detail'）；
+	//
+	//	未登录时 $userId = 0，仍会拿 user_id=0 去查收藏。
+	GetArticleDetail(context.Context, *GetArticleDetailRequest) (*GetArticleDetailReply, error)
 	GetArticleLicenses(context.Context, *GetArticleLicensesRequest) (*ArticleListReply, error)
 	mustEmbedUnimplementedArticleServiceServer()
 }
@@ -139,6 +190,9 @@ type UnimplementedArticleServiceServer struct{}
 
 func (UnimplementedArticleServiceServer) GetArticleAbout(context.Context, *GetArticleAboutRequest) (*ArticleListReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetArticleAbout not implemented")
+}
+func (UnimplementedArticleServiceServer) GetArticleDetail(context.Context, *GetArticleDetailRequest) (*GetArticleDetailReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetArticleDetail not implemented")
 }
 func (UnimplementedArticleServiceServer) GetArticleLicenses(context.Context, *GetArticleLicensesRequest) (*ArticleListReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetArticleLicenses not implemented")
@@ -182,6 +236,24 @@ func _ArticleService_GetArticleAbout_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ArticleService_GetArticleDetail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetArticleDetailRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArticleServiceServer).GetArticleDetail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ArticleService_GetArticleDetail_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArticleServiceServer).GetArticleDetail(ctx, req.(*GetArticleDetailRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ArticleService_GetArticleLicenses_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetArticleLicensesRequest)
 	if err := dec(in); err != nil {
@@ -210,6 +282,10 @@ var ArticleService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetArticleAbout",
 			Handler:    _ArticleService_GetArticleAbout_Handler,
+		},
+		{
+			MethodName: "GetArticleDetail",
+			Handler:    _ArticleService_GetArticleDetail_Handler,
 		},
 		{
 			MethodName: "GetArticleLicenses",

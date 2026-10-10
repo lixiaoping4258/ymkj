@@ -20,6 +20,7 @@ var _ = binding.EncodeURL
 const _ = http.SupportPackageIsVersion1
 
 const OperationArticleServiceGetArticleAbout = "/xtravel.v1.ArticleService/GetArticleAbout"
+const OperationArticleServiceGetArticleDetail = "/xtravel.v1.ArticleService/GetArticleDetail"
 const OperationArticleServiceGetArticleLicenses = "/xtravel.v1.ArticleService/GetArticleLicenses"
 
 type ArticleServiceHTTPServer interface {
@@ -37,16 +38,36 @@ type ArticleServiceHTTPServer interface {
 	// ⚠️ 需登录！ArticleController::$notNeedLogin = ['lists','cate','detail'] ——
 	//    **about / licenses 都不在里面**。凭"这是关于页面"的直觉会标反。
 	GetArticleAbout(context.Context, *GetArticleAboutRequest) (*ArticleListReply, error)
-	// GetArticleLicenses 资质证照
+	// GetArticleDetail 资质证照
 	//
 	// 原实现 ArticleLogic::license()：与 about 同构，只是 cid=3、title='资质证照'。
 	// ⚠️ 同样**需登录**。
+	// 文章详情
+	//
+	// 原实现 ArticleLogic::detail($articleId, $userId)：
+	//
+	//	$article = Article::getArticleDetailArr($articleId);
+	//	$article['collect'] = ArticleCollect::isCollectArticle($userId, $articleId);
+	//	return $article;
+	//
+	// 而 getArticleDetailArr 是：
+	//
+	//	$article = Article::where(['id'=>$id,'is_show'=>YES])->findOrEmpty();
+	//	if ($article->isEmpty()) { return []; }          // 不存在时返回**空数组**
+	//	$article->click_actual += 1; $article->save();   // 🔴 会写库！
+	//	return $article->append(['click'])->hidden(['click_virtual','click_actual'])->toArray();
+	//
+	// ⚠️⚠️ 这个接口**不是只读的** —— 每请求一次点击量 +1。
+	// ⚠️ 免登录（ArticleController::$notNeedLogin 含 'detail'）；
+	//    未登录时 $userId = 0，仍会拿 user_id=0 去查收藏。
+	GetArticleDetail(context.Context, *GetArticleDetailRequest) (*GetArticleDetailReply, error)
 	GetArticleLicenses(context.Context, *GetArticleLicensesRequest) (*ArticleListReply, error)
 }
 
 func RegisterArticleServiceHTTPServer(s *http.Server, srv ArticleServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/v1/article/about", _ArticleService_GetArticleAbout0_HTTP_Handler(srv))
+	r.GET("/v1/article/detail", _ArticleService_GetArticleDetail0_HTTP_Handler(srv))
 	r.GET("/v1/article/licenses", _ArticleService_GetArticleLicenses0_HTTP_Handler(srv))
 }
 
@@ -65,6 +86,25 @@ func _ArticleService_GetArticleAbout0_HTTP_Handler(srv ArticleServiceHTTPServer)
 			return err
 		}
 		reply := out.(*ArticleListReply)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _ArticleService_GetArticleDetail0_HTTP_Handler(srv ArticleServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetArticleDetailRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationArticleServiceGetArticleDetail)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetArticleDetail(ctx, req.(*GetArticleDetailRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetArticleDetailReply)
 		return ctx.Result(200, reply)
 	}
 }
@@ -103,10 +143,29 @@ type ArticleServiceHTTPClient interface {
 	// ⚠️ 需登录！ArticleController::$notNeedLogin = ['lists','cate','detail'] ——
 	//    **about / licenses 都不在里面**。凭"这是关于页面"的直觉会标反。
 	GetArticleAbout(ctx context.Context, req *GetArticleAboutRequest, opts ...http.CallOption) (rsp *ArticleListReply, err error)
-	// GetArticleLicenses 资质证照
+	// GetArticleDetail 资质证照
 	//
 	// 原实现 ArticleLogic::license()：与 about 同构，只是 cid=3、title='资质证照'。
 	// ⚠️ 同样**需登录**。
+	// 文章详情
+	//
+	// 原实现 ArticleLogic::detail($articleId, $userId)：
+	//
+	//	$article = Article::getArticleDetailArr($articleId);
+	//	$article['collect'] = ArticleCollect::isCollectArticle($userId, $articleId);
+	//	return $article;
+	//
+	// 而 getArticleDetailArr 是：
+	//
+	//	$article = Article::where(['id'=>$id,'is_show'=>YES])->findOrEmpty();
+	//	if ($article->isEmpty()) { return []; }          // 不存在时返回**空数组**
+	//	$article->click_actual += 1; $article->save();   // 🔴 会写库！
+	//	return $article->append(['click'])->hidden(['click_virtual','click_actual'])->toArray();
+	//
+	// ⚠️⚠️ 这个接口**不是只读的** —— 每请求一次点击量 +1。
+	// ⚠️ 免登录（ArticleController::$notNeedLogin 含 'detail'）；
+	//    未登录时 $userId = 0，仍会拿 user_id=0 去查收藏。
+	GetArticleDetail(ctx context.Context, req *GetArticleDetailRequest, opts ...http.CallOption) (rsp *GetArticleDetailReply, err error)
 	GetArticleLicenses(ctx context.Context, req *GetArticleLicensesRequest, opts ...http.CallOption) (rsp *ArticleListReply, err error)
 }
 
@@ -145,10 +204,42 @@ func (c *ArticleServiceHTTPClientImpl) GetArticleAbout(ctx context.Context, in *
 	return &out, nil
 }
 
-// GetArticleLicenses 资质证照
+// GetArticleDetail 资质证照
 //
 // 原实现 ArticleLogic::license()：与 about 同构，只是 cid=3、title='资质证照'。
 // ⚠️ 同样**需登录**。
+// 文章详情
+//
+// 原实现 ArticleLogic::detail($articleId, $userId)：
+//
+//	$article = Article::getArticleDetailArr($articleId);
+//	$article['collect'] = ArticleCollect::isCollectArticle($userId, $articleId);
+//	return $article;
+//
+// 而 getArticleDetailArr 是：
+//
+//	$article = Article::where(['id'=>$id,'is_show'=>YES])->findOrEmpty();
+//	if ($article->isEmpty()) { return []; }          // 不存在时返回**空数组**
+//	$article->click_actual += 1; $article->save();   // 🔴 会写库！
+//	return $article->append(['click'])->hidden(['click_virtual','click_actual'])->toArray();
+//
+// ⚠️⚠️ 这个接口**不是只读的** —— 每请求一次点击量 +1。
+// ⚠️ 免登录（ArticleController::$notNeedLogin 含 'detail'）；
+//
+//	未登录时 $userId = 0，仍会拿 user_id=0 去查收藏。
+func (c *ArticleServiceHTTPClientImpl) GetArticleDetail(ctx context.Context, in *GetArticleDetailRequest, opts ...http.CallOption) (*GetArticleDetailReply, error) {
+	var out GetArticleDetailReply
+	pattern := "/v1/article/detail"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationArticleServiceGetArticleDetail))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (c *ArticleServiceHTTPClientImpl) GetArticleLicenses(ctx context.Context, in *GetArticleLicensesRequest, opts ...http.CallOption) (*ArticleListReply, error) {
 	var out ArticleListReply
 	pattern := "/v1/article/licenses"

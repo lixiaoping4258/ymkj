@@ -67,6 +67,8 @@ var defaultPublicOps = map[string]struct{}{
 	"/xtravel.v1.IndexService/GetIndex":      {},
 	"/xtravel.v1.IndexService/GetDecorate":   {},
 	"/xtravel.v1.IndexService/GetBannerList": {},
+	// ArticleController::$notNeedLogin = ['lists','cate','detail']
+	"/xtravel.v1.ArticleService/GetArticleDetail": {},
 }
 
 // AuthMiddleware 构造鉴权中间件。

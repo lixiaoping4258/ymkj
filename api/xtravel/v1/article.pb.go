@@ -10,6 +10,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -201,12 +202,228 @@ func (x *ArticleItem) GetTitle() string {
 	return ""
 }
 
+type GetArticleDetailRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 对应 `$this->request->get('id/d')` —— 强制整数
+	Id            int32 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetArticleDetailRequest) Reset() {
+	*x = GetArticleDetailRequest{}
+	mi := &file_api_xtravel_v1_article_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetArticleDetailRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetArticleDetailRequest) ProtoMessage() {}
+
+func (x *GetArticleDetailRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_article_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetArticleDetailRequest.ProtoReflect.Descriptor instead.
+func (*GetArticleDetailRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_article_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetArticleDetailRequest) GetId() int32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+// GetArticleDetailReply 对应整行文章 + click + collect。
+//
+// ⚠️ 原文只 hidden 了 click_virtual / click_actual，其余**全部暴露**，
+//
+//	包括 content / delete_time / update_time。
+//
+// ⚠️ 可空列（desc/abstract/image/author/content/sort/create_time/update_time/delete_time）
+//
+//	用包装类型，NULL 时输出 null（用普通类型会变成 "" / 0，类型和值都不对）。
+//
+// ⚠️ 文章不存在时，原文返回的是 `{"collect": false}` —— 只有这一个键，
+//
+//	其余字段全部缺省。用 optional/包装类型自然表达这一点。
+type GetArticleDetailReply struct {
+	state      protoimpl.MessageState  `protogen:"open.v1"`
+	Id         int32                   `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Cid        int32                   `protobuf:"varint,2,opt,name=cid,proto3" json:"cid,omitempty"`
+	Title      string                  `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	Desc       *wrapperspb.StringValue `protobuf:"bytes,4,opt,name=desc,proto3" json:"desc,omitempty"`
+	Abstract   *wrapperspb.StringValue `protobuf:"bytes,5,opt,name=abstract,proto3" json:"abstract,omitempty"`
+	Image      *wrapperspb.StringValue `protobuf:"bytes,6,opt,name=image,proto3" json:"image,omitempty"`
+	Author     *wrapperspb.StringValue `protobuf:"bytes,7,opt,name=author,proto3" json:"author,omitempty"`
+	Content    *wrapperspb.StringValue `protobuf:"bytes,8,opt,name=content,proto3" json:"content,omitempty"`
+	IsShow     int32                   `protobuf:"varint,9,opt,name=is_show,proto3" json:"is_show,omitempty"`
+	Sort       *wrapperspb.Int32Value  `protobuf:"bytes,10,opt,name=sort,proto3" json:"sort,omitempty"`
+	CreateTime *wrapperspb.Int64Value  `protobuf:"bytes,11,opt,name=create_time,proto3" json:"create_time,omitempty"`
+	UpdateTime *wrapperspb.Int64Value  `protobuf:"bytes,12,opt,name=update_time,proto3" json:"update_time,omitempty"`
+	DeleteTime *wrapperspb.Int64Value  `protobuf:"bytes,13,opt,name=delete_time,proto3" json:"delete_time,omitempty"`
+	// 计算列 = click_actual + click_virtual（自增**之后**的值）
+	Click int64 `protobuf:"varint,14,opt,name=click,proto3" json:"click,omitempty"`
+	// 是否已收藏。⚠️ 文章不存在时**只有这个键**（值为 false）。
+	Collect       bool `protobuf:"varint,15,opt,name=collect,proto3" json:"collect,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetArticleDetailReply) Reset() {
+	*x = GetArticleDetailReply{}
+	mi := &file_api_xtravel_v1_article_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetArticleDetailReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetArticleDetailReply) ProtoMessage() {}
+
+func (x *GetArticleDetailReply) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_article_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetArticleDetailReply.ProtoReflect.Descriptor instead.
+func (*GetArticleDetailReply) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_article_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GetArticleDetailReply) GetId() int32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *GetArticleDetailReply) GetCid() int32 {
+	if x != nil {
+		return x.Cid
+	}
+	return 0
+}
+
+func (x *GetArticleDetailReply) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *GetArticleDetailReply) GetDesc() *wrapperspb.StringValue {
+	if x != nil {
+		return x.Desc
+	}
+	return nil
+}
+
+func (x *GetArticleDetailReply) GetAbstract() *wrapperspb.StringValue {
+	if x != nil {
+		return x.Abstract
+	}
+	return nil
+}
+
+func (x *GetArticleDetailReply) GetImage() *wrapperspb.StringValue {
+	if x != nil {
+		return x.Image
+	}
+	return nil
+}
+
+func (x *GetArticleDetailReply) GetAuthor() *wrapperspb.StringValue {
+	if x != nil {
+		return x.Author
+	}
+	return nil
+}
+
+func (x *GetArticleDetailReply) GetContent() *wrapperspb.StringValue {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *GetArticleDetailReply) GetIsShow() int32 {
+	if x != nil {
+		return x.IsShow
+	}
+	return 0
+}
+
+func (x *GetArticleDetailReply) GetSort() *wrapperspb.Int32Value {
+	if x != nil {
+		return x.Sort
+	}
+	return nil
+}
+
+func (x *GetArticleDetailReply) GetCreateTime() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.CreateTime
+	}
+	return nil
+}
+
+func (x *GetArticleDetailReply) GetUpdateTime() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.UpdateTime
+	}
+	return nil
+}
+
+func (x *GetArticleDetailReply) GetDeleteTime() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.DeleteTime
+	}
+	return nil
+}
+
+func (x *GetArticleDetailReply) GetClick() int64 {
+	if x != nil {
+		return x.Click
+	}
+	return 0
+}
+
+func (x *GetArticleDetailReply) GetCollect() bool {
+	if x != nil {
+		return x.Collect
+	}
+	return false
+}
+
 var File_api_xtravel_v1_article_proto protoreflect.FileDescriptor
 
 const file_api_xtravel_v1_article_proto_rawDesc = "" +
 	"\n" +
 	"\x1capi/xtravel/v1/article.proto\x12\n" +
-	"xtravel.v1\x1a\x1cgoogle/api/annotations.proto\"\x18\n" +
+	"xtravel.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1egoogle/protobuf/wrappers.proto\"\x18\n" +
 	"\x16GetArticleAboutRequest\"\x1b\n" +
 	"\x19GetArticleLicensesRequest\"W\n" +
 	"\x10ArticleListReply\x12\x14\n" +
@@ -214,9 +431,29 @@ const file_api_xtravel_v1_article_proto_rawDesc = "" +
 	"\x05lists\x18\x02 \x03(\v2\x17.xtravel.v1.ArticleItemR\x05lists\"3\n" +
 	"\vArticleItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x14\n" +
-	"\x05title\x18\x02 \x01(\tR\x05title2\xf9\x01\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\")\n" +
+	"\x17GetArticleDetailRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x05R\x02id\"\x95\x05\n" +
+	"\x15GetArticleDetailReply\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x10\n" +
+	"\x03cid\x18\x02 \x01(\x05R\x03cid\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x120\n" +
+	"\x04desc\x18\x04 \x01(\v2\x1c.google.protobuf.StringValueR\x04desc\x128\n" +
+	"\babstract\x18\x05 \x01(\v2\x1c.google.protobuf.StringValueR\babstract\x122\n" +
+	"\x05image\x18\x06 \x01(\v2\x1c.google.protobuf.StringValueR\x05image\x124\n" +
+	"\x06author\x18\a \x01(\v2\x1c.google.protobuf.StringValueR\x06author\x126\n" +
+	"\acontent\x18\b \x01(\v2\x1c.google.protobuf.StringValueR\acontent\x12\x18\n" +
+	"\ais_show\x18\t \x01(\x05R\ais_show\x12/\n" +
+	"\x04sort\x18\n" +
+	" \x01(\v2\x1b.google.protobuf.Int32ValueR\x04sort\x12=\n" +
+	"\vcreate_time\x18\v \x01(\v2\x1b.google.protobuf.Int64ValueR\vcreate_time\x12=\n" +
+	"\vupdate_time\x18\f \x01(\v2\x1b.google.protobuf.Int64ValueR\vupdate_time\x12=\n" +
+	"\vdelete_time\x18\r \x01(\v2\x1b.google.protobuf.Int64ValueR\vdelete_time\x12\x14\n" +
+	"\x05click\x18\x0e \x01(\x03R\x05click\x12\x18\n" +
+	"\acollect\x18\x0f \x01(\bR\acollect2\xf1\x02\n" +
 	"\x0eArticleService\x12n\n" +
-	"\x0fGetArticleAbout\x12\".xtravel.v1.GetArticleAboutRequest\x1a\x1c.xtravel.v1.ArticleListReply\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/article/about\x12w\n" +
+	"\x0fGetArticleAbout\x12\".xtravel.v1.GetArticleAboutRequest\x1a\x1c.xtravel.v1.ArticleListReply\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/article/about\x12v\n" +
+	"\x10GetArticleDetail\x12#.xtravel.v1.GetArticleDetailRequest\x1a!.xtravel.v1.GetArticleDetailReply\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/article/detail\x12w\n" +
 	"\x12GetArticleLicenses\x12%.xtravel.v1.GetArticleLicensesRequest\x1a\x1c.xtravel.v1.ArticleListReply\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/article/licensesB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
 
 var (
@@ -231,24 +468,40 @@ func file_api_xtravel_v1_article_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_article_proto_rawDescData
 }
 
-var file_api_xtravel_v1_article_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_api_xtravel_v1_article_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_api_xtravel_v1_article_proto_goTypes = []any{
 	(*GetArticleAboutRequest)(nil),    // 0: xtravel.v1.GetArticleAboutRequest
 	(*GetArticleLicensesRequest)(nil), // 1: xtravel.v1.GetArticleLicensesRequest
 	(*ArticleListReply)(nil),          // 2: xtravel.v1.ArticleListReply
 	(*ArticleItem)(nil),               // 3: xtravel.v1.ArticleItem
+	(*GetArticleDetailRequest)(nil),   // 4: xtravel.v1.GetArticleDetailRequest
+	(*GetArticleDetailReply)(nil),     // 5: xtravel.v1.GetArticleDetailReply
+	(*wrapperspb.StringValue)(nil),    // 6: google.protobuf.StringValue
+	(*wrapperspb.Int32Value)(nil),     // 7: google.protobuf.Int32Value
+	(*wrapperspb.Int64Value)(nil),     // 8: google.protobuf.Int64Value
 }
 var file_api_xtravel_v1_article_proto_depIdxs = []int32{
-	3, // 0: xtravel.v1.ArticleListReply.lists:type_name -> xtravel.v1.ArticleItem
-	0, // 1: xtravel.v1.ArticleService.GetArticleAbout:input_type -> xtravel.v1.GetArticleAboutRequest
-	1, // 2: xtravel.v1.ArticleService.GetArticleLicenses:input_type -> xtravel.v1.GetArticleLicensesRequest
-	2, // 3: xtravel.v1.ArticleService.GetArticleAbout:output_type -> xtravel.v1.ArticleListReply
-	2, // 4: xtravel.v1.ArticleService.GetArticleLicenses:output_type -> xtravel.v1.ArticleListReply
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3,  // 0: xtravel.v1.ArticleListReply.lists:type_name -> xtravel.v1.ArticleItem
+	6,  // 1: xtravel.v1.GetArticleDetailReply.desc:type_name -> google.protobuf.StringValue
+	6,  // 2: xtravel.v1.GetArticleDetailReply.abstract:type_name -> google.protobuf.StringValue
+	6,  // 3: xtravel.v1.GetArticleDetailReply.image:type_name -> google.protobuf.StringValue
+	6,  // 4: xtravel.v1.GetArticleDetailReply.author:type_name -> google.protobuf.StringValue
+	6,  // 5: xtravel.v1.GetArticleDetailReply.content:type_name -> google.protobuf.StringValue
+	7,  // 6: xtravel.v1.GetArticleDetailReply.sort:type_name -> google.protobuf.Int32Value
+	8,  // 7: xtravel.v1.GetArticleDetailReply.create_time:type_name -> google.protobuf.Int64Value
+	8,  // 8: xtravel.v1.GetArticleDetailReply.update_time:type_name -> google.protobuf.Int64Value
+	8,  // 9: xtravel.v1.GetArticleDetailReply.delete_time:type_name -> google.protobuf.Int64Value
+	0,  // 10: xtravel.v1.ArticleService.GetArticleAbout:input_type -> xtravel.v1.GetArticleAboutRequest
+	4,  // 11: xtravel.v1.ArticleService.GetArticleDetail:input_type -> xtravel.v1.GetArticleDetailRequest
+	1,  // 12: xtravel.v1.ArticleService.GetArticleLicenses:input_type -> xtravel.v1.GetArticleLicensesRequest
+	2,  // 13: xtravel.v1.ArticleService.GetArticleAbout:output_type -> xtravel.v1.ArticleListReply
+	5,  // 14: xtravel.v1.ArticleService.GetArticleDetail:output_type -> xtravel.v1.GetArticleDetailReply
+	2,  // 15: xtravel.v1.ArticleService.GetArticleLicenses:output_type -> xtravel.v1.ArticleListReply
+	13, // [13:16] is the sub-list for method output_type
+	10, // [10:13] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_api_xtravel_v1_article_proto_init() }
@@ -262,7 +515,7 @@ func file_api_xtravel_v1_article_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_article_proto_rawDesc), len(file_api_xtravel_v1_article_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

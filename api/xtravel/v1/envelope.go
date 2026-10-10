@@ -81,3 +81,22 @@ func (r *GetPlatformListsReply) Envelope() (int, int, string, any) {
 func (r *GetBannerListReply) Envelope() (int, int, string, any) {
 	return 1, 0, "", r.GetItems()
 }
+
+// Envelope 处理 article/detail 的两种形态。
+//
+// ⚠️ 原文里"文章不存在"时返回的是 **`{"collect": false}` —— 只有这一个键**：
+//
+//	$article = Article::getArticleDetailArr($articleId);   // 内部 return []; （空数组）
+//	$article['collect'] = ArticleCollect::isCollectArticle($userId, $articleId);
+//	return $article;                                        // ['collect' => false]
+//
+// 而本项目全局开了 protojson 的 EmitUnpopulated（因为 PHP 的 json_encode
+// 不会省略零值），所以直接返回消息会输出全部 15 个键的空值形态 —— **与原文不符**。
+//
+// 用 id == 0 作为哨兵：x_article.id 是自增主键，真实文章不可能为 0。
+func (r *GetArticleDetailReply) Envelope() (int, int, string, any) {
+	if r.GetId() == 0 {
+		return 1, 0, "", map[string]any{"collect": r.GetCollect()}
+	}
+	return 1, 0, "", r
+}

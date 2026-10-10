@@ -3,6 +3,7 @@ syntax = "proto3";
 package xtravel.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
 
@@ -40,6 +41,27 @@ service ArticleService {
   //
   // 原实现 ArticleLogic::license()：与 about 同构，只是 cid=3、title='资质证照'。
   // ⚠️ 同样**需登录**。
+  // 文章详情
+  //
+  // 原实现 ArticleLogic::detail($articleId, $userId)：
+  //
+  //	$article = Article::getArticleDetailArr($articleId);
+  //	$article['collect'] = ArticleCollect::isCollectArticle($userId, $articleId);
+  //	return $article;
+  //
+  // 而 getArticleDetailArr 是：
+  //
+  //	$article = Article::where(['id'=>$id,'is_show'=>YES])->findOrEmpty();
+  //	if ($article->isEmpty()) { return []; }          // 不存在时返回**空数组**
+  //	$article->click_actual += 1; $article->save();   // 🔴 会写库！
+  //	return $article->append(['click'])->hidden(['click_virtual','click_actual'])->toArray();
+  //
+  // ⚠️⚠️ 这个接口**不是只读的** —— 每请求一次点击量 +1。
+  // ⚠️ 免登录（ArticleController::$notNeedLogin 含 'detail'）；
+  //    未登录时 $userId = 0，仍会拿 user_id=0 去查收藏。
+  rpc GetArticleDetail(GetArticleDetailRequest) returns (GetArticleDetailReply) {
+    option (google.api.http) = {get: "/v1/article/detail"};
+  }
   rpc GetArticleLicenses(GetArticleLicensesRequest) returns (ArticleListReply) {
     option (google.api.http) = {get: "/v1/article/licenses"};
   }
@@ -59,4 +81,37 @@ message ArticleItem {
   // x_article.id 是 int(11)，PHP 的 toArray() 会输出**数字**
   int32 id = 1 [json_name = "id"];
   string title = 2 [json_name = "title"];
+}
+
+message GetArticleDetailRequest {
+  // 对应 `$this->request->get('id/d')` —— 强制整数
+  int32 id = 1 [json_name = "id"];
+}
+
+// GetArticleDetailReply 对应整行文章 + click + collect。
+//
+// ⚠️ 原文只 hidden 了 click_virtual / click_actual，其余**全部暴露**，
+//    包括 content / delete_time / update_time。
+// ⚠️ 可空列（desc/abstract/image/author/content/sort/create_time/update_time/delete_time）
+//    用包装类型，NULL 时输出 null（用普通类型会变成 "" / 0，类型和值都不对）。
+// ⚠️ 文章不存在时，原文返回的是 `{"collect": false}` —— 只有这一个键，
+//    其余字段全部缺省。用 optional/包装类型自然表达这一点。
+message GetArticleDetailReply {
+  int32 id = 1 [json_name = "id"];
+  int32 cid = 2 [json_name = "cid"];
+  string title = 3 [json_name = "title"];
+  google.protobuf.StringValue desc = 4 [json_name = "desc"];
+  google.protobuf.StringValue abstract = 5 [json_name = "abstract"];
+  google.protobuf.StringValue image = 6 [json_name = "image"];
+  google.protobuf.StringValue author = 7 [json_name = "author"];
+  google.protobuf.StringValue content = 8 [json_name = "content"];
+  int32 is_show = 9 [json_name = "is_show"];
+  google.protobuf.Int32Value sort = 10 [json_name = "sort"];
+  google.protobuf.Int64Value create_time = 11 [json_name = "create_time"];
+  google.protobuf.Int64Value update_time = 12 [json_name = "update_time"];
+  google.protobuf.Int64Value delete_time = 13 [json_name = "delete_time"];
+  // 计算列 = click_actual + click_virtual（自增**之后**的值）
+  int64 click = 14 [json_name = "click"];
+  // 是否已收藏。⚠️ 文章不存在时**只有这个键**（值为 false）。
+  bool collect = 15 [json_name = "collect"];
 }
