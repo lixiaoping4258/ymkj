@@ -6,12 +6,13 @@
 
 > 改路由后重新生成：`.\scripts\gen-routes.ps1`
 
-**已实现 23 / 131 条（17.6%）；其中免登录 9 条。**
+**已实现 24 / 131 条（18.3%）；其中免登录 10 条。**
 
 ## 免登录（无需 token）
 
 | 方法 | 路径 | 服务·方法 | proto |
 |---|---|---|---|
+| GET | `/v1/article/detail` | ArticleService.GetArticleDetail | `article.proto` |
 | GET | `/v1/common/captcha` | CaptchaService.GetCaptcha | `captcha.proto` |
 | GET | `/v1/common/config` | CommonService.GetConfig | `common.proto` |
 | GET | `/v1/common/protocol` | CommonService.GetProtocol | `common.proto` |
