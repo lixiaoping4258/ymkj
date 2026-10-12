@@ -78,6 +78,24 @@ service UserService {
   rpc GetAddressList(GetAddressListRequest) returns (RawData) {
     option (google.api.http) = {get: "/v1/user/address"};
   }
+
+  // 用户实名信息（已脱敏）
+  //
+  // 原实现 UserController::getRealInfo -> CardRealLogic::getUserRealInfo($userId)
+  //
+  //	$real = UserReal::where(['user_id'=>$userId])
+  //	    ->field('state,card_no,user_name,birthday,gender,address')->findOrEmpty();
+  //	if ($real->isEmpty()) { setError('未找到实名信息'); return false; }
+  //	if ($real->state != 'SUCCESS') { setError('用户未实名'); return false; }
+  //	$info['card_no']   = StrUtil::hideStr($info['card_no']);
+  //	$info['user_name'] = StrUtil::hideName($info['user_name']);
+  //
+  // ⚠️ 两条错误信息的**顺序**不能反：先"未找到实名信息"，再"用户未实名"。
+  // ⚠️ 脱敏是按**字符**(mb_*)算的，中文名要用 rune 处理。
+  // 需登录。
+  rpc GetRealInfo(GetRealInfoRequest) returns (GetRealInfoReply) {
+    option (google.api.http) = {get: "/v1/user/real/info"};
+  }
 }
 
 message GetUserInfoRequest {}
@@ -146,3 +164,19 @@ message GetAddressDefaultReply {
 }
 
 message GetAddressListRequest {}
+
+message GetRealInfoRequest {}
+
+// GetRealInfoReply 对应 field('state,card_no,user_name,birthday,gender,address') 的 6 列，
+// 其中 card_no / user_name 已脱敏。
+message GetRealInfoReply {
+  // enum('CREATE','SUCCESS','FAIL','PROCESS')；只有 SUCCESS 才会返回，所以恒为 "SUCCESS"
+  string state = 1 [json_name = "state"];
+  // 已脱敏：首字符 + (字符数-2) 个 * + 末字符；长度 ≤2 原样返回
+  string card_no = 2 [json_name = "card_no"];
+  // 已脱敏：首字符 + (字符数-1) 个 *
+  string user_name = 3 [json_name = "user_name"];
+  google.protobuf.StringValue birthday = 4 [json_name = "birthday"];
+  google.protobuf.Int32Value gender = 5 [json_name = "gender"];
+  google.protobuf.StringValue address = 6 [json_name = "address"];
+}

@@ -21,6 +21,7 @@ const _ = http.SupportPackageIsVersion1
 
 const OperationUserServiceGetAddressDefault = "/xtravel.v1.UserService/GetAddressDefault"
 const OperationUserServiceGetAddressList = "/xtravel.v1.UserService/GetAddressList"
+const OperationUserServiceGetRealInfo = "/xtravel.v1.UserService/GetRealInfo"
 const OperationUserServiceGetUserInfo = "/xtravel.v1.UserService/GetUserInfo"
 const OperationUserServiceGetUserNoticeNew = "/xtravel.v1.UserService/GetUserNoticeNew"
 
@@ -56,6 +57,21 @@ type UserServiceHTTPServer interface {
 	// 用 RawData（行的键是 DB 列名 + App 的别名 platform_name）。
 	// 需登录。
 	GetAddressList(context.Context, *GetAddressListRequest) (*RawData, error)
+	// GetRealInfo 用户实名信息（已脱敏）
+	//
+	// 原实现 UserController::getRealInfo -> CardRealLogic::getUserRealInfo($userId)
+	//
+	//	$real = UserReal::where(['user_id'=>$userId])
+	//	    ->field('state,card_no,user_name,birthday,gender,address')->findOrEmpty();
+	//	if ($real->isEmpty()) { setError('未找到实名信息'); return false; }
+	//	if ($real->state != 'SUCCESS') { setError('用户未实名'); return false; }
+	//	$info['card_no']   = StrUtil::hideStr($info['card_no']);
+	//	$info['user_name'] = StrUtil::hideName($info['user_name']);
+	//
+	// ⚠️ 两条错误信息的**顺序**不能反：先"未找到实名信息"，再"用户未实名"。
+	// ⚠️ 脱敏是按**字符**(mb_*)算的，中文名要用 rune 处理。
+	// 需登录。
+	GetRealInfo(context.Context, *GetRealInfoRequest) (*GetRealInfoReply, error)
 	// GetUserInfo 当前登录用户信息
 	// 原: UserController::info -> UserLogic::info($this->userId)
 	// 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
@@ -89,6 +105,7 @@ func RegisterUserServiceHTTPServer(s *http.Server, srv UserServiceHTTPServer) {
 	r.GET("/v1/user/notice/getNew", _UserService_GetUserNoticeNew0_HTTP_Handler(srv))
 	r.GET("/v1/user/address/default", _UserService_GetAddressDefault0_HTTP_Handler(srv))
 	r.GET("/v1/user/address", _UserService_GetAddressList0_HTTP_Handler(srv))
+	r.GET("/v1/user/real/info", _UserService_GetRealInfo0_HTTP_Handler(srv))
 }
 
 func _UserService_GetUserInfo0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
@@ -167,6 +184,25 @@ func _UserService_GetAddressList0_HTTP_Handler(srv UserServiceHTTPServer) func(c
 	}
 }
 
+func _UserService_GetRealInfo0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetRealInfoRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserServiceGetRealInfo)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetRealInfo(ctx, req.(*GetRealInfoRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetRealInfoReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type UserServiceHTTPClient interface {
 	// GetAddressDefault 用户默认地址
 	//
@@ -199,6 +235,21 @@ type UserServiceHTTPClient interface {
 	// 用 RawData（行的键是 DB 列名 + App 的别名 platform_name）。
 	// 需登录。
 	GetAddressList(ctx context.Context, req *GetAddressListRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// GetRealInfo 用户实名信息（已脱敏）
+	//
+	// 原实现 UserController::getRealInfo -> CardRealLogic::getUserRealInfo($userId)
+	//
+	//	$real = UserReal::where(['user_id'=>$userId])
+	//	    ->field('state,card_no,user_name,birthday,gender,address')->findOrEmpty();
+	//	if ($real->isEmpty()) { setError('未找到实名信息'); return false; }
+	//	if ($real->state != 'SUCCESS') { setError('用户未实名'); return false; }
+	//	$info['card_no']   = StrUtil::hideStr($info['card_no']);
+	//	$info['user_name'] = StrUtil::hideName($info['user_name']);
+	//
+	// ⚠️ 两条错误信息的**顺序**不能反：先"未找到实名信息"，再"用户未实名"。
+	// ⚠️ 脱敏是按**字符**(mb_*)算的，中文名要用 rune 处理。
+	// 需登录。
+	GetRealInfo(ctx context.Context, req *GetRealInfoRequest, opts ...http.CallOption) (rsp *GetRealInfoReply, err error)
 	// GetUserInfo 当前登录用户信息
 	// 原: UserController::info -> UserLogic::info($this->userId)
 	// 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
@@ -283,6 +334,33 @@ func (c *UserServiceHTTPClientImpl) GetAddressList(ctx context.Context, in *GetA
 	pattern := "/v1/user/address"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationUserServiceGetAddressList))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetRealInfo 用户实名信息（已脱敏）
+//
+// 原实现 UserController::getRealInfo -> CardRealLogic::getUserRealInfo($userId)
+//
+//	$real = UserReal::where(['user_id'=>$userId])
+//	    ->field('state,card_no,user_name,birthday,gender,address')->findOrEmpty();
+//	if ($real->isEmpty()) { setError('未找到实名信息'); return false; }
+//	if ($real->state != 'SUCCESS') { setError('用户未实名'); return false; }
+//	$info['card_no']   = StrUtil::hideStr($info['card_no']);
+//	$info['user_name'] = StrUtil::hideName($info['user_name']);
+//
+// ⚠️ 两条错误信息的**顺序**不能反：先"未找到实名信息"，再"用户未实名"。
+// ⚠️ 脱敏是按**字符**(mb_*)算的，中文名要用 rune 处理。
+// 需登录。
+func (c *UserServiceHTTPClientImpl) GetRealInfo(ctx context.Context, in *GetRealInfoRequest, opts ...http.CallOption) (*GetRealInfoReply, error) {
+	var out GetRealInfoReply
+	pattern := "/v1/user/real/info"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationUserServiceGetRealInfo))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

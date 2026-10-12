@@ -4,6 +4,8 @@ import (
 	"context"
 
 	v1 "github.com/lixiaoping4258/ymkj/api/xtravel/v1"
+	"google.golang.org/protobuf/types/known/wrapperspb"
+
 	"github.com/lixiaoping4258/ymkj/internal/biz"
 	"github.com/lixiaoping4258/ymkj/internal/pkg/httpx"
 	"github.com/lixiaoping4258/ymkj/internal/pkg/pbconv"
@@ -16,10 +18,11 @@ type UserService struct {
 	noticeNew   *biz.NoticeNewUsecase
 	address     *biz.AddressUsecase
 	addressList *biz.AddressListUsecase
+	realInfo    *biz.RealInfoUsecase
 }
 
-func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase, addressList *biz.AddressListUsecase) *UserService {
-	return &UserService{users: users, noticeNew: noticeNew, address: address, addressList: addressList}
+func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase, addressList *biz.AddressListUsecase, realInfo *biz.RealInfoUsecase) *UserService {
+	return &UserService{users: users, noticeNew: noticeNew, address: address, addressList: addressList, realInfo: realInfo}
 }
 
 // GetUserInfo 对应 UserController::info。
@@ -145,4 +148,36 @@ func (s *UserService) GetAddressList(
 		return nil, err
 	}
 	return &v1.RawData{Json: raw}, nil
+}
+
+// GetRealInfo 对应 UserController::getRealInfo。
+//
+// 原实现：
+//
+//	$info = CardRealLogic::getUserRealInfo($this->userId);
+//	if($info === false) { return $this->fail(CardRealLogic::getError()); }
+//	return $this->data($info);
+func (s *UserService) GetRealInfo(
+	ctx context.Context, _ *v1.GetRealInfoRequest,
+) (*v1.GetRealInfoReply, error) {
+	userID := biz.UserIDFromContext(ctx)
+	res, err := s.realInfo.GetUserRealInfo(ctx, uint32(userID))
+	if err != nil {
+		return nil, bizFail(biz.NewBizError(err.Error()))
+	}
+	reply := &v1.GetRealInfoReply{
+		State:    res.State,
+		CardNo:   res.CardNo,
+		UserName: res.UserName,
+	}
+	if res.Birthday != nil {
+		reply.Birthday = wrapperspb.String(*res.Birthday)
+	}
+	if res.Gender != nil {
+		reply.Gender = wrapperspb.Int32(*res.Gender)
+	}
+	if res.Address != nil {
+		reply.Address = wrapperspb.String(*res.Address)
+	}
+	return reply, nil
 }

@@ -23,6 +23,7 @@ const (
 	UserService_GetUserNoticeNew_FullMethodName  = "/xtravel.v1.UserService/GetUserNoticeNew"
 	UserService_GetAddressDefault_FullMethodName = "/xtravel.v1.UserService/GetAddressDefault"
 	UserService_GetAddressList_FullMethodName    = "/xtravel.v1.UserService/GetAddressList"
+	UserService_GetRealInfo_FullMethodName       = "/xtravel.v1.UserService/GetRealInfo"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -90,6 +91,21 @@ type UserServiceClient interface {
 	// 用 RawData（行的键是 DB 列名 + App 的别名 platform_name）。
 	// 需登录。
 	GetAddressList(ctx context.Context, in *GetAddressListRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 用户实名信息（已脱敏）
+	//
+	// 原实现 UserController::getRealInfo -> CardRealLogic::getUserRealInfo($userId)
+	//
+	//	$real = UserReal::where(['user_id'=>$userId])
+	//	    ->field('state,card_no,user_name,birthday,gender,address')->findOrEmpty();
+	//	if ($real->isEmpty()) { setError('未找到实名信息'); return false; }
+	//	if ($real->state != 'SUCCESS') { setError('用户未实名'); return false; }
+	//	$info['card_no']   = StrUtil::hideStr($info['card_no']);
+	//	$info['user_name'] = StrUtil::hideName($info['user_name']);
+	//
+	// ⚠️ 两条错误信息的**顺序**不能反：先"未找到实名信息"，再"用户未实名"。
+	// ⚠️ 脱敏是按**字符**(mb_*)算的，中文名要用 rune 处理。
+	// 需登录。
+	GetRealInfo(ctx context.Context, in *GetRealInfoRequest, opts ...grpc.CallOption) (*GetRealInfoReply, error)
 }
 
 type userServiceClient struct {
@@ -134,6 +150,16 @@ func (c *userServiceClient) GetAddressList(ctx context.Context, in *GetAddressLi
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, UserService_GetAddressList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetRealInfo(ctx context.Context, in *GetRealInfoRequest, opts ...grpc.CallOption) (*GetRealInfoReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRealInfoReply)
+	err := c.cc.Invoke(ctx, UserService_GetRealInfo_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -205,6 +231,21 @@ type UserServiceServer interface {
 	// 用 RawData（行的键是 DB 列名 + App 的别名 platform_name）。
 	// 需登录。
 	GetAddressList(context.Context, *GetAddressListRequest) (*RawData, error)
+	// 用户实名信息（已脱敏）
+	//
+	// 原实现 UserController::getRealInfo -> CardRealLogic::getUserRealInfo($userId)
+	//
+	//	$real = UserReal::where(['user_id'=>$userId])
+	//	    ->field('state,card_no,user_name,birthday,gender,address')->findOrEmpty();
+	//	if ($real->isEmpty()) { setError('未找到实名信息'); return false; }
+	//	if ($real->state != 'SUCCESS') { setError('用户未实名'); return false; }
+	//	$info['card_no']   = StrUtil::hideStr($info['card_no']);
+	//	$info['user_name'] = StrUtil::hideName($info['user_name']);
+	//
+	// ⚠️ 两条错误信息的**顺序**不能反：先"未找到实名信息"，再"用户未实名"。
+	// ⚠️ 脱敏是按**字符**(mb_*)算的，中文名要用 rune 处理。
+	// 需登录。
+	GetRealInfo(context.Context, *GetRealInfoRequest) (*GetRealInfoReply, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -226,6 +267,9 @@ func (UnimplementedUserServiceServer) GetAddressDefault(context.Context, *GetAdd
 }
 func (UnimplementedUserServiceServer) GetAddressList(context.Context, *GetAddressListRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAddressList not implemented")
+}
+func (UnimplementedUserServiceServer) GetRealInfo(context.Context, *GetRealInfoRequest) (*GetRealInfoReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRealInfo not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -320,6 +364,24 @@ func _UserService_GetAddressList_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_GetRealInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRealInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetRealInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetRealInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetRealInfo(ctx, req.(*GetRealInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -342,6 +404,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAddressList",
 			Handler:    _UserService_GetAddressList_Handler,
+		},
+		{
+			MethodName: "GetRealInfo",
+			Handler:    _UserService_GetRealInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

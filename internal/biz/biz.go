@@ -33,4 +33,5 @@ var ProviderSet = wire.NewSet(
 	NewNoticeNewUsecase,
 	NewAddressUsecase,
 	NewAddressListUsecase,
+	NewRealInfoUsecase,
 )
