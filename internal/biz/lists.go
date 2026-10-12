@@ -140,7 +140,9 @@ func (d ListData) ToJSON() (json.RawMessage, error) {
 		"page_size": d.PageSize,
 		"extend":    extend,
 	}
-	b, err := json.Marshal(m)
+	// ⚠️ 用 MarshalNoHTMLEscape 而不是 json.Marshal —— PHP 的 json_encode 不转义
+	//    `<` `>` `&`，而 Go 会转义成 \u003c 等，原始响应文本不同（见 jsonutil.go）
+	b, err := MarshalNoHTMLEscape(m)
 	if err != nil {
 		return nil, err
 	}

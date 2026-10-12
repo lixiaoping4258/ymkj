@@ -20,17 +20,40 @@ var _ = binding.EncodeURL
 const _ = http.SupportPackageIsVersion1
 
 const OperationUserServiceGetUserInfo = "/xtravel.v1.UserService/GetUserInfo"
+const OperationUserServiceGetUserNoticeNew = "/xtravel.v1.UserService/GetUserNoticeNew"
 
 type UserServiceHTTPServer interface {
 	// GetUserInfo 当前登录用户信息
 	// 原: UserController::info -> UserLogic::info($this->userId)
 	// 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
 	GetUserInfo(context.Context, *GetUserInfoRequest) (*GetUserInfoReply, error)
+	// GetUserNoticeNew 最新公告（用户侧）
+	//
+	// 原实现 v1/user/NoticeController::getNew -> app\api\logic\user\NoticeLogic::getNew()
+	//
+	//	$cacheKey = 'purchase:getNew';       // 键名带 purchase，但与此无关
+	//	$cache = RedisLockService::get($cacheKey);
+	//	if ($cache) { return json_decode($cache, true); }
+	//	$article = Article::where('cid',2)->field('id,title,content,create_time')
+	//	    ->where('is_show',1)->whereNull('delete_time')
+	//	    ->order('sort','desc')->order('create_time','desc')->findOrEmpty();
+	//	$res = $article->isEmpty() ? [] : $article->toArray();
+	//	RedisLockService::set($cacheKey, json_encode($res), 300);
+	//	return $res;
+	//
+	// 控制器：return $this->data(['get_new' => $getNew]);
+	//
+	// 用 RawData：get_new 的值**要么是对象，要么是空数组 []**，
+	// 两种形态用同一个 proto 消息表达不了（EmitUnpopulated 会把空的补成对象）。
+	//
+	// 免登录（v1/user/NoticeController::$notNeedLogin = ['getNew']）。
+	GetUserNoticeNew(context.Context, *GetUserNoticeNewRequest) (*RawData, error)
 }
 
 func RegisterUserServiceHTTPServer(s *http.Server, srv UserServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/v1/user/info", _UserService_GetUserInfo0_HTTP_Handler(srv))
+	r.GET("/v1/user/notice/getNew", _UserService_GetUserNoticeNew0_HTTP_Handler(srv))
 }
 
 func _UserService_GetUserInfo0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
@@ -52,11 +75,51 @@ func _UserService_GetUserInfo0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx 
 	}
 }
 
+func _UserService_GetUserNoticeNew0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetUserNoticeNewRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserServiceGetUserNoticeNew)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetUserNoticeNew(ctx, req.(*GetUserNoticeNewRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type UserServiceHTTPClient interface {
 	// GetUserInfo 当前登录用户信息
 	// 原: UserController::info -> UserLogic::info($this->userId)
 	// 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
 	GetUserInfo(ctx context.Context, req *GetUserInfoRequest, opts ...http.CallOption) (rsp *GetUserInfoReply, err error)
+	// GetUserNoticeNew 最新公告（用户侧）
+	//
+	// 原实现 v1/user/NoticeController::getNew -> app\api\logic\user\NoticeLogic::getNew()
+	//
+	//	$cacheKey = 'purchase:getNew';       // 键名带 purchase，但与此无关
+	//	$cache = RedisLockService::get($cacheKey);
+	//	if ($cache) { return json_decode($cache, true); }
+	//	$article = Article::where('cid',2)->field('id,title,content,create_time')
+	//	    ->where('is_show',1)->whereNull('delete_time')
+	//	    ->order('sort','desc')->order('create_time','desc')->findOrEmpty();
+	//	$res = $article->isEmpty() ? [] : $article->toArray();
+	//	RedisLockService::set($cacheKey, json_encode($res), 300);
+	//	return $res;
+	//
+	// 控制器：return $this->data(['get_new' => $getNew]);
+	//
+	// 用 RawData：get_new 的值**要么是对象，要么是空数组 []**，
+	// 两种形态用同一个 proto 消息表达不了（EmitUnpopulated 会把空的补成对象）。
+	//
+	// 免登录（v1/user/NoticeController::$notNeedLogin = ['getNew']）。
+	GetUserNoticeNew(ctx context.Context, req *GetUserNoticeNewRequest, opts ...http.CallOption) (rsp *RawData, err error)
 }
 
 type UserServiceHTTPClientImpl struct {
@@ -75,6 +138,39 @@ func (c *UserServiceHTTPClientImpl) GetUserInfo(ctx context.Context, in *GetUser
 	pattern := "/v1/user/info"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationUserServiceGetUserInfo))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetUserNoticeNew 最新公告（用户侧）
+//
+// 原实现 v1/user/NoticeController::getNew -> app\api\logic\user\NoticeLogic::getNew()
+//
+//	$cacheKey = 'purchase:getNew';       // 键名带 purchase，但与此无关
+//	$cache = RedisLockService::get($cacheKey);
+//	if ($cache) { return json_decode($cache, true); }
+//	$article = Article::where('cid',2)->field('id,title,content,create_time')
+//	    ->where('is_show',1)->whereNull('delete_time')
+//	    ->order('sort','desc')->order('create_time','desc')->findOrEmpty();
+//	$res = $article->isEmpty() ? [] : $article->toArray();
+//	RedisLockService::set($cacheKey, json_encode($res), 300);
+//	return $res;
+//
+// 控制器：return $this->data(['get_new' => $getNew]);
+//
+// 用 RawData：get_new 的值**要么是对象，要么是空数组 []**，
+// 两种形态用同一个 proto 消息表达不了（EmitUnpopulated 会把空的补成对象）。
+//
+// 免登录（v1/user/NoticeController::$notNeedLogin = ['getNew']）。
+func (c *UserServiceHTTPClientImpl) GetUserNoticeNew(ctx context.Context, in *GetUserNoticeNewRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/user/notice/getNew"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationUserServiceGetUserNoticeNew))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

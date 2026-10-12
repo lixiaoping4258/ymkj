@@ -292,12 +292,48 @@ func (x *UserCodeAuth) GetTaoUserCode() string {
 	return ""
 }
 
+type GetUserNoticeNewRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUserNoticeNewRequest) Reset() {
+	*x = GetUserNoticeNewRequest{}
+	mi := &file_api_xtravel_v1_user_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUserNoticeNewRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUserNoticeNewRequest) ProtoMessage() {}
+
+func (x *GetUserNoticeNewRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_user_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUserNoticeNewRequest.ProtoReflect.Descriptor instead.
+func (*GetUserNoticeNewRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_user_proto_rawDescGZIP(), []int{3}
+}
+
 var File_api_xtravel_v1_user_proto protoreflect.FileDescriptor
 
 const file_api_xtravel_v1_user_proto_rawDesc = "" +
 	"\n" +
 	"\x19api/xtravel/v1/user.proto\x12\n" +
-	"xtravel.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1egoogle/protobuf/wrappers.proto\"\x14\n" +
+	"xtravel.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1bapi/xtravel/v1/common.proto\x1a\x1egoogle/protobuf/wrappers.proto\"\x14\n" +
 	"\x12GetUserInfoRequest\"\x86\x04\n" +
 	"\x10GetUserInfoReply\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x0e\n" +
@@ -320,9 +356,11 @@ const file_api_xtravel_v1_user_proto_rawDesc = "" +
 	"\x0euser_code_auth\x18\x0f \x01(\v2\x18.xtravel.v1.UserCodeAuthR\x0euser_code_auth\"Z\n" +
 	"\fUserCodeAuth\x12$\n" +
 	"\rtea_user_code\x18\x01 \x01(\tR\rtea_user_code\x12$\n" +
-	"\rtao_user_code\x18\x02 \x01(\tR\rtao_user_code2q\n" +
+	"\rtao_user_code\x18\x02 \x01(\tR\rtao_user_code\"\x19\n" +
+	"\x17GetUserNoticeNewRequest2\xdf\x01\n" +
 	"\vUserService\x12b\n" +
-	"\vGetUserInfo\x12\x1e.xtravel.v1.GetUserInfoRequest\x1a\x1c.xtravel.v1.GetUserInfoReply\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/user/infoB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
+	"\vGetUserInfo\x12\x1e.xtravel.v1.GetUserInfoRequest\x1a\x1c.xtravel.v1.GetUserInfoReply\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/user/info\x12l\n" +
+	"\x10GetUserNoticeNew\x12#.xtravel.v1.GetUserNoticeNewRequest\x1a\x13.xtravel.v1.RawData\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/user/notice/getNewB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
 
 var (
 	file_api_xtravel_v1_user_proto_rawDescOnce sync.Once
@@ -336,21 +374,25 @@ func file_api_xtravel_v1_user_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_user_proto_rawDescData
 }
 
-var file_api_xtravel_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_api_xtravel_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_api_xtravel_v1_user_proto_goTypes = []any{
-	(*GetUserInfoRequest)(nil),     // 0: xtravel.v1.GetUserInfoRequest
-	(*GetUserInfoReply)(nil),       // 1: xtravel.v1.GetUserInfoReply
-	(*UserCodeAuth)(nil),           // 2: xtravel.v1.UserCodeAuth
-	(*wrapperspb.StringValue)(nil), // 3: google.protobuf.StringValue
+	(*GetUserInfoRequest)(nil),      // 0: xtravel.v1.GetUserInfoRequest
+	(*GetUserInfoReply)(nil),        // 1: xtravel.v1.GetUserInfoReply
+	(*UserCodeAuth)(nil),            // 2: xtravel.v1.UserCodeAuth
+	(*GetUserNoticeNewRequest)(nil), // 3: xtravel.v1.GetUserNoticeNewRequest
+	(*wrapperspb.StringValue)(nil),  // 4: google.protobuf.StringValue
+	(*RawData)(nil),                 // 5: xtravel.v1.RawData
 }
 var file_api_xtravel_v1_user_proto_depIdxs = []int32{
-	3, // 0: xtravel.v1.GetUserInfoReply.user_money:type_name -> google.protobuf.StringValue
-	3, // 1: xtravel.v1.GetUserInfoReply.opt_pwd:type_name -> google.protobuf.StringValue
+	4, // 0: xtravel.v1.GetUserInfoReply.user_money:type_name -> google.protobuf.StringValue
+	4, // 1: xtravel.v1.GetUserInfoReply.opt_pwd:type_name -> google.protobuf.StringValue
 	2, // 2: xtravel.v1.GetUserInfoReply.user_code_auth:type_name -> xtravel.v1.UserCodeAuth
 	0, // 3: xtravel.v1.UserService.GetUserInfo:input_type -> xtravel.v1.GetUserInfoRequest
-	1, // 4: xtravel.v1.UserService.GetUserInfo:output_type -> xtravel.v1.GetUserInfoReply
-	4, // [4:5] is the sub-list for method output_type
-	3, // [3:4] is the sub-list for method input_type
+	3, // 4: xtravel.v1.UserService.GetUserNoticeNew:input_type -> xtravel.v1.GetUserNoticeNewRequest
+	1, // 5: xtravel.v1.UserService.GetUserInfo:output_type -> xtravel.v1.GetUserInfoReply
+	5, // 6: xtravel.v1.UserService.GetUserNoticeNew:output_type -> xtravel.v1.RawData
+	5, // [5:7] is the sub-list for method output_type
+	3, // [3:5] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
 	3, // [3:3] is the sub-list for extension extendee
 	0, // [0:3] is the sub-list for field type_name
@@ -361,13 +403,14 @@ func file_api_xtravel_v1_user_proto_init() {
 	if File_api_xtravel_v1_user_proto != nil {
 		return
 	}
+	file_api_xtravel_v1_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_user_proto_rawDesc), len(file_api_xtravel_v1_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

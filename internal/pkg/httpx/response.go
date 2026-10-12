@@ -61,6 +61,20 @@ func marshalData(v any) (json.RawMessage, error) {
 		// 原项目 data() 的 $data 默认值是空数组
 		return json.RawMessage("[]"), nil
 	}
+	// ⚠️⚠️ 已经是 JSON 的（json.RawMessage / []byte）**原样返回**，不要再 marshal 一遍。
+	//
+	// 原因：`json.Marshal(json.RawMessage)` 会在 compact 阶段**重新做 HTML 转义**，
+	// 把 `<` `>` `&` 变成 \u003c / \u003e / \u0026。而 **PHP 的 json_encode 不转义这三个**。
+	// 两者对解析器等价，但原始响应文本不同 —— 客户端做字符串匹配会失败，
+	// 抓包对比 PHP 与 Go 也会看到差异（容易被误判成迁移出错）。
+	//
+	// 实测案例：/v1/user/notice/getNew 的 content 是 HTML，走 RawData 返回。
+	if raw, ok := v.(json.RawMessage); ok {
+		return raw, nil
+	}
+	if b, ok := v.([]byte); ok {
+		return json.RawMessage(b), nil
+	}
 	if m, ok := v.(proto.Message); ok {
 		return marshalProto(m)
 	}
@@ -214,9 +228,24 @@ func writeEnvelope(w http.ResponseWriter, code, show int, msg string, data any) 
 		_, _ = w.Write([]byte(`{"code":0,"show":1,"msg":"response marshal failed","data":[]}`))
 		return err
 	}
-	out, err := json.Marshal(Envelope{Code: code, Show: show, Msg: msg, Data: raw})
-	if err != nil {
+	// ⚠️⚠️ 必须用**不转义 HTML** 的编码器。
+	//
+	// Go 的 json.Marshal 会把 `<` `>` `&` 转义成 \u003c \u003e \u0026；
+	// 而 **PHP 的 json_encode 不转义这三个字符**。两者对 JSON 解析器等价，
+	// 但**原始响应文本不同** —— 客户端若对 body 做字符串匹配会失败，
+	// 抓包对比 PHP 与 Go 也会看到差异。
+	//
+	// 注意：即使 data 是 json.RawMessage，json.Marshal 也会在 compact 阶段
+	// 重新做 HTML 转义，所以**必须在这一层关掉**，光在 biz 层处理没用。
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(Envelope{Code: code, Show: show, Msg: msg, Data: raw}); err != nil {
 		return err
+	}
+	out := buf.Bytes()
+	if n := len(out); n > 0 && out[n-1] == '\n' {
+		out = out[:n-1] // Encode 会追加换行，去掉
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_, err = w.Write(out)

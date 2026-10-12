@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	UserService_GetUserInfo_FullMethodName = "/xtravel.v1.UserService/GetUserInfo"
+	UserService_GetUserInfo_FullMethodName      = "/xtravel.v1.UserService/GetUserInfo"
+	UserService_GetUserNoticeNew_FullMethodName = "/xtravel.v1.UserService/GetUserNoticeNew"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -33,6 +34,27 @@ type UserServiceClient interface {
 	// 原: UserController::info -> UserLogic::info($this->userId)
 	// 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
 	GetUserInfo(ctx context.Context, in *GetUserInfoRequest, opts ...grpc.CallOption) (*GetUserInfoReply, error)
+	// 最新公告（用户侧）
+	//
+	// 原实现 v1/user/NoticeController::getNew -> app\api\logic\user\NoticeLogic::getNew()
+	//
+	//	$cacheKey = 'purchase:getNew';       // 键名带 purchase，但与此无关
+	//	$cache = RedisLockService::get($cacheKey);
+	//	if ($cache) { return json_decode($cache, true); }
+	//	$article = Article::where('cid',2)->field('id,title,content,create_time')
+	//	    ->where('is_show',1)->whereNull('delete_time')
+	//	    ->order('sort','desc')->order('create_time','desc')->findOrEmpty();
+	//	$res = $article->isEmpty() ? [] : $article->toArray();
+	//	RedisLockService::set($cacheKey, json_encode($res), 300);
+	//	return $res;
+	//
+	// 控制器：return $this->data(['get_new' => $getNew]);
+	//
+	// 用 RawData：get_new 的值**要么是对象，要么是空数组 []**，
+	// 两种形态用同一个 proto 消息表达不了（EmitUnpopulated 会把空的补成对象）。
+	//
+	// 免登录（v1/user/NoticeController::$notNeedLogin = ['getNew']）。
+	GetUserNoticeNew(ctx context.Context, in *GetUserNoticeNewRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type userServiceClient struct {
@@ -53,6 +75,16 @@ func (c *userServiceClient) GetUserInfo(ctx context.Context, in *GetUserInfoRequ
 	return out, nil
 }
 
+func (c *userServiceClient) GetUserNoticeNew(ctx context.Context, in *GetUserNoticeNewRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, UserService_GetUserNoticeNew_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServiceServer is the server API for UserService service.
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility.
@@ -64,6 +96,27 @@ type UserServiceServer interface {
 	// 原: UserController::info -> UserLogic::info($this->userId)
 	// 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
 	GetUserInfo(context.Context, *GetUserInfoRequest) (*GetUserInfoReply, error)
+	// 最新公告（用户侧）
+	//
+	// 原实现 v1/user/NoticeController::getNew -> app\api\logic\user\NoticeLogic::getNew()
+	//
+	//	$cacheKey = 'purchase:getNew';       // 键名带 purchase，但与此无关
+	//	$cache = RedisLockService::get($cacheKey);
+	//	if ($cache) { return json_decode($cache, true); }
+	//	$article = Article::where('cid',2)->field('id,title,content,create_time')
+	//	    ->where('is_show',1)->whereNull('delete_time')
+	//	    ->order('sort','desc')->order('create_time','desc')->findOrEmpty();
+	//	$res = $article->isEmpty() ? [] : $article->toArray();
+	//	RedisLockService::set($cacheKey, json_encode($res), 300);
+	//	return $res;
+	//
+	// 控制器：return $this->data(['get_new' => $getNew]);
+	//
+	// 用 RawData：get_new 的值**要么是对象，要么是空数组 []**，
+	// 两种形态用同一个 proto 消息表达不了（EmitUnpopulated 会把空的补成对象）。
+	//
+	// 免登录（v1/user/NoticeController::$notNeedLogin = ['getNew']）。
+	GetUserNoticeNew(context.Context, *GetUserNoticeNewRequest) (*RawData, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -76,6 +129,9 @@ type UnimplementedUserServiceServer struct{}
 
 func (UnimplementedUserServiceServer) GetUserInfo(context.Context, *GetUserInfoRequest) (*GetUserInfoReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUserInfo not implemented")
+}
+func (UnimplementedUserServiceServer) GetUserNoticeNew(context.Context, *GetUserNoticeNewRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUserNoticeNew not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -116,6 +172,24 @@ func _UserService_GetUserInfo_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_GetUserNoticeNew_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserNoticeNewRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetUserNoticeNew(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetUserNoticeNew_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetUserNoticeNew(ctx, req.(*GetUserNoticeNewRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -126,6 +200,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserInfo",
 			Handler:    _UserService_GetUserInfo_Handler,
+		},
+		{
+			MethodName: "GetUserNoticeNew",
+			Handler:    _UserService_GetUserNoticeNew_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

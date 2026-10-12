@@ -3,6 +3,7 @@ syntax = "proto3";
 package xtravel.v1;
 
 import "google/api/annotations.proto";
+import "api/xtravel/v1/common.proto";
 import "google/protobuf/wrappers.proto";
 
 option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
@@ -15,6 +16,30 @@ service UserService {
   // 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
   rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoReply) {
     option (google.api.http) = {get: "/v1/user/info"};
+  }
+
+  // 最新公告（用户侧）
+  //
+  // 原实现 v1/user/NoticeController::getNew -> app\api\logic\user\NoticeLogic::getNew()
+  //
+  //	$cacheKey = 'purchase:getNew';       // 键名带 purchase，但与此无关
+  //	$cache = RedisLockService::get($cacheKey);
+  //	if ($cache) { return json_decode($cache, true); }
+  //	$article = Article::where('cid',2)->field('id,title,content,create_time')
+  //	    ->where('is_show',1)->whereNull('delete_time')
+  //	    ->order('sort','desc')->order('create_time','desc')->findOrEmpty();
+  //	$res = $article->isEmpty() ? [] : $article->toArray();
+  //	RedisLockService::set($cacheKey, json_encode($res), 300);
+  //	return $res;
+  //
+  // 控制器：return $this->data(['get_new' => $getNew]);
+  //
+  // 用 RawData：get_new 的值**要么是对象，要么是空数组 []**，
+  // 两种形态用同一个 proto 消息表达不了（EmitUnpopulated 会把空的补成对象）。
+  //
+  // 免登录（v1/user/NoticeController::$notNeedLogin = ['getNew']）。
+  rpc GetUserNoticeNew(GetUserNoticeNewRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/user/notice/getNew"};
   }
 }
 
@@ -68,3 +93,5 @@ message UserCodeAuth {
   // 原: tao_user_code = x_user_accounts 里 app_id=4 的 user_code
   string tao_user_code = 2 [json_name = "tao_user_code"];
 }
+
+message GetUserNoticeNewRequest {}

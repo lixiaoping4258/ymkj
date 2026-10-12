@@ -11,11 +11,12 @@ import (
 // UserService 对应原项目 app/api/controller/v1/user/UserController.php。
 type UserService struct {
 	v1.UnimplementedUserServiceServer
-	users *biz.UserUsecase
+	users     *biz.UserUsecase
+	noticeNew *biz.NoticeNewUsecase
 }
 
-func NewUserService(users *biz.UserUsecase) *UserService {
-	return &UserService{users: users}
+func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase) *UserService {
+	return &UserService{users: users, noticeNew: noticeNew}
 }
 
 // GetUserInfo 对应 UserController::info。
@@ -63,4 +64,33 @@ func (s *UserService) GetUserInfo(ctx context.Context, _ *v1.GetUserInfoRequest)
 			TaoUserCode: profile.UserCodeAuth.TaoUserCode,
 		},
 	}, nil
+}
+
+// GetUserNoticeNew 对应 v1/user/NoticeController::getNew。
+//
+// 原实现：
+//
+//	$getNew = NoticeLogic::getNew();
+//	return $this->data(['get_new' => $getNew]);      // ⚠️ 外面套了 get_new
+//
+// ⚠️ `get_new` 的值**要么是对象（文章行），要么是空数组 []** ——
+//
+//	源码里是 `$article->isEmpty() ? [] : $article->toArray()`。
+//	两种形态用同一个 proto 消息表达不了（EmitUnpopulated 会把缺省字段补出来），
+//	所以用 RawData 自己拼 JSON。
+//
+// ⚠️ 免登录（v1/user/NoticeController::$notNeedLogin = ['getNew']）。
+func (s *UserService) GetUserNoticeNew(
+	ctx context.Context, _ *v1.GetUserNoticeNewRequest,
+) (*v1.RawData, error) {
+	body, err := s.noticeNew.GetNew(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// 拼成 {"get_new": <body>}；body 本身就是合法 JSON（对象或 []）
+	out := make([]byte, 0, len(body)+16)
+	out = append(out, `{"get_new":`...)
+	out = append(out, body...)
+	out = append(out, '}')
+	return &v1.RawData{Json: out}, nil
 }
