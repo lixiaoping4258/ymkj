@@ -26,6 +26,7 @@ const OperationUserServiceGetUnregisterCheck = "/xtravel.v1.UserService/GetUnreg
 const OperationUserServiceGetUserInfo = "/xtravel.v1.UserService/GetUserInfo"
 const OperationUserServiceGetUserNoticeNew = "/xtravel.v1.UserService/GetUserNoticeNew"
 const OperationUserServiceSetMessageAllRead = "/xtravel.v1.UserService/SetMessageAllRead"
+const OperationUserServiceSetMessageOneRead = "/xtravel.v1.UserService/SetMessageOneRead"
 
 type UserServiceHTTPServer interface {
 	// GetAddressDefault 用户默认地址
@@ -123,6 +124,22 @@ type UserServiceHTTPServer interface {
 	// 控制器：`return $this->data([]);` -> data 是**空数组**
 	// 需登录。POST，无请求体。
 	SetMessageAllRead(context.Context, *SetMessageAllReadRequest) (*RawData, error)
+	// SetMessageOneRead 设置单条消息已读
+	//
+	// 原实现 MessageController::setOneRead -> MessageLogic::setOneRead($userId,$params)
+	// 校验：MessageIdValidate -> 'id' => 'require|integer|gt:0'
+	//
+	//	$where = [['message_id','=',$params['id']], ['recv_id','=',$userId], ['is_del','=',0]];
+	//	if (Messages::where($where)->findOrEmpty()->isEmpty()) {
+	//	    setError('消息不存在或无权操作'); return false;
+	//	}
+	//	if ($message['is_read'] == 1) { return true; }      // 已读 -> 短路，不 UPDATE
+	//	Messages::where($where)->update(['is_read' => 1]);
+	//
+	// ⚠️ 传进来的 id 匹配的是 **message_id** 列，不是主键。
+	// ⚠️ 带 recv_id -> 越权防护（不能标记别人的消息）。
+	// 控制器：`return $this->data([]);` -> data 是空数组。
+	SetMessageOneRead(context.Context, *SetMessageOneReadRequest) (*RawData, error)
 }
 
 func RegisterUserServiceHTTPServer(s *http.Server, srv UserServiceHTTPServer) {
@@ -134,6 +151,7 @@ func RegisterUserServiceHTTPServer(s *http.Server, srv UserServiceHTTPServer) {
 	r.GET("/v1/user/real/info", _UserService_GetRealInfo0_HTTP_Handler(srv))
 	r.GET("/v1/user/unregisr/check", _UserService_GetUnregisterCheck0_HTTP_Handler(srv))
 	r.POST("/v1/user/message/setAllRead", _UserService_SetMessageAllRead0_HTTP_Handler(srv))
+	r.POST("/v1/user/message/setOneRead", _UserService_SetMessageOneRead0_HTTP_Handler(srv))
 }
 
 func _UserService_GetUserInfo0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
@@ -272,6 +290,28 @@ func _UserService_SetMessageAllRead0_HTTP_Handler(srv UserServiceHTTPServer) fun
 	}
 }
 
+func _UserService_SetMessageOneRead0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in SetMessageOneReadRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserServiceSetMessageOneRead)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.SetMessageOneRead(ctx, req.(*SetMessageOneReadRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type UserServiceHTTPClient interface {
 	// GetAddressDefault 用户默认地址
 	//
@@ -368,6 +408,22 @@ type UserServiceHTTPClient interface {
 	// 控制器：`return $this->data([]);` -> data 是**空数组**
 	// 需登录。POST，无请求体。
 	SetMessageAllRead(ctx context.Context, req *SetMessageAllReadRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// SetMessageOneRead 设置单条消息已读
+	//
+	// 原实现 MessageController::setOneRead -> MessageLogic::setOneRead($userId,$params)
+	// 校验：MessageIdValidate -> 'id' => 'require|integer|gt:0'
+	//
+	//	$where = [['message_id','=',$params['id']], ['recv_id','=',$userId], ['is_del','=',0]];
+	//	if (Messages::where($where)->findOrEmpty()->isEmpty()) {
+	//	    setError('消息不存在或无权操作'); return false;
+	//	}
+	//	if ($message['is_read'] == 1) { return true; }      // 已读 -> 短路，不 UPDATE
+	//	Messages::where($where)->update(['is_read' => 1]);
+	//
+	// ⚠️ 传进来的 id 匹配的是 **message_id** 列，不是主键。
+	// ⚠️ 带 recv_id -> 越权防护（不能标记别人的消息）。
+	// 控制器：`return $this->data([]);` -> data 是空数组。
+	SetMessageOneRead(ctx context.Context, req *SetMessageOneReadRequest, opts ...http.CallOption) (rsp *RawData, err error)
 }
 
 type UserServiceHTTPClientImpl struct {
@@ -551,6 +607,34 @@ func (c *UserServiceHTTPClientImpl) SetMessageAllRead(ctx context.Context, in *S
 	pattern := "/v1/user/message/setAllRead"
 	path := binding.EncodeURL(pattern, in, false)
 	opts = append(opts, http.Operation(OperationUserServiceSetMessageAllRead))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SetMessageOneRead 设置单条消息已读
+//
+// 原实现 MessageController::setOneRead -> MessageLogic::setOneRead($userId,$params)
+// 校验：MessageIdValidate -> 'id' => 'require|integer|gt:0'
+//
+//	$where = [['message_id','=',$params['id']], ['recv_id','=',$userId], ['is_del','=',0]];
+//	if (Messages::where($where)->findOrEmpty()->isEmpty()) {
+//	    setError('消息不存在或无权操作'); return false;
+//	}
+//	if ($message['is_read'] == 1) { return true; }      // 已读 -> 短路，不 UPDATE
+//	Messages::where($where)->update(['is_read' => 1]);
+//
+// ⚠️ 传进来的 id 匹配的是 **message_id** 列，不是主键。
+// ⚠️ 带 recv_id -> 越权防护（不能标记别人的消息）。
+// 控制器：`return $this->data([]);` -> data 是空数组。
+func (c *UserServiceHTTPClientImpl) SetMessageOneRead(ctx context.Context, in *SetMessageOneReadRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/user/message/setOneRead"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationUserServiceSetMessageOneRead))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
 	if err != nil {

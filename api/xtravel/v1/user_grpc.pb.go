@@ -26,6 +26,7 @@ const (
 	UserService_GetRealInfo_FullMethodName        = "/xtravel.v1.UserService/GetRealInfo"
 	UserService_GetUnregisterCheck_FullMethodName = "/xtravel.v1.UserService/GetUnregisterCheck"
 	UserService_SetMessageAllRead_FullMethodName  = "/xtravel.v1.UserService/SetMessageAllRead"
+	UserService_SetMessageOneRead_FullMethodName  = "/xtravel.v1.UserService/SetMessageOneRead"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -132,6 +133,22 @@ type UserServiceClient interface {
 	// 控制器：`return $this->data([]);` -> data 是**空数组**
 	// 需登录。POST，无请求体。
 	SetMessageAllRead(ctx context.Context, in *SetMessageAllReadRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 设置单条消息已读
+	//
+	// 原实现 MessageController::setOneRead -> MessageLogic::setOneRead($userId,$params)
+	// 校验：MessageIdValidate -> 'id' => 'require|integer|gt:0'
+	//
+	//	$where = [['message_id','=',$params['id']], ['recv_id','=',$userId], ['is_del','=',0]];
+	//	if (Messages::where($where)->findOrEmpty()->isEmpty()) {
+	//	    setError('消息不存在或无权操作'); return false;
+	//	}
+	//	if ($message['is_read'] == 1) { return true; }      // 已读 -> 短路，不 UPDATE
+	//	Messages::where($where)->update(['is_read' => 1]);
+	//
+	// ⚠️ 传进来的 id 匹配的是 **message_id** 列，不是主键。
+	// ⚠️ 带 recv_id -> 越权防护（不能标记别人的消息）。
+	// 控制器：`return $this->data([]);` -> data 是空数组。
+	SetMessageOneRead(ctx context.Context, in *SetMessageOneReadRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type userServiceClient struct {
@@ -206,6 +223,16 @@ func (c *userServiceClient) SetMessageAllRead(ctx context.Context, in *SetMessag
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, UserService_SetMessageAllRead_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) SetMessageOneRead(ctx context.Context, in *SetMessageOneReadRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, UserService_SetMessageOneRead_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -316,6 +343,22 @@ type UserServiceServer interface {
 	// 控制器：`return $this->data([]);` -> data 是**空数组**
 	// 需登录。POST，无请求体。
 	SetMessageAllRead(context.Context, *SetMessageAllReadRequest) (*RawData, error)
+	// 设置单条消息已读
+	//
+	// 原实现 MessageController::setOneRead -> MessageLogic::setOneRead($userId,$params)
+	// 校验：MessageIdValidate -> 'id' => 'require|integer|gt:0'
+	//
+	//	$where = [['message_id','=',$params['id']], ['recv_id','=',$userId], ['is_del','=',0]];
+	//	if (Messages::where($where)->findOrEmpty()->isEmpty()) {
+	//	    setError('消息不存在或无权操作'); return false;
+	//	}
+	//	if ($message['is_read'] == 1) { return true; }      // 已读 -> 短路，不 UPDATE
+	//	Messages::where($where)->update(['is_read' => 1]);
+	//
+	// ⚠️ 传进来的 id 匹配的是 **message_id** 列，不是主键。
+	// ⚠️ 带 recv_id -> 越权防护（不能标记别人的消息）。
+	// 控制器：`return $this->data([]);` -> data 是空数组。
+	SetMessageOneRead(context.Context, *SetMessageOneReadRequest) (*RawData, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -346,6 +389,9 @@ func (UnimplementedUserServiceServer) GetUnregisterCheck(context.Context, *GetUn
 }
 func (UnimplementedUserServiceServer) SetMessageAllRead(context.Context, *SetMessageAllReadRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetMessageAllRead not implemented")
+}
+func (UnimplementedUserServiceServer) SetMessageOneRead(context.Context, *SetMessageOneReadRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetMessageOneRead not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -494,6 +540,24 @@ func _UserService_SetMessageAllRead_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_SetMessageOneRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetMessageOneReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).SetMessageOneRead(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_SetMessageOneRead_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).SetMessageOneRead(ctx, req.(*SetMessageOneReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -528,6 +592,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetMessageAllRead",
 			Handler:    _UserService_SetMessageAllRead_Handler,
+		},
+		{
+			MethodName: "SetMessageOneRead",
+			Handler:    _UserService_SetMessageOneRead_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

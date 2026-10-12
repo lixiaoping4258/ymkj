@@ -6,7 +6,7 @@
 
 > 改路由后重新生成：`.\scripts\gen-routes.ps1`
 
-**已实现 32 / 131 条（24.4%）；其中免登录 13 条。**
+**已实现 33 / 131 条（25.2%）；其中免登录 13 条。**
 
 ## 免登录（无需 token）
 
@@ -47,6 +47,7 @@
 | GET | `/v1/user/address` | UserService.GetAddressList | `user.proto` |
 | GET | `/v1/user/address/default` | UserService.GetAddressDefault | `user.proto` |
 | GET | `/v1/user/info` | UserService.GetUserInfo | `user.proto` |
+| POST | `/v1/user/message/setAllRead` | UserService.SetMessageAllRead | `user.proto` |
 | GET | `/v1/user/real/info` | UserService.GetRealInfo | `user.proto` |
 | GET | `/v1/user/unregisr/check` | UserService.GetUnregisterCheck | `user.proto` |
 

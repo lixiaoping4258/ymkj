@@ -129,6 +129,28 @@ service UserService {
       body: "*"
     };
   }
+
+  // 设置单条消息已读
+  //
+  // 原实现 MessageController::setOneRead -> MessageLogic::setOneRead($userId,$params)
+  // 校验：MessageIdValidate -> 'id' => 'require|integer|gt:0'
+  //
+  //	$where = [['message_id','=',$params['id']], ['recv_id','=',$userId], ['is_del','=',0]];
+  //	if (Messages::where($where)->findOrEmpty()->isEmpty()) {
+  //	    setError('消息不存在或无权操作'); return false;
+  //	}
+  //	if ($message['is_read'] == 1) { return true; }      // 已读 -> 短路，不 UPDATE
+  //	Messages::where($where)->update(['is_read' => 1]);
+  //
+  // ⚠️ 传进来的 id 匹配的是 **message_id** 列，不是主键。
+  // ⚠️ 带 recv_id -> 越权防护（不能标记别人的消息）。
+  // 控制器：`return $this->data([]);` -> data 是空数组。
+  rpc SetMessageOneRead(SetMessageOneReadRequest) returns (RawData) {
+    option (google.api.http) = {
+      post: "/v1/user/message/setOneRead"
+      body: "*"
+    };
+  }
 }
 
 message GetUserInfoRequest {}
@@ -186,6 +208,10 @@ message GetUserNoticeNewRequest {}
 
 message GetAddressDefaultRequest {
   // 对应 `$params['id']`；> 0 时走精准查询，否则查默认地址
+// ⚠️ 用 Int64Value 而不是 int64 —— 必须区分"没传 id"与"id=0"：
+  // 规则按 require -> integer -> gt:0 顺序执行，返回**第一个**失败的文案：
+  //   没传 -> "消息ID不能为空"；id=0 -> "消息ID必须大于0"
+  // 用普通 int64 时两者都是 0，无法区分。
   int64 id = 1 [json_name = "id"];
 }
 
@@ -225,3 +251,12 @@ message GetUnregisterCheckReply {
 }
 
 message SetMessageAllReadRequest {}
+
+message SetMessageOneReadRequest {
+  // 对应 `$params['id']`；规则 require|integer|gt:0。⚠️ 匹配的是 x_messages.message_id
+// ⚠️ 用 Int64Value 而不是 int64 —— 必须区分"没传 id"与"id=0"：
+  // 规则按 require -> integer -> gt:0 顺序执行，返回**第一个**失败的文案：
+  //   没传 -> "消息ID不能为空"；id=0 -> "消息ID必须大于0"
+  // 用普通 int64 时两者都是 0，无法区分。
+  google.protobuf.Int64Value id = 1 [json_name = "id"];
+}

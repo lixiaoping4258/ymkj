@@ -222,3 +222,41 @@ func (s *UserService) SetMessageAllRead(
 	// 对应 `$this->data([])` —— 空数组，不是 null 也不是 {}
 	return &v1.RawData{Json: []byte("[]")}, nil
 }
+
+// SetMessageOneRead 对应 MessageController::setOneRead（POST /v1/user/message/setOneRead）。
+//
+// 原实现：
+//
+//	$params = (new MessageIdValidate())->post()->goCheck();   // id: require|integer|gt:0
+//	$data = MessageLogic::setOneRead($this->userId, $params);
+//	if ($data === false) { return $this->fail(MessageLogic::getError()); }
+//	return $this->data([]);
+//
+// ⚠️ 校验失败时（id 缺失 / 非整数 / <=0）应当返回校验器的错误信息。
+//
+//	这里按规则手工复刻：id <= 0 视为校验失败。
+//	TODO: 精确的错误文案需读 BaseValidate 的默认 message（尚未确认），
+//	当前返回的是框架通用文案。**这一点在接入前需要补**。
+func (s *UserService) SetMessageOneRead(
+	ctx context.Context, req *v1.SetMessageOneReadRequest,
+) (*v1.RawData, error) {
+	// 逐字对应 MessageIdValidate 的三条文案，并复刻它们的**判定顺序**
+	// （require -> integer -> gt:0，返回第一个失败的）：
+	//   'id.require' => '消息ID不能为空'
+	//   'id.integer' => '消息ID不正确'
+	//   'id.gt'      => '消息ID必须大于0'
+	//
+	// ⚠️ `integer` 这条在 Go 侧由 protojson 的解码承担（非整数会解码失败），
+	//    所以这里不需要再判；但文案不同，接前若发现前端依赖该文案需另作处理。
+	if req.Id == nil {
+		return nil, bizFail(biz.NewBizError("消息ID不能为空"))
+	}
+	if req.Id.Value <= 0 {
+		return nil, bizFail(biz.NewBizError("消息ID必须大于0"))
+	}
+	userID := biz.UserIDFromContext(ctx)
+	if err := s.msgRead.SetOneRead(ctx, uint32(userID), req.Id.Value); err != nil {
+		return nil, bizFail(biz.NewBizError(err.Error()))
+	}
+	return &v1.RawData{Json: []byte("[]")}, nil
+}

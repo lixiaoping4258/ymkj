@@ -331,6 +331,12 @@ func (*GetUserNoticeNewRequest) Descriptor() ([]byte, []int) {
 type GetAddressDefaultRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 对应 `$params['id']`；> 0 时走精准查询，否则查默认地址
+	// ⚠️ 用 Int64Value 而不是 int64 —— 必须区分"没传 id"与"id=0"：
+	// 规则按 require -> integer -> gt:0 顺序执行，返回**第一个**失败的文案：
+	//
+	//	没传 -> "消息ID不能为空"；id=0 -> "消息ID必须大于0"
+	//
+	// 用普通 int64 时两者都是 0，无法区分。
 	Id            int64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -722,6 +728,57 @@ func (*SetMessageAllReadRequest) Descriptor() ([]byte, []int) {
 	return file_api_xtravel_v1_user_proto_rawDescGZIP(), []int{11}
 }
 
+type SetMessageOneReadRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 对应 `$params['id']`；规则 require|integer|gt:0。⚠️ 匹配的是 x_messages.message_id
+	// ⚠️ 用 Int64Value 而不是 int64 —— 必须区分"没传 id"与"id=0"：
+	// 规则按 require -> integer -> gt:0 顺序执行，返回**第一个**失败的文案：
+	//
+	//	没传 -> "消息ID不能为空"；id=0 -> "消息ID必须大于0"
+	//
+	// 用普通 int64 时两者都是 0，无法区分。
+	Id            *wrapperspb.Int64Value `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetMessageOneReadRequest) Reset() {
+	*x = SetMessageOneReadRequest{}
+	mi := &file_api_xtravel_v1_user_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetMessageOneReadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetMessageOneReadRequest) ProtoMessage() {}
+
+func (x *SetMessageOneReadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_user_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetMessageOneReadRequest.ProtoReflect.Descriptor instead.
+func (*SetMessageOneReadRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_user_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *SetMessageOneReadRequest) GetId() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.Id
+	}
+	return nil
+}
+
 var File_api_xtravel_v1_user_proto protoreflect.FileDescriptor
 
 const file_api_xtravel_v1_user_proto_rawDesc = "" +
@@ -773,7 +830,9 @@ const file_api_xtravel_v1_user_proto_rawDesc = "" +
 	"\x17GetUnregisterCheckReply\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\x05R\x05state\x12\x18\n" +
 	"\aerrWord\x18\x02 \x03(\tR\aerrWord\"\x1a\n" +
-	"\x18SetMessageAllReadRequest2\xa9\x06\n" +
+	"\x18SetMessageAllReadRequest\"G\n" +
+	"\x18SetMessageOneReadRequest\x12+\n" +
+	"\x02id\x18\x01 \x01(\v2\x1b.google.protobuf.Int64ValueR\x02id2\xa1\a\n" +
 	"\vUserService\x12b\n" +
 	"\vGetUserInfo\x12\x1e.xtravel.v1.GetUserInfoRequest\x1a\x1c.xtravel.v1.GetUserInfoReply\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/user/info\x12l\n" +
 	"\x10GetUserNoticeNew\x12#.xtravel.v1.GetUserNoticeNewRequest\x1a\x13.xtravel.v1.RawData\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/user/notice/getNew\x12\x7f\n" +
@@ -781,7 +840,8 @@ const file_api_xtravel_v1_user_proto_rawDesc = "" +
 	"\x0eGetAddressList\x12!.xtravel.v1.GetAddressListRequest\x1a\x13.xtravel.v1.RawData\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/user/address\x12g\n" +
 	"\vGetRealInfo\x12\x1e.xtravel.v1.GetRealInfoRequest\x1a\x1c.xtravel.v1.GetRealInfoReply\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/user/real/info\x12\x81\x01\n" +
 	"\x12GetUnregisterCheck\x12%.xtravel.v1.GetUnregisterCheckRequest\x1a#.xtravel.v1.GetUnregisterCheckReply\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/user/unregisr/check\x12v\n" +
-	"\x11SetMessageAllRead\x12$.xtravel.v1.SetMessageAllReadRequest\x1a\x13.xtravel.v1.RawData\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/user/message/setAllReadB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
+	"\x11SetMessageAllRead\x12$.xtravel.v1.SetMessageAllReadRequest\x1a\x13.xtravel.v1.RawData\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/user/message/setAllRead\x12v\n" +
+	"\x11SetMessageOneRead\x12$.xtravel.v1.SetMessageOneReadRequest\x1a\x13.xtravel.v1.RawData\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/user/message/setOneReadB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
 
 var (
 	file_api_xtravel_v1_user_proto_rawDescOnce sync.Once
@@ -795,7 +855,7 @@ func file_api_xtravel_v1_user_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_user_proto_rawDescData
 }
 
-var file_api_xtravel_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_api_xtravel_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_api_xtravel_v1_user_proto_goTypes = []any{
 	(*GetUserInfoRequest)(nil),        // 0: xtravel.v1.GetUserInfoRequest
 	(*GetUserInfoReply)(nil),          // 1: xtravel.v1.GetUserInfoReply
@@ -809,36 +869,41 @@ var file_api_xtravel_v1_user_proto_goTypes = []any{
 	(*GetUnregisterCheckRequest)(nil), // 9: xtravel.v1.GetUnregisterCheckRequest
 	(*GetUnregisterCheckReply)(nil),   // 10: xtravel.v1.GetUnregisterCheckReply
 	(*SetMessageAllReadRequest)(nil),  // 11: xtravel.v1.SetMessageAllReadRequest
-	(*wrapperspb.StringValue)(nil),    // 12: google.protobuf.StringValue
-	(*wrapperspb.Int32Value)(nil),     // 13: google.protobuf.Int32Value
-	(*RawData)(nil),                   // 14: xtravel.v1.RawData
+	(*SetMessageOneReadRequest)(nil),  // 12: xtravel.v1.SetMessageOneReadRequest
+	(*wrapperspb.StringValue)(nil),    // 13: google.protobuf.StringValue
+	(*wrapperspb.Int32Value)(nil),     // 14: google.protobuf.Int32Value
+	(*wrapperspb.Int64Value)(nil),     // 15: google.protobuf.Int64Value
+	(*RawData)(nil),                   // 16: xtravel.v1.RawData
 }
 var file_api_xtravel_v1_user_proto_depIdxs = []int32{
-	12, // 0: xtravel.v1.GetUserInfoReply.user_money:type_name -> google.protobuf.StringValue
-	12, // 1: xtravel.v1.GetUserInfoReply.opt_pwd:type_name -> google.protobuf.StringValue
+	13, // 0: xtravel.v1.GetUserInfoReply.user_money:type_name -> google.protobuf.StringValue
+	13, // 1: xtravel.v1.GetUserInfoReply.opt_pwd:type_name -> google.protobuf.StringValue
 	2,  // 2: xtravel.v1.GetUserInfoReply.user_code_auth:type_name -> xtravel.v1.UserCodeAuth
-	12, // 3: xtravel.v1.GetRealInfoReply.birthday:type_name -> google.protobuf.StringValue
-	13, // 4: xtravel.v1.GetRealInfoReply.gender:type_name -> google.protobuf.Int32Value
-	12, // 5: xtravel.v1.GetRealInfoReply.address:type_name -> google.protobuf.StringValue
-	0,  // 6: xtravel.v1.UserService.GetUserInfo:input_type -> xtravel.v1.GetUserInfoRequest
-	3,  // 7: xtravel.v1.UserService.GetUserNoticeNew:input_type -> xtravel.v1.GetUserNoticeNewRequest
-	4,  // 8: xtravel.v1.UserService.GetAddressDefault:input_type -> xtravel.v1.GetAddressDefaultRequest
-	6,  // 9: xtravel.v1.UserService.GetAddressList:input_type -> xtravel.v1.GetAddressListRequest
-	7,  // 10: xtravel.v1.UserService.GetRealInfo:input_type -> xtravel.v1.GetRealInfoRequest
-	9,  // 11: xtravel.v1.UserService.GetUnregisterCheck:input_type -> xtravel.v1.GetUnregisterCheckRequest
-	11, // 12: xtravel.v1.UserService.SetMessageAllRead:input_type -> xtravel.v1.SetMessageAllReadRequest
-	1,  // 13: xtravel.v1.UserService.GetUserInfo:output_type -> xtravel.v1.GetUserInfoReply
-	14, // 14: xtravel.v1.UserService.GetUserNoticeNew:output_type -> xtravel.v1.RawData
-	5,  // 15: xtravel.v1.UserService.GetAddressDefault:output_type -> xtravel.v1.GetAddressDefaultReply
-	14, // 16: xtravel.v1.UserService.GetAddressList:output_type -> xtravel.v1.RawData
-	8,  // 17: xtravel.v1.UserService.GetRealInfo:output_type -> xtravel.v1.GetRealInfoReply
-	10, // 18: xtravel.v1.UserService.GetUnregisterCheck:output_type -> xtravel.v1.GetUnregisterCheckReply
-	14, // 19: xtravel.v1.UserService.SetMessageAllRead:output_type -> xtravel.v1.RawData
-	13, // [13:20] is the sub-list for method output_type
-	6,  // [6:13] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	13, // 3: xtravel.v1.GetRealInfoReply.birthday:type_name -> google.protobuf.StringValue
+	14, // 4: xtravel.v1.GetRealInfoReply.gender:type_name -> google.protobuf.Int32Value
+	13, // 5: xtravel.v1.GetRealInfoReply.address:type_name -> google.protobuf.StringValue
+	15, // 6: xtravel.v1.SetMessageOneReadRequest.id:type_name -> google.protobuf.Int64Value
+	0,  // 7: xtravel.v1.UserService.GetUserInfo:input_type -> xtravel.v1.GetUserInfoRequest
+	3,  // 8: xtravel.v1.UserService.GetUserNoticeNew:input_type -> xtravel.v1.GetUserNoticeNewRequest
+	4,  // 9: xtravel.v1.UserService.GetAddressDefault:input_type -> xtravel.v1.GetAddressDefaultRequest
+	6,  // 10: xtravel.v1.UserService.GetAddressList:input_type -> xtravel.v1.GetAddressListRequest
+	7,  // 11: xtravel.v1.UserService.GetRealInfo:input_type -> xtravel.v1.GetRealInfoRequest
+	9,  // 12: xtravel.v1.UserService.GetUnregisterCheck:input_type -> xtravel.v1.GetUnregisterCheckRequest
+	11, // 13: xtravel.v1.UserService.SetMessageAllRead:input_type -> xtravel.v1.SetMessageAllReadRequest
+	12, // 14: xtravel.v1.UserService.SetMessageOneRead:input_type -> xtravel.v1.SetMessageOneReadRequest
+	1,  // 15: xtravel.v1.UserService.GetUserInfo:output_type -> xtravel.v1.GetUserInfoReply
+	16, // 16: xtravel.v1.UserService.GetUserNoticeNew:output_type -> xtravel.v1.RawData
+	5,  // 17: xtravel.v1.UserService.GetAddressDefault:output_type -> xtravel.v1.GetAddressDefaultReply
+	16, // 18: xtravel.v1.UserService.GetAddressList:output_type -> xtravel.v1.RawData
+	8,  // 19: xtravel.v1.UserService.GetRealInfo:output_type -> xtravel.v1.GetRealInfoReply
+	10, // 20: xtravel.v1.UserService.GetUnregisterCheck:output_type -> xtravel.v1.GetUnregisterCheckReply
+	16, // 21: xtravel.v1.UserService.SetMessageAllRead:output_type -> xtravel.v1.RawData
+	16, // 22: xtravel.v1.UserService.SetMessageOneRead:output_type -> xtravel.v1.RawData
+	15, // [15:23] is the sub-list for method output_type
+	7,  // [7:15] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_api_xtravel_v1_user_proto_init() }
@@ -853,7 +918,7 @@ func file_api_xtravel_v1_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_user_proto_rawDesc), len(file_api_xtravel_v1_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
