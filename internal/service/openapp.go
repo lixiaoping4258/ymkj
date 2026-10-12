@@ -15,10 +15,11 @@ type OpenAppService struct {
 	authMy *biz.AuthMyUserUsecase
 	authU  *biz.AuthUserUsecase
 	authUD *biz.AuthUserDetailUsecase
+	arch   *biz.AppArchiveUsecase
 }
 
-func NewOpenAppService(app *biz.OpenAppUsecase, authMy *biz.AuthMyUserUsecase, authU *biz.AuthUserUsecase, authUD *biz.AuthUserDetailUsecase) *OpenAppService {
-	return &OpenAppService{app: app, authMy: authMy, authU: authU, authUD: authUD}
+func NewOpenAppService(app *biz.OpenAppUsecase, authMy *biz.AuthMyUserUsecase, authU *biz.AuthUserUsecase, authUD *biz.AuthUserDetailUsecase, arch *biz.AppArchiveUsecase) *OpenAppService {
+	return &OpenAppService{app: app, authMy: authMy, authU: authU, authUD: authUD, arch: arch}
 }
 
 // GetAppList 对应 OpenAppController::appList（GET /v1/open/appList）。
@@ -279,6 +280,54 @@ func (s *OpenAppService) GetAuthUserDetail(
 		}
 	}
 	body, merr := biz.MarshalNoHTMLEscape(out)
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
+}
+
+// GetAppArchiveList 对应 OpenAppController::appArchiveList（GET /v1/open/appArchiveList）。
+//
+// 原实现：
+//
+//	(new AppArchiveListValidate())->get()->goCheck();     // app_id => require
+//	return $this->dataLists(new AppArchiveLists());
+func (s *OpenAppService) GetAppArchiveList(
+	ctx context.Context, req *v1.GetAppArchiveListRequest,
+) (*v1.RawData, error) {
+	if req.AppId == nil {
+		return nil, bizFail(biz.NewBizError("一级平台ID不能为空"))
+	}
+	q := biz.AppArchiveQuery{AppID: req.AppId.Value}
+	if req.Id != nil {
+		q.ID = req.Id.Value
+	}
+	q.CollectionID = req.GetCollectionId()
+
+	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
+	ld, err := s.arch.List(ctx, q, p)
+	if err != nil {
+		return nil, err
+	}
+	items, _ := ld.Lists.([]biz.AppArchiveItem)
+	rows := make([]map[string]any, 0, len(items))
+	for _, x := range items {
+		// 以 SELECT * 的列为基础，再塞两个嵌套对象
+		row := make(map[string]any, len(x.Columns)+2)
+		for k, v := range x.Columns {
+			row[k] = v
+		}
+		row["on_sale"] = x.OnSale   // 查不到时是 []（空数组）
+		row["app_info"] = x.AppInfo // `?? []` -> 查不到时也是 []
+		rows = append(rows, row)
+	}
+	body, merr := biz.MarshalNoHTMLEscape(map[string]any{
+		"lists":     rows,
+		"count":     ld.Count,
+		"page_no":   ld.PageNo,
+		"page_size": ld.PageSize,
+		"extend":    ld.Extend,
+	})
 	if merr != nil {
 		return nil, merr
 	}

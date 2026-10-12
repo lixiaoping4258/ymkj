@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	OpenAppService_GetAppList_FullMethodName        = "/xtravel.v1.OpenAppService/GetAppList"
+	OpenAppService_GetAppArchiveList_FullMethodName = "/xtravel.v1.OpenAppService/GetAppArchiveList"
 	OpenAppService_GetAuthUserDetail_FullMethodName = "/xtravel.v1.OpenAppService/GetAuthUserDetail"
 	OpenAppService_GetAuthUserList_FullMethodName   = "/xtravel.v1.OpenAppService/GetAuthUserList"
 	OpenAppService_GetAuthMyUserList_FullMethodName = "/xtravel.v1.OpenAppService/GetAuthMyUserList"
@@ -61,6 +62,23 @@ type OpenAppServiceClient interface {
 	//
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 一级平台艺术品档案列表（分页）
+	//
+	// 原实现 OpenAppController::appArchiveList -> `$this->dataLists(new AppArchiveLists())`
+	// 校验 AppArchiveListValidate: app_id => require
+	//
+	//	where: state=1 AND app_id=? [+ id=?] [+ collection_id=?]
+	//	order: id desc；**没有 field()** -> SELECT *（x_app_archive 有 18 列）
+	//
+	// 每行额外两个嵌套对象：
+	//
+	//	on_sale  = MarketListSales::where(app_id,archive_id)->find()->toArray() 或 []
+	//	app_info = $appMap[app_id] ?? []   <- ⚠️ 有 ??，查不到是 **[]**（authUserList 那边没有 ??，是 null）
+	//
+	// ⚠️ 原文对 on_sale 是 **N+1**（每行一次 find）；Go 侧批量取"每组第一行"，
+	//
+	//	输出形态不变，属纯性能优化。
+	GetAppArchiveList(ctx context.Context, in *GetAppArchiveListRequest, opts ...grpc.CallOption) (*RawData, error)
 	// 一级平台授权用户详情
 	//
 	// 原实现 OpenAppController::authUserDetail -> `$this->data((new AppUserLists())->detail())`
@@ -131,6 +149,16 @@ func (c *openAppServiceClient) GetAppList(ctx context.Context, in *GetAppListReq
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, OpenAppService_GetAppList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openAppServiceClient) GetAppArchiveList(ctx context.Context, in *GetAppArchiveListRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, OpenAppService_GetAppArchiveList_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -221,6 +249,23 @@ type OpenAppServiceServer interface {
 	//
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 一级平台艺术品档案列表（分页）
+	//
+	// 原实现 OpenAppController::appArchiveList -> `$this->dataLists(new AppArchiveLists())`
+	// 校验 AppArchiveListValidate: app_id => require
+	//
+	//	where: state=1 AND app_id=? [+ id=?] [+ collection_id=?]
+	//	order: id desc；**没有 field()** -> SELECT *（x_app_archive 有 18 列）
+	//
+	// 每行额外两个嵌套对象：
+	//
+	//	on_sale  = MarketListSales::where(app_id,archive_id)->find()->toArray() 或 []
+	//	app_info = $appMap[app_id] ?? []   <- ⚠️ 有 ??，查不到是 **[]**（authUserList 那边没有 ??，是 null）
+	//
+	// ⚠️ 原文对 on_sale 是 **N+1**（每行一次 find）；Go 侧批量取"每组第一行"，
+	//
+	//	输出形态不变，属纯性能优化。
+	GetAppArchiveList(context.Context, *GetAppArchiveListRequest) (*RawData, error)
 	// 一级平台授权用户详情
 	//
 	// 原实现 OpenAppController::authUserDetail -> `$this->data((new AppUserLists())->detail())`
@@ -290,6 +335,9 @@ type UnimplementedOpenAppServiceServer struct{}
 func (UnimplementedOpenAppServiceServer) GetAppList(context.Context, *GetAppListRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAppList not implemented")
 }
+func (UnimplementedOpenAppServiceServer) GetAppArchiveList(context.Context, *GetAppArchiveListRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAppArchiveList not implemented")
+}
 func (UnimplementedOpenAppServiceServer) GetAuthUserDetail(context.Context, *GetAuthUserDetailRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAuthUserDetail not implemented")
 }
@@ -340,6 +388,24 @@ func _OpenAppService_GetAppList_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OpenAppServiceServer).GetAppList(ctx, req.(*GetAppListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenAppService_GetAppArchiveList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAppArchiveListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenAppServiceServer).GetAppArchiveList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OpenAppService_GetAppArchiveList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenAppServiceServer).GetAppArchiveList(ctx, req.(*GetAppArchiveListRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -444,6 +510,10 @@ var OpenAppService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAppList",
 			Handler:    _OpenAppService_GetAppList_Handler,
+		},
+		{
+			MethodName: "GetAppArchiveList",
+			Handler:    _OpenAppService_GetAppArchiveList_Handler,
 		},
 		{
 			MethodName: "GetAuthUserDetail",

@@ -39,6 +39,24 @@ service OpenAppService {
   //    原项目的不一致，照搬。
   // ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
   // ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+  // 一级平台艺术品档案列表（分页）
+  //
+  // 原实现 OpenAppController::appArchiveList -> `$this->dataLists(new AppArchiveLists())`
+  // 校验 AppArchiveListValidate: app_id => require
+  //
+  //	where: state=1 AND app_id=? [+ id=?] [+ collection_id=?]
+  //	order: id desc；**没有 field()** -> SELECT *（x_app_archive 有 18 列）
+  //
+  // 每行额外两个嵌套对象：
+  //	on_sale  = MarketListSales::where(app_id,archive_id)->find()->toArray() 或 []
+  //	app_info = $appMap[app_id] ?? []   <- ⚠️ 有 ??，查不到是 **[]**（authUserList 那边没有 ??，是 null）
+  //
+  // ⚠️ 原文对 on_sale 是 **N+1**（每行一次 find）；Go 侧批量取"每组第一行"，
+  //    输出形态不变，属纯性能优化。
+  rpc GetAppArchiveList(GetAppArchiveListRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/open/appArchiveList"};
+  }
+
   // 一级平台授权用户详情
   //
   // 原实现 OpenAppController::authUserDetail -> `$this->data((new AppUserLists())->detail())`
@@ -131,4 +149,12 @@ message GetAuthUserDetailRequest {
   google.protobuf.Int64Value app_id = 1 [json_name = "app_id"];
   // ⚠️ 实际查询用的是这个（`$this->params['app_auth_id']`）
   google.protobuf.Int64Value app_auth_id = 2 [json_name = "app_auth_id"];
+}
+message GetAppArchiveListRequest {
+  // 校验用；规则 require（'一级平台ID不能为空'）。也用于 on_sale 的 app_id 条件
+  google.protobuf.Int64Value app_id = 1 [json_name = "app_id"];
+  // 可选：按档案主键筛（!empty 才生效）
+  google.protobuf.Int64Value id = 2 [json_name = "id"];
+  // 可选：按藏品筛（!empty 才生效）
+  string collection_id = 3 [json_name = "collection_id"];
 }
