@@ -1185,6 +1185,7 @@ if ($result['is_read'] == 0) {
 | [`docs/RECON-user-domain.md`](docs/RECON-user-domain.md) | `user.php` 21 条路由逐个标注复杂度 + `center` 的 6 个坑 |
 | [`docs/RECON-user-message.md`](docs/RECON-user-message.md) | `GET /v1/user/message` —— 读接口藏写操作 + 死代码过滤 + INNER JOIN |
 | [`docs/RECON-user-address-create.md`](docs/RECON-user-address-create.md) | `POST /v1/user/address/create` —— 事务 + Id::gen + 两个待补项 |
+| [`docs/RECON-open-authuserlist.md`](docs/RECON-open-authuserlist.md) | `GET /v1/open/authUserList` —— **过期过滤被注释掉** + count 无 JOIN + 两种掩码长度 |
 | [`docs/API-SAMPLES.md`](docs/API-SAMPLES.md) | 早期 14 条已迁接口的真实请求/响应样例 |
 ### `GET /v1/market/purchase/price_range`
 
@@ -1319,6 +1320,28 @@ ThinkPHP 的 `hasWhere('rel', ...)` 和 `join(...)` 默认都是 **INNER JOIN**�
 `AuthMyUserLists` 的三表 join。
 
 ⚠️ **不要改成 LEFT JOIN** —— 那会让"孤儿行"突然出现，总数也对不上。
+
+**关于 join 的表名前缀（已用真实 PHP `fetchSql(true)` 验证）**：
+
+ThinkPHP 的 `join()` **会自动补表前缀，但只在缺前缀时补**：
+
+```
+join('user u')    -> INNER JOIN `x_user` `u`      ← 补了前缀
+join('x_app App') -> INNER JOIN `x_app` `App`     ← 没重复补
+```
+
+实测脚本（可复用）：
+
+```php
+require 'D:/work/phpstudy_pro/WWW/xTravel/vendor/autoload.php';
+(new \think\App())->initialize();
+echo \think\facade\Db::name('app_auth')->alias('app_auth')
+    ->join('user u','app_auth.uid = u.id')
+    ->field('app_auth.id,u.mobile')->fetchSql(true)->select();
+```
+
+**所以 Go 侧一律用 `r.prefix + "user"` / `r.prefix + "app"`，
+不去纠结原文写的是 `'user u'` 还是 `'x_app App'` —— 两者都等于加了前缀的真实表名。**
 
 ### 3. `lists()` 与 `count()` 的条件可能**故意不一致**
 
