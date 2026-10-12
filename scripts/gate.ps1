@@ -66,6 +66,12 @@ Step 'gofmt -l（有未格式化文件即失败）' {
     Write-Output "(无未格式化文件)"
 }
 
+Step 'scripts/audit-structs.ps1（结构体字段必须有赋值）' {
+    $r = & "$PSScriptRoot\audit-structs.ps1" *>&1
+    $r | Where-Object { $_ -cmatch 'AUDIT|漏赋值' } | ForEach-Object { Write-Output $_ }
+    if (($r | Out-String) -cmatch 'AUDIT PASS') { } else { throw "audit-structs: 有字段漏赋值" }
+}
+
 Step 'go build ./...' { go build ./... }
 Step 'go vet ./...' { go vet ./... }
 Step 'go test ./... -count=1' { go test ./... -count=1 }
@@ -87,7 +93,7 @@ if (-not $SkipSmoke) {
     }
 }
 
-$ran = if ($SkipSmoke) { 'gofmt / build / vet / test' } else { 'gofmt / build / vet / test / smoke' }
+$ran = if ($SkipSmoke) { 'gofmt / audit-structs / build / vet / test' } else { 'gofmt / audit-structs / build / vet / test / smoke' }
 Write-Host ""
 if ($failed.Count -gt 0) {
     Write-Host "GATE FAIL: $($failed -join ', ')" -ForegroundColor Red
