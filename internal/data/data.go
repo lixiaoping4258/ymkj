@@ -72,6 +72,8 @@ var ProviderSet = wire.NewSet(
 	NewOpenAppRepo,
 	// 同一个 *openAppRepo 同时满足 biz.OpenAppRepo 与 biz.OpenAppAuthRepo
 	wire.Bind(new(biz.OpenAppRepo), new(*openAppRepo)),
+	NewAuthMyUserRepo,
+	wire.Bind(new(biz.AuthMyUserRepo), new(*authMyUserRepo)),
 	wire.Bind(new(biz.OpenAppAuthRepo), new(*openAppRepo)),
 )
 

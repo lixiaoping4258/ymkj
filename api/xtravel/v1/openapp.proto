@@ -39,6 +39,20 @@ service OpenAppService {
   //    原项目的不一致，照搬。
   // ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
   // ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+  // 我授权的三方用户列表（分页）
+  //
+  // 原实现 OpenAppController::authMyUserList -> `$this->dataLists(new AuthMyUserLists())`
+  //
+  //	三张表：AppAuth JOIN x_app App JOIN x_user User
+  //	order: AppAuth.expire asc
+  //	7 列：id, app_id, app_nickname, app_avatar, expire, app_name, mobile
+  //	mobile 经 substr_replace($m,'****',3,6) 掩码（**结果比原串短 2 位**）
+  //
+  // 🔴 count() 只有**两个** JOIN（少 x_user）—— 原项目的不一致，刻意照搬。
+  rpc GetAuthMyUserList(GetAuthMyUserListRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/open/authMyUserList"};
+  }
+
   // 获取一级平台授权地址
   //
   // 原实现 OpenAppController::authUrl -> OpenAppLogic::authUrl($appId,$redirect_url)：
@@ -73,3 +87,4 @@ message GetAuthUrlRequest {
   // ⚠️ 原实现**不做 URL 编码**，直接拼进 auth_url
   string redirect_url = 2 [json_name = "redirect_url"];
 }
+message GetAuthMyUserListRequest {}

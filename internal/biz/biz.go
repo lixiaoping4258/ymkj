@@ -42,4 +42,5 @@ var ProviderSet = wire.NewSet(
 	NewPayChannelUsecase,
 	NewBalanceQueryUsecase,
 	NewOpenAppUsecase,
+	NewAuthMyUserUsecase,
 )

@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	OpenAppService_GetAppList_FullMethodName   = "/xtravel.v1.OpenAppService/GetAppList"
-	OpenAppService_GetAuthUrl_FullMethodName   = "/xtravel.v1.OpenAppService/GetAuthUrl"
-	OpenAppService_GetAppDetail_FullMethodName = "/xtravel.v1.OpenAppService/GetAppDetail"
+	OpenAppService_GetAppList_FullMethodName        = "/xtravel.v1.OpenAppService/GetAppList"
+	OpenAppService_GetAuthMyUserList_FullMethodName = "/xtravel.v1.OpenAppService/GetAuthMyUserList"
+	OpenAppService_GetAuthUrl_FullMethodName        = "/xtravel.v1.OpenAppService/GetAuthUrl"
+	OpenAppService_GetAppDetail_FullMethodName      = "/xtravel.v1.OpenAppService/GetAppDetail"
 )
 
 // OpenAppServiceClient is the client API for OpenAppService service.
@@ -58,6 +59,17 @@ type OpenAppServiceClient interface {
 	//
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 我授权的三方用户列表（分页）
+	//
+	// 原实现 OpenAppController::authMyUserList -> `$this->dataLists(new AuthMyUserLists())`
+	//
+	//	三张表：AppAuth JOIN x_app App JOIN x_user User
+	//	order: AppAuth.expire asc
+	//	7 列：id, app_id, app_nickname, app_avatar, expire, app_name, mobile
+	//	mobile 经 substr_replace($m,'****',3,6) 掩码（**结果比原串短 2 位**）
+	//
+	// 🔴 count() 只有**两个** JOIN（少 x_user）—— 原项目的不一致，刻意照搬。
+	GetAuthMyUserList(ctx context.Context, in *GetAuthMyUserListRequest, opts ...grpc.CallOption) (*RawData, error)
 	// 获取一级平台授权地址
 	//
 	// 原实现 OpenAppController::authUrl -> OpenAppLogic::authUrl($appId,$redirect_url)：
@@ -85,6 +97,16 @@ func (c *openAppServiceClient) GetAppList(ctx context.Context, in *GetAppListReq
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, OpenAppService_GetAppList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openAppServiceClient) GetAuthMyUserList(ctx context.Context, in *GetAuthMyUserListRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, OpenAppService_GetAuthMyUserList_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +167,17 @@ type OpenAppServiceServer interface {
 	//
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 我授权的三方用户列表（分页）
+	//
+	// 原实现 OpenAppController::authMyUserList -> `$this->dataLists(new AuthMyUserLists())`
+	//
+	//	三张表：AppAuth JOIN x_app App JOIN x_user User
+	//	order: AppAuth.expire asc
+	//	7 列：id, app_id, app_nickname, app_avatar, expire, app_name, mobile
+	//	mobile 经 substr_replace($m,'****',3,6) 掩码（**结果比原串短 2 位**）
+	//
+	// 🔴 count() 只有**两个** JOIN（少 x_user）—— 原项目的不一致，刻意照搬。
+	GetAuthMyUserList(context.Context, *GetAuthMyUserListRequest) (*RawData, error)
 	// 获取一级平台授权地址
 	//
 	// 原实现 OpenAppController::authUrl -> OpenAppLogic::authUrl($appId,$redirect_url)：
@@ -170,6 +203,9 @@ type UnimplementedOpenAppServiceServer struct{}
 
 func (UnimplementedOpenAppServiceServer) GetAppList(context.Context, *GetAppListRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAppList not implemented")
+}
+func (UnimplementedOpenAppServiceServer) GetAuthMyUserList(context.Context, *GetAuthMyUserListRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAuthMyUserList not implemented")
 }
 func (UnimplementedOpenAppServiceServer) GetAuthUrl(context.Context, *GetAuthUrlRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAuthUrl not implemented")
@@ -212,6 +248,24 @@ func _OpenAppService_GetAppList_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OpenAppServiceServer).GetAppList(ctx, req.(*GetAppListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenAppService_GetAuthMyUserList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAuthMyUserListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenAppServiceServer).GetAuthMyUserList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OpenAppService_GetAuthMyUserList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenAppServiceServer).GetAuthMyUserList(ctx, req.(*GetAuthMyUserListRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -262,6 +316,10 @@ var OpenAppService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAppList",
 			Handler:    _OpenAppService_GetAppList_Handler,
+		},
+		{
+			MethodName: "GetAuthMyUserList",
+			Handler:    _OpenAppService_GetAuthMyUserList_Handler,
 		},
 		{
 			MethodName: "GetAuthUrl",

@@ -21,6 +21,7 @@ const _ = http.SupportPackageIsVersion1
 
 const OperationOpenAppServiceGetAppDetail = "/xtravel.v1.OpenAppService/GetAppDetail"
 const OperationOpenAppServiceGetAppList = "/xtravel.v1.OpenAppService/GetAppList"
+const OperationOpenAppServiceGetAuthMyUserList = "/xtravel.v1.OpenAppService/GetAuthMyUserList"
 const OperationOpenAppServiceGetAuthUrl = "/xtravel.v1.OpenAppService/GetAuthUrl"
 
 type OpenAppServiceHTTPServer interface {
@@ -36,7 +37,7 @@ type OpenAppServiceHTTPServer interface {
 	//
 	// ⚠️ logo 的**空值会被换成空串**（不是 null），非空则拼域名。
 	GetAppList(context.Context, *GetAppListRequest) (*RawData, error)
-	// GetAuthUrl 三方平台详情
+	// GetAuthMyUserList 三方平台详情
 	//
 	// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
 	//
@@ -48,7 +49,18 @@ type OpenAppServiceHTTPServer interface {
 	//    原项目的不一致，照搬。
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
-	// 获取一级平台授权地址
+	// 我授权的三方用户列表（分页）
+	//
+	// 原实现 OpenAppController::authMyUserList -> `$this->dataLists(new AuthMyUserLists())`
+	//
+	//	三张表：AppAuth JOIN x_app App JOIN x_user User
+	//	order: AppAuth.expire asc
+	//	7 列：id, app_id, app_nickname, app_avatar, expire, app_name, mobile
+	//	mobile 经 substr_replace($m,'****',3,6) 掩码（**结果比原串短 2 位**）
+	//
+	// 🔴 count() 只有**两个** JOIN（少 x_user）—— 原项目的不一致，刻意照搬。
+	GetAuthMyUserList(context.Context, *GetAuthMyUserListRequest) (*RawData, error)
+	// GetAuthUrl 获取一级平台授权地址
 	//
 	// 原实现 OpenAppController::authUrl -> OpenAppLogic::authUrl($appId,$redirect_url)：
 	//
@@ -65,6 +77,7 @@ type OpenAppServiceHTTPServer interface {
 func RegisterOpenAppServiceHTTPServer(s *http.Server, srv OpenAppServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/v1/open/appList", _OpenAppService_GetAppList0_HTTP_Handler(srv))
+	r.GET("/v1/open/authMyUserList", _OpenAppService_GetAuthMyUserList0_HTTP_Handler(srv))
 	r.GET("/v1/open/authUrl", _OpenAppService_GetAuthUrl0_HTTP_Handler(srv))
 	r.GET("/v1/open/appDetail", _OpenAppService_GetAppDetail0_HTTP_Handler(srv))
 }
@@ -78,6 +91,25 @@ func _OpenAppService_GetAppList0_HTTP_Handler(srv OpenAppServiceHTTPServer) func
 		http.SetOperation(ctx, OperationOpenAppServiceGetAppList)
 		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
 			return srv.GetAppList(ctx, req.(*GetAppListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _OpenAppService_GetAuthMyUserList0_HTTP_Handler(srv OpenAppServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetAuthMyUserListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationOpenAppServiceGetAuthMyUserList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetAuthMyUserList(ctx, req.(*GetAuthMyUserListRequest))
 		})
 		out, err := h(ctx, &in)
 		if err != nil {
@@ -139,7 +171,7 @@ type OpenAppServiceHTTPClient interface {
 	//
 	// ⚠️ logo 的**空值会被换成空串**（不是 null），非空则拼域名。
 	GetAppList(ctx context.Context, req *GetAppListRequest, opts ...http.CallOption) (rsp *RawData, err error)
-	// GetAuthUrl 三方平台详情
+	// GetAuthMyUserList 三方平台详情
 	//
 	// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
 	//
@@ -151,7 +183,18 @@ type OpenAppServiceHTTPClient interface {
 	//    原项目的不一致，照搬。
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
-	// 获取一级平台授权地址
+	// 我授权的三方用户列表（分页）
+	//
+	// 原实现 OpenAppController::authMyUserList -> `$this->dataLists(new AuthMyUserLists())`
+	//
+	//	三张表：AppAuth JOIN x_app App JOIN x_user User
+	//	order: AppAuth.expire asc
+	//	7 列：id, app_id, app_nickname, app_avatar, expire, app_name, mobile
+	//	mobile 经 substr_replace($m,'****',3,6) 掩码（**结果比原串短 2 位**）
+	//
+	// 🔴 count() 只有**两个** JOIN（少 x_user）—— 原项目的不一致，刻意照搬。
+	GetAuthMyUserList(ctx context.Context, req *GetAuthMyUserListRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// GetAuthUrl 获取一级平台授权地址
 	//
 	// 原实现 OpenAppController::authUrl -> OpenAppLogic::authUrl($appId,$redirect_url)：
 	//
@@ -209,7 +252,7 @@ func (c *OpenAppServiceHTTPClientImpl) GetAppList(ctx context.Context, in *GetAp
 	return &out, nil
 }
 
-// GetAuthUrl 三方平台详情
+// GetAuthMyUserList 三方平台详情
 //
 // 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
 //
@@ -223,7 +266,30 @@ func (c *OpenAppServiceHTTPClientImpl) GetAppList(ctx context.Context, in *GetAp
 //
 // ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 // ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
-// 获取一级平台授权地址
+// 我授权的三方用户列表（分页）
+//
+// 原实现 OpenAppController::authMyUserList -> `$this->dataLists(new AuthMyUserLists())`
+//
+//	三张表：AppAuth JOIN x_app App JOIN x_user User
+//	order: AppAuth.expire asc
+//	7 列：id, app_id, app_nickname, app_avatar, expire, app_name, mobile
+//	mobile 经 substr_replace($m,'****',3,6) 掩码（**结果比原串短 2 位**）
+//
+// 🔴 count() 只有**两个** JOIN（少 x_user）—— 原项目的不一致，刻意照搬。
+func (c *OpenAppServiceHTTPClientImpl) GetAuthMyUserList(ctx context.Context, in *GetAuthMyUserListRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/open/authMyUserList"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationOpenAppServiceGetAuthMyUserList))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetAuthUrl 获取一级平台授权地址
 //
 // 原实现 OpenAppController::authUrl -> OpenAppLogic::authUrl($appId,$redirect_url)：
 //

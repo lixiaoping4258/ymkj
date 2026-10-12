@@ -11,11 +11,12 @@ import (
 // OpenAppService 对应 app/api/controller/v1/open/OpenAppController.php。
 type OpenAppService struct {
 	v1.UnimplementedOpenAppServiceServer
-	app *biz.OpenAppUsecase
+	app    *biz.OpenAppUsecase
+	authMy *biz.AuthMyUserUsecase
 }
 
-func NewOpenAppService(app *biz.OpenAppUsecase) *OpenAppService {
-	return &OpenAppService{app: app}
+func NewOpenAppService(app *biz.OpenAppUsecase, authMy *biz.AuthMyUserUsecase) *OpenAppService {
+	return &OpenAppService{app: app, authMy: authMy}
 }
 
 // GetAppList 对应 OpenAppController::appList（GET /v1/open/appList）。
@@ -122,6 +123,46 @@ func (s *OpenAppService) GetAuthUrl(
 		return nil, bizFail(biz.NewBizError(err.Error()))
 	}
 	body, merr := biz.MarshalNoHTMLEscape(map[string]any{"auth_url": res.AuthURL})
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
+}
+
+// GetAuthMyUserList 对应 OpenAppController::authMyUserList（GET /v1/open/authMyUserList）。
+//
+// 原实现：`return $this->dataLists(new AuthMyUserLists());`
+//
+// ⚠️ mobile 的掩码在 biz 层已做（MaskMobile，有单测对拍真实 PHP）。
+func (s *OpenAppService) GetAuthMyUserList(
+	ctx context.Context, _ *v1.GetAuthMyUserListRequest,
+) (*v1.RawData, error) {
+	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
+	userID := biz.UserIDFromContext(ctx)
+	ld, err := s.authMy.List(ctx, uint32(userID), p)
+	if err != nil {
+		return nil, err
+	}
+	items, _ := ld.Lists.([]biz.AuthMyUserRow)
+	rows := make([]map[string]any, 0, len(items))
+	for _, x := range items {
+		rows = append(rows, map[string]any{
+			"id":           x.ID,
+			"app_id":       x.AppID,
+			"app_nickname": x.AppNickname,
+			"app_avatar":   x.AppAvatar,
+			"expire":       x.Expire,
+			"app_name":     x.AppName,
+			"mobile":       x.Mobile, // 已掩码
+		})
+	}
+	body, merr := biz.MarshalNoHTMLEscape(map[string]any{
+		"lists":     rows,
+		"count":     ld.Count,
+		"page_no":   ld.PageNo,
+		"page_size": ld.PageSize,
+		"extend":    ld.Extend,
+	})
 	if merr != nil {
 		return nil, merr
 	}
