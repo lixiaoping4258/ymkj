@@ -93,6 +93,16 @@ message App {
   // 以及 PurchaseFaceLists::queryWhere 里同一判断会**去掉 state 过滤**。
   // 所以配错会静默改变业务行为，不是只影响日志。
   bool debug = 4;
+
+    // 提票时间窗，对应 .env 的 [APP] LIMITTIMESTART / LIMITTIMEEND。
+    //
+    // 原项目用 env('APP.LIMITTIMESTART') 读，而 Go 服务读的是本 YAML ——
+    // 环境变量不会存在，所以必须在这里配；用 os.Getenv 兜底会静默拿到空值。
+    //
+    // 实测 .env 里是 "09:00:00" / "23:00:00"。
+    // 目前只有 ticket/amount 用到（返回给前端的 limit_time 数组）。
+    string limit_time_start = 5;
+    string limit_time_end = 6;
 }
 
 message Log {

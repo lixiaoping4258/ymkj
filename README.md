@@ -1728,6 +1728,55 @@ switch ($lock['state']) { 'create'->-1; 'process'->-2; 'success'->[...]; 'fail'-
 
 **判断标准**：如果读接口的数据来源是**尚未迁移的写入流程**，那它也做不了 ——
 不是"读接口就简单"。已跳过：`orders/create/query`。
+### 17.5 🔴 往 `.proto` / `.yaml` 里插内容，比往 `.go` 里插更容易出错（本轮连踩 3 个）
+
+补 `limit_time_start/end` 到 `conf.App` 时，**三个错误依次出现**，都值得记：
+
+**① 同一个模式在多个 message 里出现 —— 命中了错误的那一个**
+
+`bool debug = 4;` 在 `conf.proto` 里**出现两次**（`Database` 和 `App` 各一次）。
+我按"遇到第一个就插"写循环，结果插进了 **`Database`**，protoc 报：
+
+```
+Field number 5 has already been used in "kratos.api.Data.Database"
+```
+
+**做法**：插 proto 前先**跟踪当前所在的 message**：
+
+```powershell
+foreach ($l in $lines) {
+  if ($l -match '^message (\w+)') { $curMsg = $Matches[1] }   # 记住现在在哪个 message
+  ...
+  if ($curMsg -eq 'App' -and $l.Trim() -eq 'bool debug = 4;') { 插入 }
+}
+```
+
+（与清单第 6 条"改字段类型不能用全局 Replace"是同一类问题：
+ **模式在结构化文件里往往不是唯一的**。）
+
+**② YAML 的缩进层级与 Go/proto 完全不同**
+
+我把 Go 风格的 **4 空格**缩进照抄进 yaml，而 `app:` 下的键是 **2 空格**。
+结果 `limit_time_start` 变成了**标量 `debug: true` 的子项**，YAML 直接解析失败：
+
+```
+yaml: line 29: did not find expected key
+```
+
+**后果**：服务起不来（`go test` 的集成测试与 smoke **同时**失败）。
+
+**做法**：改 yaml 前先 `Select-String` 打出**同一层级的相邻行**，照抄它的缩进；
+改完**立刻跑 `.\scripts\gate.ps1`** —— 这次就是 gate 拦住的。
+
+**③ `debug: true` 也在多处出现**
+
+yaml 里 `debug:` 在 `database:` 和 `app:` 下各有一处（`false` / `true`）。
+我这次靠"值不同"（`debug: true` vs `debug: false`）侥幸命中了正确的那个 ——
+**但这是运气，不是方法**。同样应该按"当前所在的顶层键"跟踪。
+
+> **总结**：编辑 `.proto` / `.yaml` 这类**结构化且模式可重复**的文件时，
+> 一律先**确定上下文（在哪个 message / 哪个顶层键下）**再动手，
+> 并且**改完立刻跑质量门**。gate.ps1 这一轮就是靠 yaml 解析失败把问题挡在了提交之前。
 ### 18. ⚠️ `env('APP.*')` 类配置**不在 Kratos 的 conf 里** —— 要先补
 
 迁移时反复遇到：PHP 用 `env('APP.XXX')` 读 `.env`，而 **Go 服务读的是

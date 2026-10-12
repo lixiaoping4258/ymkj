@@ -310,9 +310,18 @@ type App struct {
 	//
 	// 以及 PurchaseFaceLists::queryWhere 里同一判断会**去掉 state 过滤**。
 	// 所以配错会静默改变业务行为，不是只影响日志。
-	Debug         bool `protobuf:"varint,4,opt,name=debug,proto3" json:"debug,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Debug bool `protobuf:"varint,4,opt,name=debug,proto3" json:"debug,omitempty"`
+	// 提票时间窗，对应 .env 的 [APP] LIMITTIMESTART / LIMITTIMEEND。
+	//
+	// 原项目用 env('APP.LIMITTIMESTART') 读，而 Go 服务读的是本 YAML ——
+	// 环境变量不会存在，所以必须在这里配；用 os.Getenv 兜底会静默拿到空值。
+	//
+	// 实测 .env 里是 "09:00:00" / "23:00:00"。
+	// 目前只有 ticket/amount 用到（返回给前端的 limit_time 数组）。
+	LimitTimeStart string `protobuf:"bytes,5,opt,name=limit_time_start,json=limitTimeStart,proto3" json:"limit_time_start,omitempty"`
+	LimitTimeEnd   string `protobuf:"bytes,6,opt,name=limit_time_end,json=limitTimeEnd,proto3" json:"limit_time_end,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *App) Reset() {
@@ -371,6 +380,20 @@ func (x *App) GetDebug() bool {
 		return x.Debug
 	}
 	return false
+}
+
+func (x *App) GetLimitTimeStart() string {
+	if x != nil {
+		return x.LimitTimeStart
+	}
+	return ""
+}
+
+func (x *App) GetLimitTimeEnd() string {
+	if x != nil {
+		return x.LimitTimeEnd
+	}
+	return ""
 }
 
 type Log struct {
@@ -770,12 +793,14 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\bpassword\x18\x03 \x01(\tR\bpassword\x12\x0e\n" +
 	"\x02db\x18\x04 \x01(\x05R\x02db\x12<\n" +
 	"\fread_timeout\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\vreadTimeout\x12>\n" +
-	"\rwrite_timeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\"]\n" +
+	"\rwrite_timeout\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\"\xad\x01\n" +
 	"\x03App\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03env\x18\x02 \x01(\tR\x03env\x12\x1a\n" +
 	"\btimezone\x18\x03 \x01(\tR\btimezone\x12\x14\n" +
-	"\x05debug\x18\x04 \x01(\bR\x05debug\"G\n" +
+	"\x05debug\x18\x04 \x01(\bR\x05debug\x12(\n" +
+	"\x10limit_time_start\x18\x05 \x01(\tR\x0elimitTimeStart\x12$\n" +
+	"\x0elimit_time_end\x18\x06 \x01(\tR\flimitTimeEnd\"G\n" +
 	"\x03Log\x12\x14\n" +
 	"\x05level\x18\x01 \x01(\tR\x05level\x12\x16\n" +
 	"\x06format\x18\x02 \x01(\tR\x06format\x12\x12\n" +
