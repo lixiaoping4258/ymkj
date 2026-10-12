@@ -36,6 +36,7 @@ type MarketService struct {
 	stale *biz.StaleCache
 	// saleDetail 对应 SaleLogic::getSaleDetail
 	saleDetail *biz.SaleDetailUsecase
+	saleOn     *biz.SaleOnUsecase
 	log        *log.Helper
 }
 
@@ -50,14 +51,15 @@ func NewMarketService(
 	rawCache biz.RawKeyCache,
 	stale *biz.StaleCache,
 	saleDetail *biz.SaleDetailUsecase,
+	saleOn *biz.SaleOnUsecase,
 	logger log.Logger,
 ) *MarketService {
 	return &MarketService{
 		market: market, purchase: purchase, sale: sale,
 		stock: stock, archive: archive, fee: fee,
 		purchaseState: purchaseState, rawCache: rawCache, stale: stale,
-		saleDetail: saleDetail,
-		log:        log.NewHelper(logger),
+		saleDetail: saleDetail, saleOn: saleOn,
+		log: log.NewHelper(logger),
 	}
 }
 
@@ -465,6 +467,57 @@ func (s *MarketService) GetSaleDetail(
 		"trade_notice": res.TradeNotice, // 可能是 nil -> null
 	}
 	body, merr := biz.MarshalNoHTMLEscape(out)
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
+}
+
+// GetSaleOn 对应 SaleController::salesOn（GET /v1/market/sales/on?id=N）。
+//
+// 原实现：
+//
+//	(new SaleOnValidate())->get()->goCheck();       // id => require
+//	return $this->dataLists(new SaleOnCollectionLists());
+//
+// ⚠️ 列表类的构造函数里是 `throw new Exception('记录不存在')`（不是 fail()）——
+//
+//	这里按 fail 实现，与 purchase_state 里同类情形的处理一致。
+func (s *MarketService) GetSaleOn(
+	ctx context.Context, in *v1.GetSaleOnRequest,
+) (*v1.RawData, error) {
+	idStr := strings.TrimSpace(in.GetId())
+	if idStr == "" {
+		return nil, bizFail(biz.NewBizError("秒转种类ID不能为空"))
+	}
+	salesID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		// id 不是数字：findSales 查不到 -> 记录不存在
+		return nil, bizFail(biz.NewBizError("记录不存在"))
+	}
+	// 构造里的 findSales($id) -> archive_id
+	archiveID, found, err := s.archive.FindSalesArchiveID(ctx, salesID)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, bizFail(biz.NewBizError("记录不存在"))
+	}
+	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
+	ld, err := s.saleOn.List(ctx, archiveID, p)
+	if err != nil {
+		return nil, err
+	}
+	items, _ := ld.Lists.([]map[string]any)
+	rows := make([]map[string]any, 0, len(items))
+	rows = append(rows, items...)
+	body, merr := biz.MarshalNoHTMLEscape(map[string]any{
+		"lists":     rows,
+		"count":     ld.Count,
+		"page_no":   ld.PageNo,
+		"page_size": ld.PageSize,
+		"extend":    ld.Extend,
+	})
 	if merr != nil {
 		return nil, merr
 	}

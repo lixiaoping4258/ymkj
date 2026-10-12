@@ -23,6 +23,7 @@ const OperationMarketServiceCheckExchange = "/xtravel.v1.MarketService/CheckExch
 const OperationMarketServiceGetPayWay = "/xtravel.v1.MarketService/GetPayWay"
 const OperationMarketServiceGetSaleCategories = "/xtravel.v1.MarketService/GetSaleCategories"
 const OperationMarketServiceGetSaleDetail = "/xtravel.v1.MarketService/GetSaleDetail"
+const OperationMarketServiceGetSaleOn = "/xtravel.v1.MarketService/GetSaleOn"
 const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseIndex"
 const OperationMarketServicePurchaseInfo = "/xtravel.v1.MarketService/PurchaseInfo"
 const OperationMarketServicePurchaseOn = "/xtravel.v1.MarketService/PurchaseOn"
@@ -60,6 +61,18 @@ type MarketServiceHTTPServer interface {
 	// ⚠️ trade_notice 来自 ConfigService::get('trade','notice')，**无默认值 -> 可能 null**
 	// 需登录（SaleController::$notNeedLogin = ['categories']）。
 	GetSaleDetail(context.Context, *GetSaleDetailRequest) (*RawData, error)
+	// GetSaleOn 秒转在售藏品（分页）
+	//
+	// 原实现 SaleController::salesOn -> `$this->dataLists(new SaleOnCollectionLists())`
+	// 校验 SaleOnValidate: 'id' => 'require'（'秒转种类ID不能为空'）
+	//
+	// 构造：findSales(id) 查 archive_id，查不到 **throw new Exception('记录不存在')**
+	// where: archive_id = ? AND state = 'ON_SALE'
+	// lists: MarketSales JOIN x_app_archive JOIN x_app，7 列，order id desc
+	// images 会 json_decode 成数组
+	//
+	// 🔴 lists 两个 JOIN、count 只有一个 —— 又一处不一致（清单第 3 条）
+	GetSaleOn(context.Context, *GetSaleOnRequest) (*RawData, error)
 	// PurchaseIndex 兑换专区首页列表
 	// 原: PurchaseController::index -> PurchaseFaceLists
 	//     **免登录**（控制器 $notNeedLogin 放行了 index）
@@ -142,6 +155,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/purchase/out", _MarketService_PurchaseOut0_HTTP_Handler(srv))
 	r.GET("/v1/market/purchase/on", _MarketService_PurchaseOn0_HTTP_Handler(srv))
 	r.GET("/v1/market/sales/detail", _MarketService_GetSaleDetail0_HTTP_Handler(srv))
+	r.GET("/v1/market/sales/on", _MarketService_GetSaleOn0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -372,6 +386,25 @@ func _MarketService_GetSaleDetail0_HTTP_Handler(srv MarketServiceHTTPServer) fun
 	}
 }
 
+func _MarketService_GetSaleOn0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetSaleOnRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServiceGetSaleOn)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetSaleOn(ctx, req.(*GetSaleOnRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -400,6 +433,18 @@ type MarketServiceHTTPClient interface {
 	// ⚠️ trade_notice 来自 ConfigService::get('trade','notice')，**无默认值 -> 可能 null**
 	// 需登录（SaleController::$notNeedLogin = ['categories']）。
 	GetSaleDetail(ctx context.Context, req *GetSaleDetailRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// GetSaleOn 秒转在售藏品（分页）
+	//
+	// 原实现 SaleController::salesOn -> `$this->dataLists(new SaleOnCollectionLists())`
+	// 校验 SaleOnValidate: 'id' => 'require'（'秒转种类ID不能为空'）
+	//
+	// 构造：findSales(id) 查 archive_id，查不到 **throw new Exception('记录不存在')**
+	// where: archive_id = ? AND state = 'ON_SALE'
+	// lists: MarketSales JOIN x_app_archive JOIN x_app，7 列，order id desc
+	// images 会 json_decode 成数组
+	//
+	// 🔴 lists 两个 JOIN、count 只有一个 —— 又一处不一致（清单第 3 条）
+	GetSaleOn(ctx context.Context, req *GetSaleOnRequest, opts ...http.CallOption) (rsp *RawData, err error)
 	// PurchaseIndex 兑换专区首页列表
 	// 原: PurchaseController::index -> PurchaseFaceLists
 	//     **免登录**（控制器 $notNeedLogin 放行了 index）
@@ -545,6 +590,30 @@ func (c *MarketServiceHTTPClientImpl) GetSaleDetail(ctx context.Context, in *Get
 	pattern := "/v1/market/sales/detail"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServiceGetSaleDetail))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetSaleOn 秒转在售藏品（分页）
+//
+// 原实现 SaleController::salesOn -> `$this->dataLists(new SaleOnCollectionLists())`
+// 校验 SaleOnValidate: 'id' => 'require'（'秒转种类ID不能为空'）
+//
+// 构造：findSales(id) 查 archive_id，查不到 **throw new Exception('记录不存在')**
+// where: archive_id = ? AND state = 'ON_SALE'
+// lists: MarketSales JOIN x_app_archive JOIN x_app，7 列，order id desc
+// images 会 json_decode 成数组
+//
+// 🔴 lists 两个 JOIN、count 只有一个 —— 又一处不一致（清单第 3 条）
+func (c *MarketServiceHTTPClientImpl) GetSaleOn(ctx context.Context, in *GetSaleOnRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/market/sales/on"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServiceGetSaleOn))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

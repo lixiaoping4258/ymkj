@@ -150,6 +150,21 @@ service MarketService {
   rpc GetSaleDetail(GetSaleDetailRequest) returns (RawData) {
     option (google.api.http) = {get: "/v1/market/sales/detail"};
   }
+
+  // 秒转在售藏品（分页）
+  //
+  // 原实现 SaleController::salesOn -> `$this->dataLists(new SaleOnCollectionLists())`
+  // 校验 SaleOnValidate: 'id' => 'require'（'秒转种类ID不能为空'）
+  //
+  // 构造：findSales(id) 查 archive_id，查不到 **throw new Exception('记录不存在')**
+  // where: archive_id = ? AND state = 'ON_SALE'
+  // lists: MarketSales JOIN x_app_archive JOIN x_app，7 列，order id desc
+  // images 会 json_decode 成数组
+  //
+  // 🔴 lists 两个 JOIN、count 只有一个 —— 又一处不一致（清单第 3 条）
+  rpc GetSaleOn(GetSaleOnRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/market/sales/on"};
+  }
 }
 
 message PurchaseOnRequest {
@@ -256,4 +271,9 @@ message GetSaleDetailRequest {
   // 规则 require|number（文案 '详情ID不能为空' / '详情ID不正确'）
   // ⚠️ 是 number 不是 integer|gt:0 —— 0 合法
   google.protobuf.Int64Value id = 1 [json_name = "id"];
+}
+
+message GetSaleOnRequest {
+  // 规则 require（'秒转种类ID不能为空'）
+  string id = 1 [json_name = "id"];
 }
