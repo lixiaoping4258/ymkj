@@ -1661,6 +1661,56 @@ x_PurchaseOrder:Stock:lock:178608362100012
 （727 行，属于下单写入流程）写入，**Go 侧还没有任何东西会写它**。
 所以该接口**当前无法实现**，也与"只迁 C 端读接口"的边界一致 —— 详见下面第 17 条。
 
+### 15.5 🔴 给 service 加依赖时，**结构体字段与构造函数赋值要一起改**（踩过 3 次）
+
+我在 `MarketService` 上加了三个新 usecase 字段，**三次都漏了构造函数的赋值**：
+
+| 字段 | 后果 |
+|---|---|
+| `saleOn` | 编译期就报 `unknown field`（因为结构体也漏了）—— 很快就发现 |
+| `saleDetail` | 同上 |
+| `goodsLook` | **结构体字段加上了，但 `return &MarketService{...}` 里没赋值** —— **编译通过、启动正常**，只有请求时 panic |
+
+**为什么第 3 次最危险**：前两次编译就报错，第三次**编译、启动、其它接口全部正常**，
+只有打这个接口时：
+
+```
+{"code":0,"show":1,"msg":"unknown request error","data":[]}
+```
+
+**nil 指针调用方法会 panic，而 Kratos 的 recovery 中间件把 panic 吞成了
+"unknown request error"** —— 看不到任何堆栈、看不到 nil 是哪来的。
+
+**排查过程**（下次可以照做）：
+
+1. 先确认**路由注册了**：打一个不存在的路径对比 HTTP 状态码。
+   `goodsLook` 返回 200、`goodsLook2` 返回 404 → 路由没问题，是处理流程里的错。
+2. 在 handler 的 `if err != nil` 里临时加 `bizFail(biz.NewBizError("DBG: "+err.Error()))`，
+   把真实错误暴露出来。**如果 DBG 一直不出现，说明 handler 根本没被执行到**
+   → 大概率是 panic（而不是返回 error）。
+3. 既然 DBG 不出现，就去看**构造函数**。
+
+**根因**：我用 `$c.Replace('		stockList:  stockList,', ...)` 做锚点，
+但实际文件里是 **`stockList: stockList,`（一个空格）** —— **锚点空白不匹配，
+替换静默失败**（`String.Replace` 不匹配时不报错）。
+
+**规则**：
+- 加字段时，**先 `Select-String` 把结构体与构造函数两处的实际行都打出来**，
+  再照着改；不要凭记忆构造锚点。
+- **任何 `String.Replace` 都要先确认命中次数**：
+  `([regex]::Matches($c,'锚点')).Count` —— 为 0 就是没匹配上。
+- 新增/修改 handler 后，**至少实际打一次这个接口** —— 编译通过不代表能跑。
+
+### 15.6 panic 会被 recovery 中间件吞成 `unknown request error`
+
+上面那条提到过，单独强调一下：**Kratos 的 recovery 会把 panic 转成
+`{"code":0,"show":1,"msg":"unknown request error","data":[]}`**，
+调用方看不到 `nil pointer`、看不到堆栈。
+
+**排查手段**（本轮用的）：
+- 临时在 handler 里把 error 包成 `bizFail(biz.NewBizError(...))` 看有没有走到
+- 用 `Get-Process` + `Get-NetTCPConnection -LocalPort` 确认**跑的是新二进制**
+  （我一度怀疑是旧进程 —— 虽然那次不是，但这个习惯要有）
 ### 16. 依赖未迁写入流程的读接口，也要跳过
 
 `orders/create/query` 不是"读接口"那么简单 —— 它读的是**下单流程的中间状态**：

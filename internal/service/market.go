@@ -39,6 +39,7 @@ type MarketService struct {
 	saleOn     *biz.SaleOnUsecase
 	saleOut    *biz.SaleOutUsecase
 	stockList  *biz.StockListUsecase
+	goodsLook  *biz.GoodsLookUsecase
 	log        *log.Helper
 }
 
@@ -56,6 +57,7 @@ func NewMarketService(
 	saleOn *biz.SaleOnUsecase,
 	saleOut *biz.SaleOutUsecase,
 	stockList *biz.StockListUsecase,
+	goodsLook *biz.GoodsLookUsecase,
 	logger log.Logger,
 ) *MarketService {
 	return &MarketService{
@@ -63,8 +65,8 @@ func NewMarketService(
 		stock: stock, archive: archive, fee: fee,
 		purchaseState: purchaseState, rawCache: rawCache, stale: stale,
 		saleDetail: saleDetail, saleOn: saleOn, saleOut: saleOut,
-		stockList: stockList,
-		log:       log.NewHelper(logger),
+		stockList: stockList, goodsLook: goodsLook,
+		log: log.NewHelper(logger),
 	}
 }
 
@@ -618,6 +620,29 @@ func (s *MarketService) GetStockList(
 	})
 	if merr != nil {
 		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
+}
+
+// GetGoodsLook 对应 PurchaseController::goodsLook（GET /v1/market/stock/goodsLook）。
+//
+// 原实现：
+//
+//	$params = request()->get();
+//	$data = GoodsLogic::goodsLook($this->userId, $params);
+//	if ($data === false) { return $this->fail(GoodsLogic::getError()); }
+//	return $this->data($data);
+//
+// ⚠️ `$data` 是**顶层数组**，所以直接作为 RawData 的 Json 返回。
+func (s *MarketService) GetGoodsLook(
+	ctx context.Context, in *v1.GetGoodsLookRequest,
+) (*v1.RawData, error) {
+	userID := uint32(biz.UserIDFromContext(ctx))
+	archiveID := in.GetArchiveId()
+	has := archiveID != ""
+	body, err := s.goodsLook.Get(ctx, userID, archiveID, has)
+	if err != nil {
+		return nil, err
 	}
 	return &v1.RawData{Json: body}, nil
 }

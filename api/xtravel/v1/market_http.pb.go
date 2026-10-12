@@ -20,6 +20,7 @@ var _ = binding.EncodeURL
 const _ = http.SupportPackageIsVersion1
 
 const OperationMarketServiceCheckExchange = "/xtravel.v1.MarketService/CheckExchange"
+const OperationMarketServiceGetGoodsLook = "/xtravel.v1.MarketService/GetGoodsLook"
 const OperationMarketServiceGetPayWay = "/xtravel.v1.MarketService/GetPayWay"
 const OperationMarketServiceGetSaleCategories = "/xtravel.v1.MarketService/GetSaleCategories"
 const OperationMarketServiceGetSaleDetail = "/xtravel.v1.MarketService/GetSaleDetail"
@@ -40,6 +41,21 @@ type MarketServiceHTTPServer interface {
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
 	//     （需要登录；会加 2 秒防重复点击锁并查一次兑换单数量）
 	CheckExchange(context.Context, *CheckExchangeRequest) (*CheckExchangeReply, error)
+	// GetGoodsLook 可导入的档案列表（含每个档案的可导入数量）
+	//
+	// 原实现 PurchaseController::goodsLook -> GoodsLogic::goodsLook($userId, $params)
+	// **无校验**（控制器直接 request()->get()）
+	//
+	//	AppArchive::where(["state"=>1] [+ "id"=>$archive_id])
+	//	    ->field("app_id,images as goods_image,name as goods_name,collection_id,id as archive_id")
+	//	  + 按 collection_id 分组统计 WarehouseDetail 的可导入数量（num）
+	//	缓存：RedisLockService 的 user:stock:goodsLook:{userId}，TTL 5
+	//
+	// ⚠️ **返回值是顶层数组**（不是 {lists,count,...}）
+	// ⚠️ goods_image 的假值分支**保持原值**（不是 []）—— 与 /v1/market/stock/list 不同
+	// ⚠️ archive_id 用 isset 语义：传了空串也会当条件（查不到行）
+	// 需登录（PurchaseController::$notNeedLogin = ['index']）。
+	GetGoodsLook(context.Context, *GetGoodsLookRequest) (*RawData, error)
 	// GetPayWay 支付方式列表
 	// 原: PurchaseController::payWay（硬编码，不查库；需要登录）
 	GetPayWay(context.Context, *GetPayWayRequest) (*GetPayWayReply, error)
@@ -188,6 +204,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/sales/on", _MarketService_GetSaleOn0_HTTP_Handler(srv))
 	r.GET("/v1/market/sales/out", _MarketService_GetSaleOut0_HTTP_Handler(srv))
 	r.GET("/v1/market/stock/list", _MarketService_GetStockList0_HTTP_Handler(srv))
+	r.GET("/v1/market/stock/goodsLook", _MarketService_GetGoodsLook0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -475,11 +492,45 @@ func _MarketService_GetStockList0_HTTP_Handler(srv MarketServiceHTTPServer) func
 	}
 }
 
+func _MarketService_GetGoodsLook0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetGoodsLookRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServiceGetGoodsLook)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetGoodsLook(ctx, req.(*GetGoodsLookRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
 	//     （需要登录；会加 2 秒防重复点击锁并查一次兑换单数量）
 	CheckExchange(ctx context.Context, req *CheckExchangeRequest, opts ...http.CallOption) (rsp *CheckExchangeReply, err error)
+	// GetGoodsLook 可导入的档案列表（含每个档案的可导入数量）
+	//
+	// 原实现 PurchaseController::goodsLook -> GoodsLogic::goodsLook($userId, $params)
+	// **无校验**（控制器直接 request()->get()）
+	//
+	//	AppArchive::where(["state"=>1] [+ "id"=>$archive_id])
+	//	    ->field("app_id,images as goods_image,name as goods_name,collection_id,id as archive_id")
+	//	  + 按 collection_id 分组统计 WarehouseDetail 的可导入数量（num）
+	//	缓存：RedisLockService 的 user:stock:goodsLook:{userId}，TTL 5
+	//
+	// ⚠️ **返回值是顶层数组**（不是 {lists,count,...}）
+	// ⚠️ goods_image 的假值分支**保持原值**（不是 []）—— 与 /v1/market/stock/list 不同
+	// ⚠️ archive_id 用 isset 语义：传了空串也会当条件（查不到行）
+	// 需登录（PurchaseController::$notNeedLogin = ['index']）。
+	GetGoodsLook(ctx context.Context, req *GetGoodsLookRequest, opts ...http.CallOption) (rsp *RawData, err error)
 	// GetPayWay 支付方式列表
 	// 原: PurchaseController::payWay（硬编码，不查库；需要登录）
 	GetPayWay(ctx context.Context, req *GetPayWayRequest, opts ...http.CallOption) (rsp *GetPayWayReply, err error)
@@ -628,6 +679,33 @@ func (c *MarketServiceHTTPClientImpl) CheckExchange(ctx context.Context, in *Che
 	pattern := "/v1/market/check/exchange"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServiceCheckExchange))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetGoodsLook 可导入的档案列表（含每个档案的可导入数量）
+//
+// 原实现 PurchaseController::goodsLook -> GoodsLogic::goodsLook($userId, $params)
+// **无校验**（控制器直接 request()->get()）
+//
+//	AppArchive::where(["state"=>1] [+ "id"=>$archive_id])
+//	    ->field("app_id,images as goods_image,name as goods_name,collection_id,id as archive_id")
+//	  + 按 collection_id 分组统计 WarehouseDetail 的可导入数量（num）
+//	缓存：RedisLockService 的 user:stock:goodsLook:{userId}，TTL 5
+//
+// ⚠️ **返回值是顶层数组**（不是 {lists,count,...}）
+// ⚠️ goods_image 的假值分支**保持原值**（不是 []）—— 与 /v1/market/stock/list 不同
+// ⚠️ archive_id 用 isset 语义：传了空串也会当条件（查不到行）
+// 需登录（PurchaseController::$notNeedLogin = ['index']）。
+func (c *MarketServiceHTTPClientImpl) GetGoodsLook(ctx context.Context, in *GetGoodsLookRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/market/stock/goodsLook"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServiceGetGoodsLook))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

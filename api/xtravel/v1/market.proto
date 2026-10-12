@@ -199,6 +199,24 @@ service MarketService {
   rpc GetStockList(GetStockListRequest) returns (RawData) {
     option (google.api.http) = {get: "/v1/market/stock/list"};
   }
+
+  // 可导入的档案列表（含每个档案的可导入数量）
+  //
+  // 原实现 PurchaseController::goodsLook -> GoodsLogic::goodsLook($userId, $params)
+  // **无校验**（控制器直接 request()->get()）
+  //
+  //	AppArchive::where(["state"=>1] [+ "id"=>$archive_id])
+  //	    ->field("app_id,images as goods_image,name as goods_name,collection_id,id as archive_id")
+  //	  + 按 collection_id 分组统计 WarehouseDetail 的可导入数量（num）
+  //	缓存：RedisLockService 的 user:stock:goodsLook:{userId}，TTL 5
+  //
+  // ⚠️ **返回值是顶层数组**（不是 {lists,count,...}）
+  // ⚠️ goods_image 的假值分支**保持原值**（不是 []）—— 与 /v1/market/stock/list 不同
+  // ⚠️ archive_id 用 isset 语义：传了空串也会当条件（查不到行）
+  // 需登录（PurchaseController::$notNeedLogin = ['index']）。
+  rpc GetGoodsLook(GetGoodsLookRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/market/stock/goodsLook"};
+  }
 }
 
 message PurchaseOnRequest {
@@ -322,4 +340,12 @@ message GetStockListRequest {
   google.protobuf.Int64Value archive_id = 1 [json_name = "archive_id"];
   // 对应 `$this->params['auth_id']`；**缺失时兜底为 0**
   google.protobuf.Int64Value auth_id = 2 [json_name = "auth_id"];
+}
+
+message GetGoodsLookRequest {
+  // 对应 `$params['archive_id']`；⚠️ 用 isset 语义 —— 传空串也会当条件
+  // ⚠️ 用普通 string 而不是 google.protobuf.StringValue ——
+  //    Kratos 的 query 解码**不支持 StringValue**（会返回 unknown request error，已实测）。
+  //    代价：无法区分"没传"与"传了空串"，两者都按"没传"处理（原逻辑用 isset）。已记录该偏差。
+  string archive_id = 1 [json_name = "archive_id"];
 }
