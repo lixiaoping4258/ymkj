@@ -5,6 +5,7 @@ package xtravel.v1;
 import "google/api/annotations.proto";
 // google.protobuf.Value 用在 PurchaseInfoReply.images 上
 import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
 // RawData 定义在 common.proto（同属 xtravel.v1 包，但 protoc 仍要求显式 import）。
 //
 // ⚠️ 路径必须与生成脚本传给 protoc 的 target 形式**完全一致**（都是相对项目根的
@@ -130,6 +131,25 @@ service MarketService {
   rpc PurchaseOn(PurchaseOnRequest) returns (RawData) {
     option (google.api.http) = {get: "/v1/market/purchase/on"};
   }
+
+  // 秒转详情
+  //
+  // 原实现 SaleController::detail -> SaleLogic::getSaleDetail($id)
+  // 校验 SaleDetailValidate: 'id' => 'require|number'
+  //
+  //	state IN ('ON_SALE','SELL_OUT')   ⚠️ 下架(OFFLINE)查不到
+  //	两个 INNER JOIN: app_archive / app，12 列
+  //	images 会 json_decode 成数组
+  //	返回 {collection, saler, trade_notice}
+  //
+  // ⚠️ saler 查不到用户时是**空数组 []**（且不补 sale_count 等键）
+  // ⚠️ saler.collection_count **恒为 0**（硬编码，不是查出来的）
+  // ⚠️ saler.avatar 经 getAvatarAttr 拼域名
+  // ⚠️ trade_notice 来自 ConfigService::get('trade','notice')，**无默认值 -> 可能 null**
+  // 需登录（SaleController::$notNeedLogin = ['categories']）。
+  rpc GetSaleDetail(GetSaleDetailRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/market/sales/detail"};
+  }
 }
 
 message PurchaseOnRequest {
@@ -231,3 +251,9 @@ message CheckExchangeRequest {}
 // 成功时原接口返回的是**空数组** []（`return $this->data([])`），
 // 不是空对象 {}。同样由 Envelope() 处理。
 message CheckExchangeReply {}
+
+message GetSaleDetailRequest {
+  // 规则 require|number（文案 '详情ID不能为空' / '详情ID不正确'）
+  // ⚠️ 是 number 不是 integer|gt:0 —— 0 合法
+  google.protobuf.Int64Value id = 1 [json_name = "id"];
+}

@@ -84,6 +84,8 @@ var ProviderSet = wire.NewSet(
 	wire.Bind(new(biz.AppArchiveRepo), new(*appArchiveRepo)),
 	NewAppUserGoodsRepo,
 	wire.Bind(new(biz.AppUserGoodsRepo), new(*appUserGoodsRepo)),
+	NewSaleDetailRepo,
+	wire.Bind(new(biz.SaleDetailRepo), new(*saleDetailRepo)),
 	wire.Bind(new(biz.OpenAppAuthRepo), new(*openAppRepo)),
 )
 

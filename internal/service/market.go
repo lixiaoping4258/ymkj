@@ -34,7 +34,9 @@ type MarketService struct {
 	rawCache biz.RawKeyCache
 	// stale 提供 stale-while-revalidate 语义，供 salesOn 使用
 	stale *biz.StaleCache
-	log   *log.Helper
+	// saleDetail 对应 SaleLogic::getSaleDetail
+	saleDetail *biz.SaleDetailUsecase
+	log        *log.Helper
 }
 
 func NewMarketService(
@@ -47,13 +49,15 @@ func NewMarketService(
 	purchaseState *biz.PurchaseStateUsecase,
 	rawCache biz.RawKeyCache,
 	stale *biz.StaleCache,
+	saleDetail *biz.SaleDetailUsecase,
 	logger log.Logger,
 ) *MarketService {
 	return &MarketService{
 		market: market, purchase: purchase, sale: sale,
 		stock: stock, archive: archive, fee: fee,
 		purchaseState: purchaseState, rawCache: rawCache, stale: stale,
-		log: log.NewHelper(logger),
+		saleDetail: saleDetail,
+		log:        log.NewHelper(logger),
 	}
 }
 
@@ -430,4 +434,39 @@ func cacheKeyWithParams(prefix string, q url.Values) string {
 	}
 	sum := md5.Sum([]byte(b.String()))
 	return prefix + hex.EncodeToString(sum[:])
+}
+
+// GetSaleDetail 对应 SaleController::detail（GET /v1/market/sales/detail?id=N）。
+//
+// 原实现：
+//
+//	$params = (new SaleDetailValidate())->get()->goCheck();
+//	$data = SaleLogic::getSaleDetail($params['id']);
+//	if ($data === false) { return $this->fail('未找到记录信息'); }
+//	return $this->data($data);
+func (s *MarketService) GetSaleDetail(
+	ctx context.Context, req *v1.GetSaleDetailRequest,
+) (*v1.RawData, error) {
+	// 校验文案逐字对应 SaleDetailValidate：
+	//   'id.require' => '详情ID不能为空'
+	//   'id.number'  => '详情ID不正确'
+	// ⚠️ 规则是 require|number（不是 integer|gt:0）—— 0 合法，会走到"未找到记录信息"
+	if req.Id == nil {
+		return nil, bizFail(biz.NewBizError("详情ID不能为空"))
+	}
+	domain := domainFrom(ctx)
+	res, err := s.saleDetail.GetSaleDetail(ctx, req.Id.Value, domain)
+	if err != nil {
+		return nil, bizFail(biz.NewBizError(err.Error()))
+	}
+	out := map[string]any{
+		"collection":   res.Collection,
+		"saler":        res.Saler,       // 可能是空 map -> {}
+		"trade_notice": res.TradeNotice, // 可能是 nil -> null
+	}
+	body, merr := biz.MarshalNoHTMLEscape(out)
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
 }

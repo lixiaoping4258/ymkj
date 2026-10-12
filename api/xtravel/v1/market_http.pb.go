@@ -22,6 +22,7 @@ const _ = http.SupportPackageIsVersion1
 const OperationMarketServiceCheckExchange = "/xtravel.v1.MarketService/CheckExchange"
 const OperationMarketServiceGetPayWay = "/xtravel.v1.MarketService/GetPayWay"
 const OperationMarketServiceGetSaleCategories = "/xtravel.v1.MarketService/GetSaleCategories"
+const OperationMarketServiceGetSaleDetail = "/xtravel.v1.MarketService/GetSaleDetail"
 const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseIndex"
 const OperationMarketServicePurchaseInfo = "/xtravel.v1.MarketService/PurchaseInfo"
 const OperationMarketServicePurchaseOn = "/xtravel.v1.MarketService/PurchaseOn"
@@ -43,6 +44,22 @@ type MarketServiceHTTPServer interface {
 	// 原: SaleController::categories —— **硬编码**，不查库；是 SaleController 里
 	//     唯一免登录的方法（$notNeedLogin = ['categories']）
 	GetSaleCategories(context.Context, *GetSaleCategoriesRequest) (*GetSaleCategoriesReply, error)
+	// GetSaleDetail 秒转详情
+	//
+	// 原实现 SaleController::detail -> SaleLogic::getSaleDetail($id)
+	// 校验 SaleDetailValidate: 'id' => 'require|number'
+	//
+	//	state IN ('ON_SALE','SELL_OUT')   ⚠️ 下架(OFFLINE)查不到
+	//	两个 INNER JOIN: app_archive / app，12 列
+	//	images 会 json_decode 成数组
+	//	返回 {collection, saler, trade_notice}
+	//
+	// ⚠️ saler 查不到用户时是**空数组 []**（且不补 sale_count 等键）
+	// ⚠️ saler.collection_count **恒为 0**（硬编码，不是查出来的）
+	// ⚠️ saler.avatar 经 getAvatarAttr 拼域名
+	// ⚠️ trade_notice 来自 ConfigService::get('trade','notice')，**无默认值 -> 可能 null**
+	// 需登录（SaleController::$notNeedLogin = ['categories']）。
+	GetSaleDetail(context.Context, *GetSaleDetailRequest) (*RawData, error)
 	// PurchaseIndex 兑换专区首页列表
 	// 原: PurchaseController::index -> PurchaseFaceLists
 	//     **免登录**（控制器 $notNeedLogin 放行了 index）
@@ -124,6 +141,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/purchase/showTotalAmount", _MarketService_ShowTotalAmount0_HTTP_Handler(srv))
 	r.GET("/v1/market/purchase/out", _MarketService_PurchaseOut0_HTTP_Handler(srv))
 	r.GET("/v1/market/purchase/on", _MarketService_PurchaseOn0_HTTP_Handler(srv))
+	r.GET("/v1/market/sales/detail", _MarketService_GetSaleDetail0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -335,6 +353,25 @@ func _MarketService_PurchaseOn0_HTTP_Handler(srv MarketServiceHTTPServer) func(c
 	}
 }
 
+func _MarketService_GetSaleDetail0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetSaleDetailRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServiceGetSaleDetail)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetSaleDetail(ctx, req.(*GetSaleDetailRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -347,6 +384,22 @@ type MarketServiceHTTPClient interface {
 	// 原: SaleController::categories —— **硬编码**，不查库；是 SaleController 里
 	//     唯一免登录的方法（$notNeedLogin = ['categories']）
 	GetSaleCategories(ctx context.Context, req *GetSaleCategoriesRequest, opts ...http.CallOption) (rsp *GetSaleCategoriesReply, err error)
+	// GetSaleDetail 秒转详情
+	//
+	// 原实现 SaleController::detail -> SaleLogic::getSaleDetail($id)
+	// 校验 SaleDetailValidate: 'id' => 'require|number'
+	//
+	//	state IN ('ON_SALE','SELL_OUT')   ⚠️ 下架(OFFLINE)查不到
+	//	两个 INNER JOIN: app_archive / app，12 列
+	//	images 会 json_decode 成数组
+	//	返回 {collection, saler, trade_notice}
+	//
+	// ⚠️ saler 查不到用户时是**空数组 []**（且不补 sale_count 等键）
+	// ⚠️ saler.collection_count **恒为 0**（硬编码，不是查出来的）
+	// ⚠️ saler.avatar 经 getAvatarAttr 拼域名
+	// ⚠️ trade_notice 来自 ConfigService::get('trade','notice')，**无默认值 -> 可能 null**
+	// 需登录（SaleController::$notNeedLogin = ['categories']）。
+	GetSaleDetail(ctx context.Context, req *GetSaleDetailRequest, opts ...http.CallOption) (rsp *RawData, err error)
 	// PurchaseIndex 兑换专区首页列表
 	// 原: PurchaseController::index -> PurchaseFaceLists
 	//     **免登录**（控制器 $notNeedLogin 放行了 index）
@@ -464,6 +517,34 @@ func (c *MarketServiceHTTPClientImpl) GetSaleCategories(ctx context.Context, in 
 	pattern := "/v1/market/sales/categories"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServiceGetSaleCategories))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetSaleDetail 秒转详情
+//
+// 原实现 SaleController::detail -> SaleLogic::getSaleDetail($id)
+// 校验 SaleDetailValidate: 'id' => 'require|number'
+//
+//	state IN ('ON_SALE','SELL_OUT')   ⚠️ 下架(OFFLINE)查不到
+//	两个 INNER JOIN: app_archive / app，12 列
+//	images 会 json_decode 成数组
+//	返回 {collection, saler, trade_notice}
+//
+// ⚠️ saler 查不到用户时是**空数组 []**（且不补 sale_count 等键）
+// ⚠️ saler.collection_count **恒为 0**（硬编码，不是查出来的）
+// ⚠️ saler.avatar 经 getAvatarAttr 拼域名
+// ⚠️ trade_notice 来自 ConfigService::get('trade','notice')，**无默认值 -> 可能 null**
+// 需登录（SaleController::$notNeedLogin = ['categories']）。
+func (c *MarketServiceHTTPClientImpl) GetSaleDetail(ctx context.Context, in *GetSaleDetailRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/market/sales/detail"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServiceGetSaleDetail))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

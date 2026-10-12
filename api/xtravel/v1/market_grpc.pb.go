@@ -30,6 +30,7 @@ const (
 	MarketService_ShowTotalAmount_FullMethodName   = "/xtravel.v1.MarketService/ShowTotalAmount"
 	MarketService_PurchaseOut_FullMethodName       = "/xtravel.v1.MarketService/PurchaseOut"
 	MarketService_PurchaseOn_FullMethodName        = "/xtravel.v1.MarketService/PurchaseOn"
+	MarketService_GetSaleDetail_FullMethodName     = "/xtravel.v1.MarketService/GetSaleDetail"
 )
 
 // MarketServiceClient is the client API for MarketService service.
@@ -133,6 +134,22 @@ type MarketServiceClient interface {
 	// 原实现还挂了 stale-while-revalidate 缓存（逻辑过期 5s / 物理 15s / 重建锁 5s），
 	// 本批**未接**，每次直查。功能正确，少了缓存。
 	PurchaseOn(ctx context.Context, in *PurchaseOnRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 秒转详情
+	//
+	// 原实现 SaleController::detail -> SaleLogic::getSaleDetail($id)
+	// 校验 SaleDetailValidate: 'id' => 'require|number'
+	//
+	//	state IN ('ON_SALE','SELL_OUT')   ⚠️ 下架(OFFLINE)查不到
+	//	两个 INNER JOIN: app_archive / app，12 列
+	//	images 会 json_decode 成数组
+	//	返回 {collection, saler, trade_notice}
+	//
+	// ⚠️ saler 查不到用户时是**空数组 []**（且不补 sale_count 等键）
+	// ⚠️ saler.collection_count **恒为 0**（硬编码，不是查出来的）
+	// ⚠️ saler.avatar 经 getAvatarAttr 拼域名
+	// ⚠️ trade_notice 来自 ConfigService::get('trade','notice')，**无默认值 -> 可能 null**
+	// 需登录（SaleController::$notNeedLogin = ['categories']）。
+	GetSaleDetail(ctx context.Context, in *GetSaleDetailRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type marketServiceClient struct {
@@ -253,6 +270,16 @@ func (c *marketServiceClient) PurchaseOn(ctx context.Context, in *PurchaseOnRequ
 	return out, nil
 }
 
+func (c *marketServiceClient) GetSaleDetail(ctx context.Context, in *GetSaleDetailRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, MarketService_GetSaleDetail_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketServiceServer is the server API for MarketService service.
 // All implementations must embed UnimplementedMarketServiceServer
 // for forward compatibility.
@@ -354,6 +381,22 @@ type MarketServiceServer interface {
 	// 原实现还挂了 stale-while-revalidate 缓存（逻辑过期 5s / 物理 15s / 重建锁 5s），
 	// 本批**未接**，每次直查。功能正确，少了缓存。
 	PurchaseOn(context.Context, *PurchaseOnRequest) (*RawData, error)
+	// 秒转详情
+	//
+	// 原实现 SaleController::detail -> SaleLogic::getSaleDetail($id)
+	// 校验 SaleDetailValidate: 'id' => 'require|number'
+	//
+	//	state IN ('ON_SALE','SELL_OUT')   ⚠️ 下架(OFFLINE)查不到
+	//	两个 INNER JOIN: app_archive / app，12 列
+	//	images 会 json_decode 成数组
+	//	返回 {collection, saler, trade_notice}
+	//
+	// ⚠️ saler 查不到用户时是**空数组 []**（且不补 sale_count 等键）
+	// ⚠️ saler.collection_count **恒为 0**（硬编码，不是查出来的）
+	// ⚠️ saler.avatar 经 getAvatarAttr 拼域名
+	// ⚠️ trade_notice 来自 ConfigService::get('trade','notice')，**无默认值 -> 可能 null**
+	// 需登录（SaleController::$notNeedLogin = ['categories']）。
+	GetSaleDetail(context.Context, *GetSaleDetailRequest) (*RawData, error)
 	mustEmbedUnimplementedMarketServiceServer()
 }
 
@@ -396,6 +439,9 @@ func (UnimplementedMarketServiceServer) PurchaseOut(context.Context, *PurchaseOu
 }
 func (UnimplementedMarketServiceServer) PurchaseOn(context.Context, *PurchaseOnRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method PurchaseOn not implemented")
+}
+func (UnimplementedMarketServiceServer) GetSaleDetail(context.Context, *GetSaleDetailRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSaleDetail not implemented")
 }
 func (UnimplementedMarketServiceServer) mustEmbedUnimplementedMarketServiceServer() {}
 func (UnimplementedMarketServiceServer) testEmbeddedByValue()                       {}
@@ -616,6 +662,24 @@ func _MarketService_PurchaseOn_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketService_GetSaleDetail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSaleDetailRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).GetSaleDetail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_GetSaleDetail_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).GetSaleDetail(ctx, req.(*GetSaleDetailRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketService_ServiceDesc is the grpc.ServiceDesc for MarketService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -666,6 +730,10 @@ var MarketService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PurchaseOn",
 			Handler:    _MarketService_PurchaseOn_Handler,
+		},
+		{
+			MethodName: "GetSaleDetail",
+			Handler:    _MarketService_GetSaleDetail_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
