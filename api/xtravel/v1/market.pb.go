@@ -1124,6 +1124,60 @@ func (x *GetSaleOutRequest) GetId() string {
 	return ""
 }
 
+type GetStockListRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 对应 `$this->params['archive_id']`；空/0 直接返回空列表
+	ArchiveId *wrapperspb.Int64Value `protobuf:"bytes,1,opt,name=archive_id,proto3" json:"archive_id,omitempty"`
+	// 对应 `$this->params['auth_id']`；**缺失时兜底为 0**
+	AuthId        *wrapperspb.Int64Value `protobuf:"bytes,2,opt,name=auth_id,proto3" json:"auth_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetStockListRequest) Reset() {
+	*x = GetStockListRequest{}
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetStockListRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetStockListRequest) ProtoMessage() {}
+
+func (x *GetStockListRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_market_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetStockListRequest.ProtoReflect.Descriptor instead.
+func (*GetStockListRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_market_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *GetStockListRequest) GetArchiveId() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.ArchiveId
+	}
+	return nil
+}
+
+func (x *GetStockListRequest) GetAuthId() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.AuthId
+	}
+	return nil
+}
+
 var File_api_xtravel_v1_market_proto protoreflect.FileDescriptor
 
 const file_api_xtravel_v1_market_proto_rawDesc = "" +
@@ -1185,7 +1239,12 @@ const file_api_xtravel_v1_market_proto_rawDesc = "" +
 	"\x10GetSaleOnRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"#\n" +
 	"\x11GetSaleOutRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id2\xe7\v\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x89\x01\n" +
+	"\x13GetStockListRequest\x12;\n" +
+	"\n" +
+	"archive_id\x18\x01 \x01(\v2\x1b.google.protobuf.Int64ValueR\n" +
+	"archive_id\x125\n" +
+	"\aauth_id\x18\x02 \x01(\v2\x1b.google.protobuf.Int64ValueR\aauth_id2\xcc\f\n" +
 	"\rMarketService\x12a\n" +
 	"\tGetPayWay\x12\x1c.xtravel.v1.GetPayWayRequest\x1a\x1a.xtravel.v1.GetPayWayReply\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/market/pay_way\x12t\n" +
 	"\rCheckExchange\x12 .xtravel.v1.CheckExchangeRequest\x1a\x1e.xtravel.v1.CheckExchangeReply\"!\x82\xd3\xe4\x93\x02\x1b\x12\x19/v1/market/check/exchange\x12c\n" +
@@ -1202,7 +1261,8 @@ const file_api_xtravel_v1_market_proto_rawDesc = "" +
 	"\rGetSaleDetail\x12 .xtravel.v1.GetSaleDetailRequest\x1a\x13.xtravel.v1.RawData\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/market/sales/detail\x12[\n" +
 	"\tGetSaleOn\x12\x1c.xtravel.v1.GetSaleOnRequest\x1a\x13.xtravel.v1.RawData\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/market/sales/on\x12^\n" +
 	"\n" +
-	"GetSaleOut\x12\x1d.xtravel.v1.GetSaleOutRequest\x1a\x13.xtravel.v1.RawData\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/market/sales/outB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
+	"GetSaleOut\x12\x1d.xtravel.v1.GetSaleOutRequest\x1a\x13.xtravel.v1.RawData\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/market/sales/out\x12c\n" +
+	"\fGetStockList\x12\x1f.xtravel.v1.GetStockListRequest\x1a\x13.xtravel.v1.RawData\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/v1/market/stock/listB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
 
 var (
 	file_api_xtravel_v1_market_proto_rawDescOnce sync.Once
@@ -1216,7 +1276,7 @@ func file_api_xtravel_v1_market_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_market_proto_rawDescData
 }
 
-var file_api_xtravel_v1_market_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_api_xtravel_v1_market_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_api_xtravel_v1_market_proto_goTypes = []any{
 	(*PurchaseOnRequest)(nil),        // 0: xtravel.v1.PurchaseOnRequest
 	(*PurchaseOutRequest)(nil),       // 1: xtravel.v1.PurchaseOutRequest
@@ -1241,49 +1301,54 @@ var file_api_xtravel_v1_market_proto_goTypes = []any{
 	(*GetSaleDetailRequest)(nil),     // 20: xtravel.v1.GetSaleDetailRequest
 	(*GetSaleOnRequest)(nil),         // 21: xtravel.v1.GetSaleOnRequest
 	(*GetSaleOutRequest)(nil),        // 22: xtravel.v1.GetSaleOutRequest
-	(*structpb.Value)(nil),           // 23: google.protobuf.Value
-	(*wrapperspb.Int64Value)(nil),    // 24: google.protobuf.Int64Value
-	(*RawData)(nil),                  // 25: xtravel.v1.RawData
+	(*GetStockListRequest)(nil),      // 23: xtravel.v1.GetStockListRequest
+	(*structpb.Value)(nil),           // 24: google.protobuf.Value
+	(*wrapperspb.Int64Value)(nil),    // 25: google.protobuf.Int64Value
+	(*RawData)(nil),                  // 26: xtravel.v1.RawData
 }
 var file_api_xtravel_v1_market_proto_depIdxs = []int32{
-	23, // 0: xtravel.v1.SaleInfoReply.images:type_name -> google.protobuf.Value
-	23, // 1: xtravel.v1.PurchaseInfoReply.images:type_name -> google.protobuf.Value
+	24, // 0: xtravel.v1.SaleInfoReply.images:type_name -> google.protobuf.Value
+	24, // 1: xtravel.v1.PurchaseInfoReply.images:type_name -> google.protobuf.Value
 	13, // 2: xtravel.v1.GetSaleCategoriesReply.items:type_name -> xtravel.v1.SaleCategory
 	17, // 3: xtravel.v1.GetPayWayReply.items:type_name -> xtravel.v1.PayWay
-	24, // 4: xtravel.v1.GetSaleDetailRequest.id:type_name -> google.protobuf.Int64Value
-	15, // 5: xtravel.v1.MarketService.GetPayWay:input_type -> xtravel.v1.GetPayWayRequest
-	18, // 6: xtravel.v1.MarketService.CheckExchange:input_type -> xtravel.v1.CheckExchangeRequest
-	10, // 7: xtravel.v1.MarketService.PurchaseIndex:input_type -> xtravel.v1.PurchaseIndexRequest
-	11, // 8: xtravel.v1.MarketService.GetSaleCategories:input_type -> xtravel.v1.GetSaleCategoriesRequest
-	14, // 9: xtravel.v1.MarketService.SaleIndex:input_type -> xtravel.v1.SaleIndexRequest
-	8,  // 10: xtravel.v1.MarketService.StockLookAll:input_type -> xtravel.v1.StockLookAllRequest
-	6,  // 11: xtravel.v1.MarketService.PurchaseInfo:input_type -> xtravel.v1.PurchaseInfoRequest
-	4,  // 12: xtravel.v1.MarketService.SaleInfo:input_type -> xtravel.v1.SaleInfoRequest
-	2,  // 13: xtravel.v1.MarketService.ShowTotalAmount:input_type -> xtravel.v1.ShowTotalAmountRequest
-	1,  // 14: xtravel.v1.MarketService.PurchaseOut:input_type -> xtravel.v1.PurchaseOutRequest
-	0,  // 15: xtravel.v1.MarketService.PurchaseOn:input_type -> xtravel.v1.PurchaseOnRequest
-	20, // 16: xtravel.v1.MarketService.GetSaleDetail:input_type -> xtravel.v1.GetSaleDetailRequest
-	21, // 17: xtravel.v1.MarketService.GetSaleOn:input_type -> xtravel.v1.GetSaleOnRequest
-	22, // 18: xtravel.v1.MarketService.GetSaleOut:input_type -> xtravel.v1.GetSaleOutRequest
-	16, // 19: xtravel.v1.MarketService.GetPayWay:output_type -> xtravel.v1.GetPayWayReply
-	19, // 20: xtravel.v1.MarketService.CheckExchange:output_type -> xtravel.v1.CheckExchangeReply
-	25, // 21: xtravel.v1.MarketService.PurchaseIndex:output_type -> xtravel.v1.RawData
-	12, // 22: xtravel.v1.MarketService.GetSaleCategories:output_type -> xtravel.v1.GetSaleCategoriesReply
-	25, // 23: xtravel.v1.MarketService.SaleIndex:output_type -> xtravel.v1.RawData
-	9,  // 24: xtravel.v1.MarketService.StockLookAll:output_type -> xtravel.v1.StockLookAllReply
-	7,  // 25: xtravel.v1.MarketService.PurchaseInfo:output_type -> xtravel.v1.PurchaseInfoReply
-	5,  // 26: xtravel.v1.MarketService.SaleInfo:output_type -> xtravel.v1.SaleInfoReply
-	3,  // 27: xtravel.v1.MarketService.ShowTotalAmount:output_type -> xtravel.v1.ShowTotalAmountReply
-	25, // 28: xtravel.v1.MarketService.PurchaseOut:output_type -> xtravel.v1.RawData
-	25, // 29: xtravel.v1.MarketService.PurchaseOn:output_type -> xtravel.v1.RawData
-	25, // 30: xtravel.v1.MarketService.GetSaleDetail:output_type -> xtravel.v1.RawData
-	25, // 31: xtravel.v1.MarketService.GetSaleOn:output_type -> xtravel.v1.RawData
-	25, // 32: xtravel.v1.MarketService.GetSaleOut:output_type -> xtravel.v1.RawData
-	19, // [19:33] is the sub-list for method output_type
-	5,  // [5:19] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	25, // 4: xtravel.v1.GetSaleDetailRequest.id:type_name -> google.protobuf.Int64Value
+	25, // 5: xtravel.v1.GetStockListRequest.archive_id:type_name -> google.protobuf.Int64Value
+	25, // 6: xtravel.v1.GetStockListRequest.auth_id:type_name -> google.protobuf.Int64Value
+	15, // 7: xtravel.v1.MarketService.GetPayWay:input_type -> xtravel.v1.GetPayWayRequest
+	18, // 8: xtravel.v1.MarketService.CheckExchange:input_type -> xtravel.v1.CheckExchangeRequest
+	10, // 9: xtravel.v1.MarketService.PurchaseIndex:input_type -> xtravel.v1.PurchaseIndexRequest
+	11, // 10: xtravel.v1.MarketService.GetSaleCategories:input_type -> xtravel.v1.GetSaleCategoriesRequest
+	14, // 11: xtravel.v1.MarketService.SaleIndex:input_type -> xtravel.v1.SaleIndexRequest
+	8,  // 12: xtravel.v1.MarketService.StockLookAll:input_type -> xtravel.v1.StockLookAllRequest
+	6,  // 13: xtravel.v1.MarketService.PurchaseInfo:input_type -> xtravel.v1.PurchaseInfoRequest
+	4,  // 14: xtravel.v1.MarketService.SaleInfo:input_type -> xtravel.v1.SaleInfoRequest
+	2,  // 15: xtravel.v1.MarketService.ShowTotalAmount:input_type -> xtravel.v1.ShowTotalAmountRequest
+	1,  // 16: xtravel.v1.MarketService.PurchaseOut:input_type -> xtravel.v1.PurchaseOutRequest
+	0,  // 17: xtravel.v1.MarketService.PurchaseOn:input_type -> xtravel.v1.PurchaseOnRequest
+	20, // 18: xtravel.v1.MarketService.GetSaleDetail:input_type -> xtravel.v1.GetSaleDetailRequest
+	21, // 19: xtravel.v1.MarketService.GetSaleOn:input_type -> xtravel.v1.GetSaleOnRequest
+	22, // 20: xtravel.v1.MarketService.GetSaleOut:input_type -> xtravel.v1.GetSaleOutRequest
+	23, // 21: xtravel.v1.MarketService.GetStockList:input_type -> xtravel.v1.GetStockListRequest
+	16, // 22: xtravel.v1.MarketService.GetPayWay:output_type -> xtravel.v1.GetPayWayReply
+	19, // 23: xtravel.v1.MarketService.CheckExchange:output_type -> xtravel.v1.CheckExchangeReply
+	26, // 24: xtravel.v1.MarketService.PurchaseIndex:output_type -> xtravel.v1.RawData
+	12, // 25: xtravel.v1.MarketService.GetSaleCategories:output_type -> xtravel.v1.GetSaleCategoriesReply
+	26, // 26: xtravel.v1.MarketService.SaleIndex:output_type -> xtravel.v1.RawData
+	9,  // 27: xtravel.v1.MarketService.StockLookAll:output_type -> xtravel.v1.StockLookAllReply
+	7,  // 28: xtravel.v1.MarketService.PurchaseInfo:output_type -> xtravel.v1.PurchaseInfoReply
+	5,  // 29: xtravel.v1.MarketService.SaleInfo:output_type -> xtravel.v1.SaleInfoReply
+	3,  // 30: xtravel.v1.MarketService.ShowTotalAmount:output_type -> xtravel.v1.ShowTotalAmountReply
+	26, // 31: xtravel.v1.MarketService.PurchaseOut:output_type -> xtravel.v1.RawData
+	26, // 32: xtravel.v1.MarketService.PurchaseOn:output_type -> xtravel.v1.RawData
+	26, // 33: xtravel.v1.MarketService.GetSaleDetail:output_type -> xtravel.v1.RawData
+	26, // 34: xtravel.v1.MarketService.GetSaleOn:output_type -> xtravel.v1.RawData
+	26, // 35: xtravel.v1.MarketService.GetSaleOut:output_type -> xtravel.v1.RawData
+	26, // 36: xtravel.v1.MarketService.GetStockList:output_type -> xtravel.v1.RawData
+	22, // [22:37] is the sub-list for method output_type
+	7,  // [7:22] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_api_xtravel_v1_market_proto_init() }
@@ -1298,7 +1363,7 @@ func file_api_xtravel_v1_market_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_market_proto_rawDesc), len(file_api_xtravel_v1_market_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   23,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

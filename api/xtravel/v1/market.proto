@@ -181,6 +181,24 @@ service MarketService {
   rpc GetSaleOut(GetSaleOutRequest) returns (RawData) {
     option (google.api.http) = {get: "/v1/market/sales/out"};
   }
+
+  // 库存商品明细（分页）
+  //
+  // 原实现 PurchaseController::stockList -> `$this->dataLists(new StockLists())`
+  // **无校验**（控制器没有 goCheck）
+  //
+  //	where: user_id AND auth_id AND collection_id AND is_locked=1 AND used=0 AND is_use_num=0
+  //	collection_id 来自 `AppArchive::where(['id'=>$archive_id])->findOrEmpty()`
+  //	**没有 field()** -> SELECT *（x_warehouse_detail 有 24 列）
+  //	order: create_time ASC, goods_id ASC   （两个都是升序）
+  //	goods_image 逐行 json_decode；空值则赋**空数组 []**
+  //
+  // ⚠️ archive_id 为空、或档案查不到 -> **空列表 + count=0**（不是报错）
+  // ⚠️ auth_id 缺失时**兜底为 0**（不是"不筛"）
+  // 需登录（PurchaseController::$notNeedLogin = ['index']）。
+  rpc GetStockList(GetStockListRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/market/stock/list"};
+  }
 }
 
 message PurchaseOnRequest {
@@ -297,4 +315,11 @@ message GetSaleOnRequest {
 message GetSaleOutRequest {
   // 规则 require（'秒转种类ID不能为空'）。⚠️ 是 **x_app_archive.id**
   string id = 1 [json_name = "id"];
+}
+
+message GetStockListRequest {
+  // 对应 `$this->params['archive_id']`；空/0 直接返回空列表
+  google.protobuf.Int64Value archive_id = 1 [json_name = "archive_id"];
+  // 对应 `$this->params['auth_id']`；**缺失时兜底为 0**
+  google.protobuf.Int64Value auth_id = 2 [json_name = "auth_id"];
 }

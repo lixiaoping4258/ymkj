@@ -38,6 +38,7 @@ type MarketService struct {
 	saleDetail *biz.SaleDetailUsecase
 	saleOn     *biz.SaleOnUsecase
 	saleOut    *biz.SaleOutUsecase
+	stockList  *biz.StockListUsecase
 	log        *log.Helper
 }
 
@@ -54,6 +55,7 @@ func NewMarketService(
 	saleDetail *biz.SaleDetailUsecase,
 	saleOn *biz.SaleOnUsecase,
 	saleOut *biz.SaleOutUsecase,
+	stockList *biz.StockListUsecase,
 	logger log.Logger,
 ) *MarketService {
 	return &MarketService{
@@ -61,7 +63,8 @@ func NewMarketService(
 		stock: stock, archive: archive, fee: fee,
 		purchaseState: purchaseState, rawCache: rawCache, stale: stale,
 		saleDetail: saleDetail, saleOn: saleOn, saleOut: saleOut,
-		log: log.NewHelper(logger),
+		stockList: stockList,
+		log:       log.NewHelper(logger),
 	}
 }
 
@@ -562,6 +565,44 @@ func (s *MarketService) GetSaleOut(
 	// `$this->params['archive_id'] = $archive['id'];` —— 就是入参本身
 	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
 	ld, err := s.saleOut.List(ctx, archiveID, p)
+	if err != nil {
+		return nil, err
+	}
+	items, _ := ld.Lists.([]map[string]any)
+	rows := make([]map[string]any, 0, len(items))
+	rows = append(rows, items...)
+	body, merr := biz.MarshalNoHTMLEscape(map[string]any{
+		"lists":     rows,
+		"count":     ld.Count,
+		"page_no":   ld.PageNo,
+		"page_size": ld.PageSize,
+		"extend":    ld.Extend,
+	})
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
+}
+
+// GetStockList 对应 PurchaseController::stockList（GET /v1/market/stock/list）。
+//
+// 原实现：`return $this->dataLists(new StockLists());`（**无校验**）
+//
+// ⚠️ archive_id 为空 / 档案查不到 -> 空列表 + count=0（不是报错）。
+// ⚠️ auth_id 缺失 -> 兜底 0。
+func (s *MarketService) GetStockList(
+	ctx context.Context, in *v1.GetStockListRequest,
+) (*v1.RawData, error) {
+	var archiveID, authID int64
+	if in.ArchiveId != nil {
+		archiveID = in.ArchiveId.Value
+	}
+	if in.AuthId != nil {
+		authID = in.AuthId.Value
+	}
+	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
+	userID := uint32(biz.UserIDFromContext(ctx))
+	ld, err := s.stockList.List(ctx, userID, archiveID, authID, p)
 	if err != nil {
 		return nil, err
 	}

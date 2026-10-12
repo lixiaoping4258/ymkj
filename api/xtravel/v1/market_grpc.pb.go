@@ -33,6 +33,7 @@ const (
 	MarketService_GetSaleDetail_FullMethodName     = "/xtravel.v1.MarketService/GetSaleDetail"
 	MarketService_GetSaleOn_FullMethodName         = "/xtravel.v1.MarketService/GetSaleOn"
 	MarketService_GetSaleOut_FullMethodName        = "/xtravel.v1.MarketService/GetSaleOut"
+	MarketService_GetStockList_FullMethodName      = "/xtravel.v1.MarketService/GetStockList"
 )
 
 // MarketServiceClient is the client API for MarketService service.
@@ -178,6 +179,21 @@ type MarketServiceClient interface {
 	//
 	// 其余同 sale/on：7 字段、images json_decode、lists 两个 JOIN / count 一个 JOIN。
 	GetSaleOut(ctx context.Context, in *GetSaleOutRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 库存商品明细（分页）
+	//
+	// 原实现 PurchaseController::stockList -> `$this->dataLists(new StockLists())`
+	// **无校验**（控制器没有 goCheck）
+	//
+	//	where: user_id AND auth_id AND collection_id AND is_locked=1 AND used=0 AND is_use_num=0
+	//	collection_id 来自 `AppArchive::where(['id'=>$archive_id])->findOrEmpty()`
+	//	**没有 field()** -> SELECT *（x_warehouse_detail 有 24 列）
+	//	order: create_time ASC, goods_id ASC   （两个都是升序）
+	//	goods_image 逐行 json_decode；空值则赋**空数组 []**
+	//
+	// ⚠️ archive_id 为空、或档案查不到 -> **空列表 + count=0**（不是报错）
+	// ⚠️ auth_id 缺失时**兜底为 0**（不是"不筛"）
+	// 需登录（PurchaseController::$notNeedLogin = ['index']）。
+	GetStockList(ctx context.Context, in *GetStockListRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type marketServiceClient struct {
@@ -328,6 +344,16 @@ func (c *marketServiceClient) GetSaleOut(ctx context.Context, in *GetSaleOutRequ
 	return out, nil
 }
 
+func (c *marketServiceClient) GetStockList(ctx context.Context, in *GetStockListRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, MarketService_GetStockList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketServiceServer is the server API for MarketService service.
 // All implementations must embed UnimplementedMarketServiceServer
 // for forward compatibility.
@@ -471,6 +497,21 @@ type MarketServiceServer interface {
 	//
 	// 其余同 sale/on：7 字段、images json_decode、lists 两个 JOIN / count 一个 JOIN。
 	GetSaleOut(context.Context, *GetSaleOutRequest) (*RawData, error)
+	// 库存商品明细（分页）
+	//
+	// 原实现 PurchaseController::stockList -> `$this->dataLists(new StockLists())`
+	// **无校验**（控制器没有 goCheck）
+	//
+	//	where: user_id AND auth_id AND collection_id AND is_locked=1 AND used=0 AND is_use_num=0
+	//	collection_id 来自 `AppArchive::where(['id'=>$archive_id])->findOrEmpty()`
+	//	**没有 field()** -> SELECT *（x_warehouse_detail 有 24 列）
+	//	order: create_time ASC, goods_id ASC   （两个都是升序）
+	//	goods_image 逐行 json_decode；空值则赋**空数组 []**
+	//
+	// ⚠️ archive_id 为空、或档案查不到 -> **空列表 + count=0**（不是报错）
+	// ⚠️ auth_id 缺失时**兜底为 0**（不是"不筛"）
+	// 需登录（PurchaseController::$notNeedLogin = ['index']）。
+	GetStockList(context.Context, *GetStockListRequest) (*RawData, error)
 	mustEmbedUnimplementedMarketServiceServer()
 }
 
@@ -522,6 +563,9 @@ func (UnimplementedMarketServiceServer) GetSaleOn(context.Context, *GetSaleOnReq
 }
 func (UnimplementedMarketServiceServer) GetSaleOut(context.Context, *GetSaleOutRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSaleOut not implemented")
+}
+func (UnimplementedMarketServiceServer) GetStockList(context.Context, *GetStockListRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetStockList not implemented")
 }
 func (UnimplementedMarketServiceServer) mustEmbedUnimplementedMarketServiceServer() {}
 func (UnimplementedMarketServiceServer) testEmbeddedByValue()                       {}
@@ -796,6 +840,24 @@ func _MarketService_GetSaleOut_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketService_GetStockList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetStockListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).GetStockList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_GetStockList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).GetStockList(ctx, req.(*GetStockListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketService_ServiceDesc is the grpc.ServiceDesc for MarketService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -858,6 +920,10 @@ var MarketService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSaleOut",
 			Handler:    _MarketService_GetSaleOut_Handler,
+		},
+		{
+			MethodName: "GetStockList",
+			Handler:    _MarketService_GetStockList_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -25,6 +25,7 @@ const OperationMarketServiceGetSaleCategories = "/xtravel.v1.MarketService/GetSa
 const OperationMarketServiceGetSaleDetail = "/xtravel.v1.MarketService/GetSaleDetail"
 const OperationMarketServiceGetSaleOn = "/xtravel.v1.MarketService/GetSaleOn"
 const OperationMarketServiceGetSaleOut = "/xtravel.v1.MarketService/GetSaleOut"
+const OperationMarketServiceGetStockList = "/xtravel.v1.MarketService/GetStockList"
 const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseIndex"
 const OperationMarketServicePurchaseInfo = "/xtravel.v1.MarketService/PurchaseInfo"
 const OperationMarketServicePurchaseOn = "/xtravel.v1.MarketService/PurchaseOn"
@@ -87,6 +88,21 @@ type MarketServiceHTTPServer interface {
 	//
 	// 其余同 sale/on：7 字段、images json_decode、lists 两个 JOIN / count 一个 JOIN。
 	GetSaleOut(context.Context, *GetSaleOutRequest) (*RawData, error)
+	// GetStockList 库存商品明细（分页）
+	//
+	// 原实现 PurchaseController::stockList -> `$this->dataLists(new StockLists())`
+	// **无校验**（控制器没有 goCheck）
+	//
+	//	where: user_id AND auth_id AND collection_id AND is_locked=1 AND used=0 AND is_use_num=0
+	//	collection_id 来自 `AppArchive::where(['id'=>$archive_id])->findOrEmpty()`
+	//	**没有 field()** -> SELECT *（x_warehouse_detail 有 24 列）
+	//	order: create_time ASC, goods_id ASC   （两个都是升序）
+	//	goods_image 逐行 json_decode；空值则赋**空数组 []**
+	//
+	// ⚠️ archive_id 为空、或档案查不到 -> **空列表 + count=0**（不是报错）
+	// ⚠️ auth_id 缺失时**兜底为 0**（不是"不筛"）
+	// 需登录（PurchaseController::$notNeedLogin = ['index']）。
+	GetStockList(context.Context, *GetStockListRequest) (*RawData, error)
 	// PurchaseIndex 兑换专区首页列表
 	// 原: PurchaseController::index -> PurchaseFaceLists
 	//     **免登录**（控制器 $notNeedLogin 放行了 index）
@@ -171,6 +187,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/sales/detail", _MarketService_GetSaleDetail0_HTTP_Handler(srv))
 	r.GET("/v1/market/sales/on", _MarketService_GetSaleOn0_HTTP_Handler(srv))
 	r.GET("/v1/market/sales/out", _MarketService_GetSaleOut0_HTTP_Handler(srv))
+	r.GET("/v1/market/stock/list", _MarketService_GetStockList0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -439,6 +456,25 @@ func _MarketService_GetSaleOut0_HTTP_Handler(srv MarketServiceHTTPServer) func(c
 	}
 }
 
+func _MarketService_GetStockList0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetStockListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServiceGetStockList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetStockList(ctx, req.(*GetStockListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -492,6 +528,21 @@ type MarketServiceHTTPClient interface {
 	//
 	// 其余同 sale/on：7 字段、images json_decode、lists 两个 JOIN / count 一个 JOIN。
 	GetSaleOut(ctx context.Context, req *GetSaleOutRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// GetStockList 库存商品明细（分页）
+	//
+	// 原实现 PurchaseController::stockList -> `$this->dataLists(new StockLists())`
+	// **无校验**（控制器没有 goCheck）
+	//
+	//	where: user_id AND auth_id AND collection_id AND is_locked=1 AND used=0 AND is_use_num=0
+	//	collection_id 来自 `AppArchive::where(['id'=>$archive_id])->findOrEmpty()`
+	//	**没有 field()** -> SELECT *（x_warehouse_detail 有 24 列）
+	//	order: create_time ASC, goods_id ASC   （两个都是升序）
+	//	goods_image 逐行 json_decode；空值则赋**空数组 []**
+	//
+	// ⚠️ archive_id 为空、或档案查不到 -> **空列表 + count=0**（不是报错）
+	// ⚠️ auth_id 缺失时**兜底为 0**（不是"不筛"）
+	// 需登录（PurchaseController::$notNeedLogin = ['index']）。
+	GetStockList(ctx context.Context, req *GetStockListRequest, opts ...http.CallOption) (rsp *RawData, err error)
 	// PurchaseIndex 兑换专区首页列表
 	// 原: PurchaseController::index -> PurchaseFaceLists
 	//     **免登录**（控制器 $notNeedLogin 放行了 index）
@@ -687,6 +738,33 @@ func (c *MarketServiceHTTPClientImpl) GetSaleOut(ctx context.Context, in *GetSal
 	pattern := "/v1/market/sales/out"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServiceGetSaleOut))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetStockList 库存商品明细（分页）
+//
+// 原实现 PurchaseController::stockList -> `$this->dataLists(new StockLists())`
+// **无校验**（控制器没有 goCheck）
+//
+//	where: user_id AND auth_id AND collection_id AND is_locked=1 AND used=0 AND is_use_num=0
+//	collection_id 来自 `AppArchive::where(['id'=>$archive_id])->findOrEmpty()`
+//	**没有 field()** -> SELECT *（x_warehouse_detail 有 24 列）
+//	order: create_time ASC, goods_id ASC   （两个都是升序）
+//	goods_image 逐行 json_decode；空值则赋**空数组 []**
+//
+// ⚠️ archive_id 为空、或档案查不到 -> **空列表 + count=0**（不是报错）
+// ⚠️ auth_id 缺失时**兜底为 0**（不是"不筛"）
+// 需登录（PurchaseController::$notNeedLogin = ['index']）。
+func (c *MarketServiceHTTPClientImpl) GetStockList(ctx context.Context, in *GetStockListRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/market/stock/list"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServiceGetStockList))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {
