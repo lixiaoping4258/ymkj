@@ -25,6 +25,7 @@ const (
 	UserService_GetAddressList_FullMethodName     = "/xtravel.v1.UserService/GetAddressList"
 	UserService_GetRealInfo_FullMethodName        = "/xtravel.v1.UserService/GetRealInfo"
 	UserService_GetUnregisterCheck_FullMethodName = "/xtravel.v1.UserService/GetUnregisterCheck"
+	UserService_SetMessageAllRead_FullMethodName  = "/xtravel.v1.UserService/SetMessageAllRead"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -120,6 +121,17 @@ type UserServiceClient interface {
 	// ⚠️ 用的是 success('请求成功', ...) —— **不是 data()**，所以 msg 是 "请求成功"。
 	// 需登录。
 	GetUnregisterCheck(ctx context.Context, in *GetUnregisterCheckRequest, opts ...grpc.CallOption) (*GetUnregisterCheckReply, error)
+	// 设置所有消息已读
+	//
+	// 原实现 MessageController::setAllRead -> MessageLogic::setAllRead($userId)
+	//
+	//	$where = [['recv_id','=',$userId], ['is_read','=',0], ['is_del','=',0]];
+	//	if (empty(Messages::where($where)->count())) { return true; }   // ⚠️ 没有未读则**不发 UPDATE**
+	//	Messages::where($where)->update(['is_read' => 1]);
+	//
+	// 控制器：`return $this->data([]);` -> data 是**空数组**
+	// 需登录。POST，无请求体。
+	SetMessageAllRead(ctx context.Context, in *SetMessageAllReadRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type userServiceClient struct {
@@ -184,6 +196,16 @@ func (c *userServiceClient) GetUnregisterCheck(ctx context.Context, in *GetUnreg
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetUnregisterCheckReply)
 	err := c.cc.Invoke(ctx, UserService_GetUnregisterCheck_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) SetMessageAllRead(ctx context.Context, in *SetMessageAllReadRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, UserService_SetMessageAllRead_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -283,6 +305,17 @@ type UserServiceServer interface {
 	// ⚠️ 用的是 success('请求成功', ...) —— **不是 data()**，所以 msg 是 "请求成功"。
 	// 需登录。
 	GetUnregisterCheck(context.Context, *GetUnregisterCheckRequest) (*GetUnregisterCheckReply, error)
+	// 设置所有消息已读
+	//
+	// 原实现 MessageController::setAllRead -> MessageLogic::setAllRead($userId)
+	//
+	//	$where = [['recv_id','=',$userId], ['is_read','=',0], ['is_del','=',0]];
+	//	if (empty(Messages::where($where)->count())) { return true; }   // ⚠️ 没有未读则**不发 UPDATE**
+	//	Messages::where($where)->update(['is_read' => 1]);
+	//
+	// 控制器：`return $this->data([]);` -> data 是**空数组**
+	// 需登录。POST，无请求体。
+	SetMessageAllRead(context.Context, *SetMessageAllReadRequest) (*RawData, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -310,6 +343,9 @@ func (UnimplementedUserServiceServer) GetRealInfo(context.Context, *GetRealInfoR
 }
 func (UnimplementedUserServiceServer) GetUnregisterCheck(context.Context, *GetUnregisterCheckRequest) (*GetUnregisterCheckReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUnregisterCheck not implemented")
+}
+func (UnimplementedUserServiceServer) SetMessageAllRead(context.Context, *SetMessageAllReadRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetMessageAllRead not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -440,6 +476,24 @@ func _UserService_GetUnregisterCheck_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_SetMessageAllRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetMessageAllReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).SetMessageAllRead(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_SetMessageAllRead_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).SetMessageAllRead(ctx, req.(*SetMessageAllReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -470,6 +524,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUnregisterCheck",
 			Handler:    _UserService_GetUnregisterCheck_Handler,
+		},
+		{
+			MethodName: "SetMessageAllRead",
+			Handler:    _UserService_SetMessageAllRead_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

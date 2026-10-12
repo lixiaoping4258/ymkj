@@ -25,6 +25,7 @@ const OperationUserServiceGetRealInfo = "/xtravel.v1.UserService/GetRealInfo"
 const OperationUserServiceGetUnregisterCheck = "/xtravel.v1.UserService/GetUnregisterCheck"
 const OperationUserServiceGetUserInfo = "/xtravel.v1.UserService/GetUserInfo"
 const OperationUserServiceGetUserNoticeNew = "/xtravel.v1.UserService/GetUserNoticeNew"
+const OperationUserServiceSetMessageAllRead = "/xtravel.v1.UserService/SetMessageAllRead"
 
 type UserServiceHTTPServer interface {
 	// GetAddressDefault 用户默认地址
@@ -111,6 +112,17 @@ type UserServiceHTTPServer interface {
 	//
 	// 免登录（v1/user/NoticeController::$notNeedLogin = ['getNew']）。
 	GetUserNoticeNew(context.Context, *GetUserNoticeNewRequest) (*RawData, error)
+	// SetMessageAllRead 设置所有消息已读
+	//
+	// 原实现 MessageController::setAllRead -> MessageLogic::setAllRead($userId)
+	//
+	//	$where = [['recv_id','=',$userId], ['is_read','=',0], ['is_del','=',0]];
+	//	if (empty(Messages::where($where)->count())) { return true; }   // ⚠️ 没有未读则**不发 UPDATE**
+	//	Messages::where($where)->update(['is_read' => 1]);
+	//
+	// 控制器：`return $this->data([]);` -> data 是**空数组**
+	// 需登录。POST，无请求体。
+	SetMessageAllRead(context.Context, *SetMessageAllReadRequest) (*RawData, error)
 }
 
 func RegisterUserServiceHTTPServer(s *http.Server, srv UserServiceHTTPServer) {
@@ -121,6 +133,7 @@ func RegisterUserServiceHTTPServer(s *http.Server, srv UserServiceHTTPServer) {
 	r.GET("/v1/user/address", _UserService_GetAddressList0_HTTP_Handler(srv))
 	r.GET("/v1/user/real/info", _UserService_GetRealInfo0_HTTP_Handler(srv))
 	r.GET("/v1/user/unregisr/check", _UserService_GetUnregisterCheck0_HTTP_Handler(srv))
+	r.POST("/v1/user/message/setAllRead", _UserService_SetMessageAllRead0_HTTP_Handler(srv))
 }
 
 func _UserService_GetUserInfo0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
@@ -237,6 +250,28 @@ func _UserService_GetUnregisterCheck0_HTTP_Handler(srv UserServiceHTTPServer) fu
 	}
 }
 
+func _UserService_SetMessageAllRead0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in SetMessageAllReadRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserServiceSetMessageAllRead)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.SetMessageAllRead(ctx, req.(*SetMessageAllReadRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type UserServiceHTTPClient interface {
 	// GetAddressDefault 用户默认地址
 	//
@@ -322,6 +357,17 @@ type UserServiceHTTPClient interface {
 	//
 	// 免登录（v1/user/NoticeController::$notNeedLogin = ['getNew']）。
 	GetUserNoticeNew(ctx context.Context, req *GetUserNoticeNewRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// SetMessageAllRead 设置所有消息已读
+	//
+	// 原实现 MessageController::setAllRead -> MessageLogic::setAllRead($userId)
+	//
+	//	$where = [['recv_id','=',$userId], ['is_read','=',0], ['is_del','=',0]];
+	//	if (empty(Messages::where($where)->count())) { return true; }   // ⚠️ 没有未读则**不发 UPDATE**
+	//	Messages::where($where)->update(['is_read' => 1]);
+	//
+	// 控制器：`return $this->data([]);` -> data 是**空数组**
+	// 需登录。POST，无请求体。
+	SetMessageAllRead(ctx context.Context, req *SetMessageAllReadRequest, opts ...http.CallOption) (rsp *RawData, err error)
 }
 
 type UserServiceHTTPClientImpl struct {
@@ -484,6 +530,29 @@ func (c *UserServiceHTTPClientImpl) GetUserNoticeNew(ctx context.Context, in *Ge
 	opts = append(opts, http.Operation(OperationUserServiceGetUserNoticeNew))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SetMessageAllRead 设置所有消息已读
+//
+// 原实现 MessageController::setAllRead -> MessageLogic::setAllRead($userId)
+//
+//	$where = [['recv_id','=',$userId], ['is_read','=',0], ['is_del','=',0]];
+//	if (empty(Messages::where($where)->count())) { return true; }   // ⚠️ 没有未读则**不发 UPDATE**
+//	Messages::where($where)->update(['is_read' => 1]);
+//
+// 控制器：`return $this->data([]);` -> data 是**空数组**
+// 需登录。POST，无请求体。
+func (c *UserServiceHTTPClientImpl) SetMessageAllRead(ctx context.Context, in *SetMessageAllReadRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/user/message/setAllRead"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationUserServiceSetMessageAllRead))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
 	if err != nil {
 		return nil, err
 	}

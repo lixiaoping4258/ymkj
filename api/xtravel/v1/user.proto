@@ -112,6 +112,23 @@ service UserService {
   rpc GetUnregisterCheck(GetUnregisterCheckRequest) returns (GetUnregisterCheckReply) {
     option (google.api.http) = {get: "/v1/user/unregisr/check"};
   }
+
+  // 设置所有消息已读
+  //
+  // 原实现 MessageController::setAllRead -> MessageLogic::setAllRead($userId)
+  //
+  //	$where = [['recv_id','=',$userId], ['is_read','=',0], ['is_del','=',0]];
+  //	if (empty(Messages::where($where)->count())) { return true; }   // ⚠️ 没有未读则**不发 UPDATE**
+  //	Messages::where($where)->update(['is_read' => 1]);
+  //
+  // 控制器：`return $this->data([]);` -> data 是**空数组**
+  // 需登录。POST，无请求体。
+  rpc SetMessageAllRead(SetMessageAllReadRequest) returns (RawData) {
+    option (google.api.http) = {
+      post: "/v1/user/message/setAllRead"
+      body: "*"
+    };
+  }
 }
 
 message GetUserInfoRequest {}
@@ -206,3 +223,5 @@ message GetUnregisterCheckReply {
   // 不通过的原因；全部通过时是**空数组**
   repeated string errWord = 2 [json_name = "errWord"];
 }
+
+message SetMessageAllReadRequest {}

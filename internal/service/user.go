@@ -20,10 +20,11 @@ type UserService struct {
 	addressList *biz.AddressListUsecase
 	realInfo    *biz.RealInfoUsecase
 	unreg       *biz.UnregisterCheckUsecase
+	msgRead     *biz.MessageReadUsecase
 }
 
-func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase, addressList *biz.AddressListUsecase, realInfo *biz.RealInfoUsecase, unreg *biz.UnregisterCheckUsecase) *UserService {
-	return &UserService{users: users, noticeNew: noticeNew, address: address, addressList: addressList, realInfo: realInfo, unreg: unreg}
+func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase, addressList *biz.AddressListUsecase, realInfo *biz.RealInfoUsecase, unreg *biz.UnregisterCheckUsecase, msgRead *biz.MessageReadUsecase) *UserService {
+	return &UserService{users: users, noticeNew: noticeNew, address: address, addressList: addressList, realInfo: realInfo, unreg: unreg, msgRead: msgRead}
 }
 
 // GetUserInfo 对应 UserController::info。
@@ -202,4 +203,22 @@ func (s *UserService) GetUnregisterCheck(
 		words = []string{}
 	}
 	return &v1.GetUnregisterCheckReply{State: res.State, ErrWord: words}, nil
+}
+
+// SetMessageAllRead 对应 MessageController::setAllRead（POST /v1/user/message/setAllRead）。
+//
+// 原实现：
+//
+//	$data = MessageLogic::setAllRead($this->userId);
+//	if ($data === false) { return $this->fail(MessageLogic::getError()); }
+//	return $this->data([]);          // ⚠️ data 是**空数组**
+func (s *UserService) SetMessageAllRead(
+	ctx context.Context, _ *v1.SetMessageAllReadRequest,
+) (*v1.RawData, error) {
+	userID := biz.UserIDFromContext(ctx)
+	if err := s.msgRead.SetAllRead(ctx, uint32(userID)); err != nil {
+		return nil, bizFail(biz.NewBizError(err.Error()))
+	}
+	// 对应 `$this->data([])` —— 空数组，不是 null 也不是 {}
+	return &v1.RawData{Json: []byte("[]")}, nil
 }
