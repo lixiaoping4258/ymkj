@@ -22,6 +22,10 @@
 >
 > 如果 `git ls-remote` 显示远端不在本地历史里，**停下来问人**，不要强推。
 
+
+> 🔥 **动手前先读**：[十一、迁移检查清单](#十一迁移检查清单反复踩过的坑)</br>
+> 那里集中了本会话**反复踩过**的坑（datetime 类型、INNER JOIN、msg 文案、
+> 共享缓存键名、写操作测试纪律……）。**每一条都是实际返工换来的。**
 ---
 
 ## 一、当前进度：Stage 1 已完成并**连真实数据库验证通过**
@@ -1180,6 +1184,7 @@ if ($result['is_read'] == 0) {
 | [`docs/RECON-login-spec.md`](docs/RECON-login-spec.md) | 登录域逐分支规格（`login`/`register`/验证码/锁定/`Id::gen`） |
 | [`docs/RECON-user-domain.md`](docs/RECON-user-domain.md) | `user.php` 21 条路由逐个标注复杂度 + `center` 的 6 个坑 |
 | [`docs/RECON-user-message.md`](docs/RECON-user-message.md) | `GET /v1/user/message` —— 读接口藏写操作 + 死代码过滤 + INNER JOIN |
+| [`docs/RECON-user-address-create.md`](docs/RECON-user-address-create.md) | `POST /v1/user/address/create` —— 事务 + Id::gen + 两个待补项 |
 | [`docs/API-SAMPLES.md`](docs/API-SAMPLES.md) | 早期 14 条已迁接口的真实请求/响应样例 |
 ### `GET /v1/market/purchase/price_range`
 
@@ -1279,3 +1284,143 @@ if ($result['is_read'] == 0) {
 | `@($空结果).Count` | **等于 1**（空字符串被当成一个元素），会把空输出数成 1 条 | 直接打印内容判断，别用 `.Count` 判空 |
 | 在 `.ps1` 里写 `<<'EOF'` heredoc | PowerShell 不支持 | 写消息文件再 `git commit -F` |
 | `Select-Object -First N` 接在原生命令后 | **会关掉管道并杀掉上游进程**（曾杀掉一个 56% 的 Blender 渲染） | 用 `[array]` 收全再截取 |
+
+---
+
+## 十一、迁移检查清单（反复踩过的坑）
+
+> 这些**全部是实际返工换来的**，不是理论。每迁一个接口，逐条过一遍。
+
+### 1. datetime 列 → 必须扫进 `time.Time` 再格式化（**踩过 2 次**）
+
+用 `string` 接 datetime 列，GORM/driver 会输出 **RFC3339**：
+
+```
+我:   "2026-11-08T14:37:15+08:00"
+PHP:  "2026-11-08 14:37:15"
+```
+
+**已踩过的接口**：`/v1/user/message/detail`（`create_time`）、
+`/v1/open/authMyUserList`（`expire`）。
+
+**规则**：凡是从 `information_schema` 查到 `COLUMN_TYPE = datetime` 的列，
+一律 `time.Time` + `Format("2006-01-02 15:04:05")`。
+
+**反例（不要一律改）**：`x_article.create_time` 是 **`int(11)`**（不是 datetime），
+`x_notices.create_time` 才是 datetime —— **同一张表的相邻表也可能不同，必须查**。
+
+### 2. `hasWhere` / `join` 都是 **INNER JOIN**
+
+ThinkPHP 的 `hasWhere('rel', ...)` 和 `join(...)` 默认都是 **INNER JOIN**。
+关联不上的行**不会出现**，而且 `count()` 往往用同一套 JOIN。
+
+**已遇到的**：`AddressLists::hasWhere('app')`、`MessageLists::join('messages_body')`、
+`PaymentLogic::getScenePayWay` 的 `hasWhere('payConfig')`、
+`AuthMyUserLists` 的三表 join。
+
+⚠️ **不要改成 LEFT JOIN** —— 那会让"孤儿行"突然出现，总数也对不上。
+
+### 3. `lists()` 与 `count()` 的条件可能**故意不一致**
+
+**已遇到 2 次**：
+- `AuthMyUserLists`：`lists()` 三表 JOIN，`count()` 只有两表（少 `x_user`）
+- `MessageLists`：两者一致，但 `queryWhere` 过滤 `m.type` 而 `field` 取 `mb.type`
+
+**照搬**。这会导致 `count` 大于列表实际长度（末页空列表）—— 是**原项目的行为**。
+
+### 4. `msg` 文案不是"成功"，各接口**各不相同**
+
+```php
+data()                     -> msg = ""           ← 大多数接口
+success('成功', $data)      -> msg = "成功"        ← /v1/user/address/default
+success('请求成功', $data)  -> msg = "请求成功"     ← /v1/user/unregisr/check
+success('删除成功')         -> msg = "删除成功"     ← /v1/user/address/delete
+success('添加成功')         -> msg = "添加成功"     ← /v1/user/address/create
+```
+
+**每个接口都要单独看控制器的 return**。
+
+### 5. 共享缓存键的**值**必须是 PHP 的 `toArray()` 形状
+
+`biz.RawKeyCache`（`RedisLockService`，无前缀）与 PHP **共用键**。
+缓存值**不能用 Go 结构体直接 Marshal**：
+
+```
+我(错): {"ID":123,"IsDefault":1,"Address":"..."}
+PHP:   {"id":123,"is_default":1,"address":"..."}
+```
+
+**已踩过**：`purchase:addressDefault:{uid}`。要用**手工拼的 snake_case map**。
+
+（注意区分：`biz.Cache`（ThinkPHP `cache()`）有 `la:` 前缀 + TP 序列化
+→ **必须隔离**，用 `xtravel:go:` 前缀。）
+
+### 6. 改 proto 字段类型**不能用全局 Replace**
+
+`int64 id = 1 [json_name = "id"];` 这种模式在多个 message 里都有。
+一次全局替换**误伤了 `GetAddressDefaultRequest/Reply`**，导致 protoc 报
+`"id" is already defined`。
+
+**按 message 定位，逐行改。**
+
+### 7. JSON 输出不要走 `json.Marshal`
+
+Go 会把 `<` `>` `&` 转义成 `\u003c` 等，**PHP 的 `json_encode` 不转义**。
+统一用 `biz.MarshalNoHTMLEscape`；`httpx` 层已改（`marshalData` 对
+`json.RawMessage` 原样返回 + `writeEnvelope` 用 `SetEscapeHTML(false)`）。
+
+### 8. 找不到表时先看模型的 `$name`
+
+`PayWay` 声明了 `protected $name = 'dev_pay_way'` → 真实表是 **`x_dev_pay_way`**，
+按类名猜成 `x_pay_way` 会报 `Table doesn't exist`。
+
+### 9. 软删除列必须**逐个表核实**
+
+ThinkPHP 模型会自动加 `delete_time IS NULL`，Go 侧必须显式加。但**不是每张表都有**：
+
+| 有 `delete_time` | 没有 `delete_time` |
+|---|---|
+| `x_market_purchase`（第 6 轮踩过） | `x_user_address` |
+| `x_user_accounts`（第 41 轮踩过） | `x_user_real` |
+| `x_user` | `x_user_wallet` |
+| `x_app_auth` | `x_hot_search` |
+| `x_messages`（用 `is_del` 而非软删除） | `x_app` |
+
+**加了不存在的列会直接报 SQL 错误；不加已有的列会多返回数据。**
+
+### 10. 跨语言函数语义**必须实跑对拍，不能手算**
+
+`substr_replace($m, '****', 3, 6)` 我手算成 `138****000`（10 位），
+**实跑 PHP 是 `138****00`（9 位）** —— 星号只有 4 个而抹掉 6 个字符，
+**结果比原串短 2 位**。实现本来是对的，是手算的期望值错了。
+
+**凡是带 offset/length 的 PHP 函数（`substr_replace` / `substr` / `mb_substr` /
+`sprintf` / `number_format` / `bc*`），都写个 `.php` 脚本用 `php.exe` 跑一遍，
+拿真实输出当期望值。**
+
+### 11. `mb_*` 是**字符**语义，Go 要按 rune
+
+`StrUtil::hideStr` / `hideName` 用 `mb_strlen` / `mb_substr`。
+Go 的 `len()` / `s[i]` 是字节 —— 中文名会算错：
+
+```
+"郎云霞"  正确: 郎*霞        按字节: 郎*******霞
+```
+
+已用 `[]rune` 实现并有单测（含反向断言）。
+
+### 12. 🔴 验证**写操作**只能用**合成数据**
+
+**我在验证 `address/delete` 时误用真实地址**（`id=178056289901272`）
+做破坏性测试，**它被硬删除**（该表无 `delete_time`）。已按原值恢复，
+条数回到 3，但 `contact_phone` 的原值没有直接证据。
+
+**纪律**：
+- 写/删接口**只碰自己 INSERT 进去的合成行**，验证完立刻清理
+- **不要**为了"看看返回什么"而拿真实业务数据试
+- 破坏性接口优先只验证**校验分支**与**未找到分支**（这两类安全）
+
+### 13. 需要联网/外部服务的接口先跳过
+
+`open.php` 的 `authUser*` / `lockGoods` / `unlockGoods` / `userArchiveList`
+要调第三方 HTTP（`TransactionService`）。**先跳过**，等有测试环境再动。
