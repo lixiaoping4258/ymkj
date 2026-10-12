@@ -76,6 +76,8 @@ var ProviderSet = wire.NewSet(
 	wire.Bind(new(biz.AuthMyUserRepo), new(*authMyUserRepo)),
 	NewAuthUserRepo,
 	wire.Bind(new(biz.AuthUserRepo), new(*authUserRepo)),
+	NewAuthUserDetailRepo,
+	wire.Bind(new(biz.AuthUserDetailRepo), new(*authUserDetailRepo)),
 	wire.Bind(new(biz.OpenAppAuthRepo), new(*openAppRepo)),
 )
 

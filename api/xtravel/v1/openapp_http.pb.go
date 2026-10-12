@@ -23,6 +23,7 @@ const OperationOpenAppServiceGetAppDetail = "/xtravel.v1.OpenAppService/GetAppDe
 const OperationOpenAppServiceGetAppList = "/xtravel.v1.OpenAppService/GetAppList"
 const OperationOpenAppServiceGetAuthMyUserList = "/xtravel.v1.OpenAppService/GetAuthMyUserList"
 const OperationOpenAppServiceGetAuthUrl = "/xtravel.v1.OpenAppService/GetAuthUrl"
+const OperationOpenAppServiceGetAuthUserDetail = "/xtravel.v1.OpenAppService/GetAuthUserDetail"
 const OperationOpenAppServiceGetAuthUserList = "/xtravel.v1.OpenAppService/GetAuthUserList"
 
 type OpenAppServiceHTTPServer interface {
@@ -61,7 +62,7 @@ type OpenAppServiceHTTPServer interface {
 	// ⚠️ **state=111 是硬编码的**；auth_url 原样拼接；**redirectUrl 不做 URL 编码**。
 	// ⚠️ 只筛 state=1，**不筛 type**（与 appList 不同）。
 	GetAuthUrl(context.Context, *GetAuthUrlRequest) (*RawData, error)
-	// GetAuthUserList 三方平台详情
+	// GetAuthUserDetail 三方平台详情
 	//
 	// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
 	//
@@ -73,7 +74,21 @@ type OpenAppServiceHTTPServer interface {
 	//    原项目的不一致，照搬。
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
-	// 一级平台授权用户列表（分页）
+	// 一级平台授权用户详情
+	//
+	// 原实现 OpenAppController::authUserDetail -> `$this->data((new AppUserLists())->detail())`
+	//
+	//	$appAuth = AppAuth::where('id', $this->params['app_auth_id'])->findOrEmpty()->toArray();
+	//	$app = (new AppLists())->detail($appAuth['app_id']);
+	//	$appAuth['app_info'] = $app;
+	//
+	// ⚠️⚠️ **参数名不一致（原项目如此）**：校验用的是 `app_id`（require），
+	//    但这里读的是 `app_auth_id` —— 请求必须**同时带两个**。
+	// ⚠️ 找不到 app_auth_id 时 `toArray()` 是 []，`['app_id']` 得 null，
+	//    回退到校验过的 `app_id` -> 响应变成 {"app_info":{...}}。
+	// ⚠️ `SELECT *` -> 返回**全部 10 列，含 token**（凭据外泄面，照搬）。
+	GetAuthUserDetail(context.Context, *GetAuthUserDetailRequest) (*RawData, error)
+	// GetAuthUserList 一级平台授权用户列表（分页）
 	//
 	// 原实现 OpenAppController::authUserList -> `$this->dataLists(new AppUserLists())`
 	// 校验 AuthUserListValidate: app_id => require（'一级平台ID不能为空'）
@@ -92,6 +107,7 @@ type OpenAppServiceHTTPServer interface {
 func RegisterOpenAppServiceHTTPServer(s *http.Server, srv OpenAppServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/v1/open/appList", _OpenAppService_GetAppList0_HTTP_Handler(srv))
+	r.GET("/v1/open/authUserDetail", _OpenAppService_GetAuthUserDetail0_HTTP_Handler(srv))
 	r.GET("/v1/open/authUserList", _OpenAppService_GetAuthUserList0_HTTP_Handler(srv))
 	r.GET("/v1/open/authMyUserList", _OpenAppService_GetAuthMyUserList0_HTTP_Handler(srv))
 	r.GET("/v1/open/authUrl", _OpenAppService_GetAuthUrl0_HTTP_Handler(srv))
@@ -107,6 +123,25 @@ func _OpenAppService_GetAppList0_HTTP_Handler(srv OpenAppServiceHTTPServer) func
 		http.SetOperation(ctx, OperationOpenAppServiceGetAppList)
 		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
 			return srv.GetAppList(ctx, req.(*GetAppListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _OpenAppService_GetAuthUserDetail0_HTTP_Handler(srv OpenAppServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetAuthUserDetailRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationOpenAppServiceGetAuthUserDetail)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetAuthUserDetail(ctx, req.(*GetAuthUserDetailRequest))
 		})
 		out, err := h(ctx, &in)
 		if err != nil {
@@ -229,7 +264,7 @@ type OpenAppServiceHTTPClient interface {
 	// ⚠️ **state=111 是硬编码的**；auth_url 原样拼接；**redirectUrl 不做 URL 编码**。
 	// ⚠️ 只筛 state=1，**不筛 type**（与 appList 不同）。
 	GetAuthUrl(ctx context.Context, req *GetAuthUrlRequest, opts ...http.CallOption) (rsp *RawData, err error)
-	// GetAuthUserList 三方平台详情
+	// GetAuthUserDetail 三方平台详情
 	//
 	// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
 	//
@@ -241,7 +276,21 @@ type OpenAppServiceHTTPClient interface {
 	//    原项目的不一致，照搬。
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
-	// 一级平台授权用户列表（分页）
+	// 一级平台授权用户详情
+	//
+	// 原实现 OpenAppController::authUserDetail -> `$this->data((new AppUserLists())->detail())`
+	//
+	//	$appAuth = AppAuth::where('id', $this->params['app_auth_id'])->findOrEmpty()->toArray();
+	//	$app = (new AppLists())->detail($appAuth['app_id']);
+	//	$appAuth['app_info'] = $app;
+	//
+	// ⚠️⚠️ **参数名不一致（原项目如此）**：校验用的是 `app_id`（require），
+	//    但这里读的是 `app_auth_id` —— 请求必须**同时带两个**。
+	// ⚠️ 找不到 app_auth_id 时 `toArray()` 是 []，`['app_id']` 得 null，
+	//    回退到校验过的 `app_id` -> 响应变成 {"app_info":{...}}。
+	// ⚠️ `SELECT *` -> 返回**全部 10 列，含 token**（凭据外泄面，照搬）。
+	GetAuthUserDetail(ctx context.Context, req *GetAuthUserDetailRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// GetAuthUserList 一级平台授权用户列表（分页）
 	//
 	// 原实现 OpenAppController::authUserList -> `$this->dataLists(new AppUserLists())`
 	// 校验 AuthUserListValidate: app_id => require（'一级平台ID不能为空'）
@@ -348,7 +397,7 @@ func (c *OpenAppServiceHTTPClientImpl) GetAuthUrl(ctx context.Context, in *GetAu
 	return &out, nil
 }
 
-// GetAuthUserList 三方平台详情
+// GetAuthUserDetail 三方平台详情
 //
 // 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
 //
@@ -362,7 +411,37 @@ func (c *OpenAppServiceHTTPClientImpl) GetAuthUrl(ctx context.Context, in *GetAu
 //
 // ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 // ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
-// 一级平台授权用户列表（分页）
+// 一级平台授权用户详情
+//
+// 原实现 OpenAppController::authUserDetail -> `$this->data((new AppUserLists())->detail())`
+//
+//	$appAuth = AppAuth::where('id', $this->params['app_auth_id'])->findOrEmpty()->toArray();
+//	$app = (new AppLists())->detail($appAuth['app_id']);
+//	$appAuth['app_info'] = $app;
+//
+// ⚠️⚠️ **参数名不一致（原项目如此）**：校验用的是 `app_id`（require），
+//
+//	但这里读的是 `app_auth_id` —— 请求必须**同时带两个**。
+//
+// ⚠️ 找不到 app_auth_id 时 `toArray()` 是 []，`['app_id']` 得 null，
+//
+//	回退到校验过的 `app_id` -> 响应变成 {"app_info":{...}}。
+//
+// ⚠️ `SELECT *` -> 返回**全部 10 列，含 token**（凭据外泄面，照搬）。
+func (c *OpenAppServiceHTTPClientImpl) GetAuthUserDetail(ctx context.Context, in *GetAuthUserDetailRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/open/authUserDetail"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationOpenAppServiceGetAuthUserDetail))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetAuthUserList 一级平台授权用户列表（分页）
 //
 // 原实现 OpenAppController::authUserList -> `$this->dataLists(new AppUserLists())`
 // 校验 AuthUserListValidate: app_id => require（'一级平台ID不能为空'）

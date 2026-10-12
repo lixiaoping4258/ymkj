@@ -1167,6 +1167,66 @@ if ($result['is_read'] == 0) {
 对应实现：`internal/biz/message_detail.go` 的 `Detail()`，
 以及 `internal/data/message_detail.go` 的 `MarkReadByPrimaryKey()`，两处都有醒目注释。
 
+
+### 🔴 `/v1/open/authUserDetail` 把三方授权 `token` 返回给了前端（**刻意照搬**）
+
+`AppUserLists::detail()` 用的是 **`SELECT *`**（不是字段清单）：
+
+```php
+$appAuth = AppAuth::where('id', $this->params['app_auth_id'])->findOrEmpty()->toArray();
+$app = (new AppLists())->detail($appAuth['app_id']);
+$appAuth['app_info'] = $app;
+return $appAuth;
+```
+
+`AppAuth` 模型**没有 `$hidden`**，所以 `toArray()` 返回 `x_app_auth` 的**全部 10 列**：
+
+```
+id, app_id, uid, app_uid, app_nickname, app_avatar, token, start, expire, delete_time
+                                        ^^^^^
+```
+
+**其中 `token` 是三方平台的授权凭据**，会被原样返回给前端。
+
+实测响应（11 个键）：
+
+```json
+{"app_avatar":"...","app_id":1234554321,
+ "app_info":{"fee_rate":"0.006","flag":"ymdc","id":1234554321,
+             "logo":"/uploads/images/...png","name":"元梦典藏","type":2},
+ "app_nickname":"yw8","app_uid":67,"delete_time":null,
+ "expire":"2026-11-08 14:37:15","id":21004039,
+ "start":"2026-10-09 14:37:15",
+ "token":"70f2e346-64a7-4b6a-806f-70de09281aa2",   <-- 凭据
+ "uid":21004035}
+```
+
+**Go 版按"不改动原项目逻辑"照搬**（返回了 token），未做收敛。
+若要修，需先确认前端没有依赖该字段 —— 而且**这属于安全修复，应单独评估**，
+不要混在迁移里顺手改。
+
+对应实现：`internal/data/authuser_detail.go` 的 `FindAuthByID()`（`Select("*")`）。
+
+### 🟡 同一接口的参数名不一致：校验 `app_id`、查询 `app_auth_id`
+
+```php
+(new AuthUserListValidate())->get()->goCheck();   // 校验的是 app_id（require）
+return $this->data((new AppUserLists())->detail());
+// detail() 内部读的却是 $this->params['app_auth_id']
+```
+
+**请求必须同时带 `app_id` 与 `app_auth_id`**：前者过校验，后者才是真正查询的键。
+
+当 `app_auth_id` 不存在（或已被软删除）时：
+
+```
+findOrEmpty()->toArray()  ->  []                       // 空数组
+$appAuth['app_id']       ->  null                     // Undefined array key
+AppLists::detail(null)     ->  $app_id ?: $this->params['app_id']  -> 回退到入参
+```
+
+于是响应退化成 **`{"app_info": {...}}`**（没有其它键）。已实测确认。**照搬。**
+
 ## 九、待迁接口的侦察记录（省下一次重新读源码）
 
 这一节记录已经读过、但**还没到能动手实现**的接口。目的是让下一次接手的人

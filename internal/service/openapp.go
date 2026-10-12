@@ -14,10 +14,11 @@ type OpenAppService struct {
 	app    *biz.OpenAppUsecase
 	authMy *biz.AuthMyUserUsecase
 	authU  *biz.AuthUserUsecase
+	authUD *biz.AuthUserDetailUsecase
 }
 
-func NewOpenAppService(app *biz.OpenAppUsecase, authMy *biz.AuthMyUserUsecase, authU *biz.AuthUserUsecase) *OpenAppService {
-	return &OpenAppService{app: app, authMy: authMy, authU: authU}
+func NewOpenAppService(app *biz.OpenAppUsecase, authMy *biz.AuthMyUserUsecase, authU *biz.AuthUserUsecase, authUD *biz.AuthUserDetailUsecase) *OpenAppService {
+	return &OpenAppService{app: app, authMy: authMy, authU: authU, authUD: authUD}
 }
 
 // GetAppList 对应 OpenAppController::appList（GET /v1/open/appList）。
@@ -233,4 +234,53 @@ func appInfoAny(a *biz.AppInfoRow) any {
 		"fee_rate": a.FeeRate,
 		"flag":     a.Flag,
 	}
+}
+
+// GetAuthUserDetail 对应 OpenAppController::authUserDetail（GET /v1/open/authUserDetail）。
+//
+// 原实现：
+//
+//	(new AuthUserListValidate())->get()->goCheck();     // app_id => require
+//	return $this->data((new AppUserLists())->detail());
+//
+// ⚠️⚠️ **校验的是 `app_id`，查询用的是 `app_auth_id`** —— 原项目的不一致。
+//
+//	所以 app_id 必须存在（否则校验失败），而 app_auth_id 决定能否取到授权记录。
+func (s *OpenAppService) GetAuthUserDetail(
+	ctx context.Context, req *v1.GetAuthUserDetailRequest,
+) (*v1.RawData, error) {
+	if req.AppId == nil {
+		return nil, bizFail(biz.NewBizError("一级平台ID不能为空"))
+	}
+	var authID int64
+	if req.AppAuthId != nil {
+		authID = req.AppAuthId.Value
+	}
+	res, err := s.authUD.Detail(ctx, authID, req.AppId.Value)
+	if err != nil {
+		return nil, err
+	}
+	// 以 $appAuth 为基底（可能是空 map），再塞 app_info
+	out := make(map[string]any, len(res.Auth)+1)
+	for k, v := range res.Auth {
+		out[k] = v
+	}
+	if res.AppInfo == nil {
+		// `findOrEmpty()->toArray()` 是**空数组**
+		out["app_info"] = []any{}
+	} else {
+		out["app_info"] = map[string]any{
+			"id":       res.AppInfo.ID,
+			"name":     res.AppInfo.Name,
+			"logo":     res.AppInfo.Logo, // ⚠️ 不处理（相对路径）
+			"type":     res.AppInfo.Type,
+			"fee_rate": res.AppInfo.FeeRate,
+			"flag":     res.AppInfo.Flag,
+		}
+	}
+	body, merr := biz.MarshalNoHTMLEscape(out)
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
 }

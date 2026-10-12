@@ -39,6 +39,23 @@ service OpenAppService {
   //    原项目的不一致，照搬。
   // ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
   // ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+  // 一级平台授权用户详情
+  //
+  // 原实现 OpenAppController::authUserDetail -> `$this->data((new AppUserLists())->detail())`
+  //
+  //	$appAuth = AppAuth::where('id', $this->params['app_auth_id'])->findOrEmpty()->toArray();
+  //	$app = (new AppLists())->detail($appAuth['app_id']);
+  //	$appAuth['app_info'] = $app;
+  //
+  // ⚠️⚠️ **参数名不一致（原项目如此）**：校验用的是 `app_id`（require），
+  //    但这里读的是 `app_auth_id` —— 请求必须**同时带两个**。
+  // ⚠️ 找不到 app_auth_id 时 `toArray()` 是 []，`['app_id']` 得 null，
+  //    回退到校验过的 `app_id` -> 响应变成 {"app_info":{...}}。
+  // ⚠️ `SELECT *` -> 返回**全部 10 列，含 token**（凭据外泄面，照搬）。
+  rpc GetAuthUserDetail(GetAuthUserDetailRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/open/authUserDetail"};
+  }
+
   // 一级平台授权用户列表（分页）
   //
   // 原实现 OpenAppController::authUserList -> `$this->dataLists(new AppUserLists())`
@@ -108,4 +125,10 @@ message GetAuthMyUserListRequest {}
 message GetAuthUserListRequest {
   // 对应 `$this->params['app_id']`；规则 require（文案 '一级平台ID不能为空'）
   google.protobuf.Int64Value app_id = 1 [json_name = "app_id"];
+}
+message GetAuthUserDetailRequest {
+  // 校验用（AuthUserListValidate: app_id => require）
+  google.protobuf.Int64Value app_id = 1 [json_name = "app_id"];
+  // ⚠️ 实际查询用的是这个（`$this->params['app_auth_id']`）
+  google.protobuf.Int64Value app_auth_id = 2 [json_name = "app_auth_id"];
 }
