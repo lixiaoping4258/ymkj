@@ -1246,6 +1246,7 @@ AppLists::detail(null)     ->  $app_id ?: $this->params['app_id']  -> 回退到�
 | [`docs/RECON-user-message.md`](docs/RECON-user-message.md) | `GET /v1/user/message` —— 读接口藏写操作 + 死代码过滤 + INNER JOIN |
 | [`docs/RECON-user-address-create.md`](docs/RECON-user-address-create.md) | `POST /v1/user/address/create` —— 事务 + Id::gen + 两个待补项 |
 | [`docs/RECON-purchase-detail.md`](docs/RECON-purchase-detail.md) | `GET /v1/market/purchase/detail` —— 6 个顶层键 + 17 字段 + 缓存可共用 + 4 处易错命名 |
+| [`docs/RECON-ticket-amount.md`](docs/RECON-ticket-amount.md) | `GET /v1/ticket/amount` —— **需先补 conf 的 limit_time_\*** + 大写 W 的 Withdraw_status | `GET /v1/market/purchase/detail` —— 6 个顶层键 + 17 字段 + 缓存可共用 + 4 处易错命名 |
 | [`docs/RECON-open-authuserlist.md`](docs/RECON-open-authuserlist.md) | `GET /v1/open/authUserList` —— **过期过滤被注释掉** + count 无 JOIN + 两种掩码长度 |
 | [`docs/API-SAMPLES.md`](docs/API-SAMPLES.md) | 早期 14 条已迁接口的真实请求/响应样例 |
 ### `GET /v1/market/purchase/price_range`
@@ -1727,6 +1728,33 @@ switch ($lock['state']) { 'create'->-1; 'process'->-2; 'success'->[...]; 'fail'-
 
 **判断标准**：如果读接口的数据来源是**尚未迁移的写入流程**，那它也做不了 ——
 不是"读接口就简单"。已跳过：`orders/create/query`。
+### 18. ⚠️ `env('APP.*')` 类配置**不在 Kratos 的 conf 里** —— 要先补
+
+迁移时反复遇到：PHP 用 `env('APP.XXX')` 读 `.env`，而 **Go 服务读的是
+`configs/config.local.yaml`，环境变量根本不会设**。
+
+**已发现的缺口**（第 3 轮起陆续遇到，逐条补）：
+
+| PHP 的 env | 用途 | Kratos 侧 |
+|---|---|---|
+| `APP_DEBUG` | 调试开关（**不只是调试**：SMS `7700` 后门、验证码旁路都看它） | ✅ 已迁为 `conf.App.Debug` |
+| `APP.LIMITTIMESTART` | 提票时间窗（`09:00:00`） | ❌ **缺** —— `ticket/amount` 需要 |
+| `APP.LIMITTIMEEND` | 提票时间窗（`23:00:00`） | ❌ **缺** |
+
+**⚠️⚠️ 千万不要用 `os.Getenv` 兜底** —— Go 服务读 YAML，环境变量不会存在，
+会**静默拿到空值**（不报错，只是行为不对）。
+
+**正确做法**：在 `internal/conf/conf.proto` 的 `App` 里加字段 ->
+`configs/config.local.yaml` 填值 -> `scripts/gen.ps1` -> `wire ./cmd/xtravel`。
+
+**排查方法**：迁任何逻辑前先 grep 目标方法体里的 `env(` 与 `ConfigService::get(`：
+
+```powershell
+Select-String -Path <Logic文件> -Pattern "env\(|ConfigService::get\("
+```
+
+**凡是出现的，都要确认 Kratos 侧的配置里有没有对应项** —— 没有就先补配置，
+不要写进 handler 里临时取值。
 ### 17. 需要联网/外部服务的接口先跳过
 
 `open.php` 的 `authUser*` / `lockGoods` / `unlockGoods` / `userArchiveList`
