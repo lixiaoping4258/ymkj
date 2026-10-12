@@ -1245,6 +1245,7 @@ AppLists::detail(null)     ->  $app_id ?: $this->params['app_id']  -> 回退到�
 | [`docs/RECON-user-domain.md`](docs/RECON-user-domain.md) | `user.php` 21 条路由逐个标注复杂度 + `center` 的 6 个坑 |
 | [`docs/RECON-user-message.md`](docs/RECON-user-message.md) | `GET /v1/user/message` —— 读接口藏写操作 + 死代码过滤 + INNER JOIN |
 | [`docs/RECON-user-address-create.md`](docs/RECON-user-address-create.md) | `POST /v1/user/address/create` —— 事务 + Id::gen + 两个待补项 |
+| [`docs/RECON-purchase-detail.md`](docs/RECON-purchase-detail.md) | `GET /v1/market/purchase/detail` —— 6 个顶层键 + 17 字段 + 缓存可共用 + 4 处易错命名 |
 | [`docs/RECON-open-authuserlist.md`](docs/RECON-open-authuserlist.md) | `GET /v1/open/authUserList` —— **过期过滤被注释掉** + count 无 JOIN + 两种掩码长度 |
 | [`docs/API-SAMPLES.md`](docs/API-SAMPLES.md) | 早期 14 条已迁接口的真实请求/响应样例 |
 ### `GET /v1/market/purchase/price_range`
