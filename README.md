@@ -1610,7 +1610,73 @@ if ($LASTEXITCODE -ne 0) { throw "质量门未通过，禁止提交" }
 try { $out = & $Body; $code = $LASTEXITCODE }
 catch { $out = @("$_"); $code = 1 }
 ```
-### 15. 需要联网/外部服务的接口先跳过
+### 15. 🔴 ThinkPHP 的 `cache()` 值是 **PHP serialize 格式** —— Go **读不了**
+
+**已用真实 Redis 数据核实**（db 1，与 PHP 共用的那个库）：
+
+```
+la:user:21004035:auth_permanent:1234554321:21004039
+  -> a:10:{s:2:"id";i:21004039;s:6:"app_id";i:1234554321;s:3:"uid";i:21004035;...}
+la:STORAGE_DEFAULT
+  -> s:5:"local";
+la:tag:cd21a5b7233ef0338c62e000b0b46fdf
+  -> (set 类型，TP 的标签簿记)
+la:id:gen
+  -> 353                     ← 裸整数（Go 的 idgen 写的，是**特意**用 la: 与 PHP 共用）
+x_PurchaseOrder:Stock:lock:178608362100012
+  -> 1                       ← 裸字符串
+{queues:sale_buy_queue}
+  -> (list，元素是 JSON，Laravel/TP 队列用)
+```
+
+**结论**：凡是走 `cache()`（`config/cache.php` 的 redis store，`prefix = 'la:'`）
+写进去的值，都是 **PHP `serialize()` 的字符串**。Go 侧没有 PHP unserialize 实现，
+**读不出来**。
+
+**这就是 `biz.Cache` 要多加一层 `xtravel:go:` 隔离前缀的原因** ——
+不是为了"干净"，而是**不得不**：同一个物理键下两边的格式不兼容，混用会互相读坏。
+
+**代价（必须知道）**：
+
+- Go 侧**看不见** PHP 用 `cache()` 写的任何值
+- 反过来 PHP 也看不见 Go 侧 `xtravel:go:*` 的值
+- 迁移期两套系统并行时，**这类缓存不共享** —— 各自维护一份，TTL 到期后自然收敛
+
+**哪些键是"裸值"、可以共享**（不走 `cache()`）：
+
+| 键 | 写入方 | 格式 |
+|---|---|---|
+| `la:id:gen` / `la:id:prefix` | Go 的 idgen（**刻意**用 `la:`） | 裸整数 |
+| `x_*` 前缀（如 `x_PurchaseOrder:Stock:lock:*`） | `RedisLockService`（裸 phpredis） | 裸值 |
+| `purchase:getNew` / `purchase:addressDefault:*` | `RedisLockService` | 裸 JSON |
+| `{queues:...}` | 队列 | list + JSON |
+
+**判断方法**：看 PHP 代码用的是 `cache($key, ...)` 还是裸 `Redis`/`RedisLockService`。
+前者**不可共享**，后者**可以**。
+
+#### 由此产生的未实现接口
+
+`GET /v1/market/orders/create/query` 读的是 `cache('sales:lock:'.$userId.':'.$id)` ——
+**PHP serialize 值，Go 读不了**；而且这个键由 `OrderCreateLogic::lockBuySaleForJob`
+（727 行，属于下单写入流程）写入，**Go 侧还没有任何东西会写它**。
+所以该接口**当前无法实现**，也与"只迁 C 端读接口"的边界一致 —— 详见下面第 17 条。
+
+### 16. 依赖未迁写入流程的读接口，也要跳过
+
+`orders/create/query` 不是"读接口"那么简单 —— 它读的是**下单流程的中间状态**：
+
+```php
+$lockKey = sprintf('sales:lock:%s:%s', $userId, $params['id']);
+$lock = cache($lockKey);                       // ← TP 序列化，Go 读不了
+switch ($lock['state']) { 'create'->-1; 'process'->-2; 'success'->[...]; 'fail'->... }
+```
+
+它由 `OrderCreateLogic::createSaleQueue` / `lockBuySaleForJob` 驱动，
+而那是**下单写入流程**（含队列 `{queues:sale_buy_queue}`、Redis 锁、727 行逻辑）。
+
+**判断标准**：如果读接口的数据来源是**尚未迁移的写入流程**，那它也做不了 ——
+不是"读接口就简单"。已跳过：`orders/create/query`。
+### 17. 需要联网/外部服务的接口先跳过
 
 `open.php` 的 `authUser*` / `lockGoods` / `unlockGoods` / `userArchiveList`
 要调第三方 HTTP（`TransactionService`）。**先跳过**，等有测试环境再动。
