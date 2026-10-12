@@ -132,3 +132,76 @@ func (uc *AddressUsecase) AddressDefault(ctx context.Context, userID uint32, id 
 	}
 	return row, nil
 }
+
+/* ------------------------------------------------- 地址列表 */
+
+// AddressListUsecase 对应 app/api/lists/users/AddressLists.php。
+type AddressListUsecase struct {
+	repo AddressListRepo
+}
+
+func NewAddressListUsecase(repo AddressListRepo) *AddressListUsecase {
+	return &AddressListUsecase{repo: repo}
+}
+
+// AddressListRepo 地址列表（含 x_app 的 INNER JOIN）。
+type AddressListRepo interface {
+	ListAddresses(ctx context.Context, userID uint32, offset, limit int) ([]map[string]any, error)
+	CountAddresses(ctx context.Context, userID uint32) (int64, error)
+}
+
+// List 对应 dataLists(new AddressLists())。
+//
+// 原实现：
+//
+//	private function queryWhere() { return ['UserAddress.user_id' => $this->userId]; }
+//
+//	public function lists(): array {
+//	    return UserAddress::hasWhere('app', $this->queryWhere(),
+//	        'App.name platform_name,App.flag,UserAddress.id,UserAddress.contact_user,
+//	         UserAddress.contact_phone,UserAddress.address,UserAddress.fettle,UserAddress.is_default')
+//	        ->limit($this->limitOffset, $this->limitLength)->select()->toArray();
+//	}
+//	public function count(): int {
+//	    return UserAddress::hasWhere('app', $this->queryWhere())->count();
+//	}
+//
+// ⚠️⚠️ **`hasWhere('app', ...)` 生成的是 INNER JOIN**（不是 LEFT JOIN）：
+//
+//	FROM x_user_address UserAddress
+//	INNER JOIN x_app App ON App.id = UserAddress.app_id
+//	WHERE UserAddress.user_id = ?
+//
+// 关联定义见 UserAddress::app()：`hasOne(App::class, 'id', 'app_id')`。
+//
+// **后果**：`app_id` 在 `x_app` 里不存在的地址**不会出现在列表里**，
+// 而且 `count()` 用的是同一个 INNER JOIN -> 分页总数也不含它们。
+// 实测当前所有地址的 app_id（1234554321）都能匹配上，所以暂时看不出差异；
+// 但迁移时不能用 LEFT JOIN —— 那会让"孤儿地址"突然出现，总数也对不上。
+//
+// ⚠️ list 与 count 必须用**同一套 JOIN 条件**，否则分页会错位。
+func (uc *AddressListUsecase) List(ctx context.Context, userID uint32, p PageParams) (*ListData, error) {
+	count, err := uc.repo.CountAddresses(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := uc.repo.ListAddresses(ctx, userID, p.Offset, p.Limit)
+	if err != nil {
+		return nil, err
+	}
+	return &ListData{
+		Lists:    rows,
+		Count:    count,
+		PageNo:   p.PageNo,
+		PageSize: p.PageSize,
+		Extend:   []any{},
+	}, nil
+}
+
+// AddressListSelect 逐字对应原文的字段列表（8 个）。
+//
+// ⚠️ 顺序即原文顺序：App.name 别名成 platform_name，App.flag 保持 flag，
+//
+//	其余是 UserAddress 的列（ThinkPHP 会把表别名去掉，键就是列名）。
+const AddressListSelect = "app.name AS platform_name, app.flag, ua.id, " +
+	"ua.contact_user, ua.contact_phone, ua.address, ua.fettle, ua.is_default"

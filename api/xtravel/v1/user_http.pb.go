@@ -20,6 +20,7 @@ var _ = binding.EncodeURL
 const _ = http.SupportPackageIsVersion1
 
 const OperationUserServiceGetAddressDefault = "/xtravel.v1.UserService/GetAddressDefault"
+const OperationUserServiceGetAddressList = "/xtravel.v1.UserService/GetAddressList"
 const OperationUserServiceGetUserInfo = "/xtravel.v1.UserService/GetUserInfo"
 const OperationUserServiceGetUserNoticeNew = "/xtravel.v1.UserService/GetUserNoticeNew"
 
@@ -38,6 +39,23 @@ type UserServiceHTTPServer interface {
 	//
 	// 需登录（AddressController 未声明 $notNeedLogin）。
 	GetAddressDefault(context.Context, *GetAddressDefaultRequest) (*GetAddressDefaultReply, error)
+	// GetAddressList 地址列表（分页）
+	//
+	// 原实现 v1/user/AddressController::index -> $this->dataLists(new AddressLists())
+	//
+	//	UserAddress::hasWhere('app', ['UserAddress.user_id'=>$userId],
+	//	    'App.name platform_name,App.flag,UserAddress.id,UserAddress.contact_user,
+	//	     UserAddress.contact_phone,UserAddress.address,UserAddress.fettle,UserAddress.is_default')
+	//
+	// ⚠️ hasWhere 生成的是 **INNER JOIN**（app 关联是 hasOne(App::class,'id','app_id')）：
+	//    FROM x_user_address UserAddress
+	//    INNER JOIN x_app App ON App.id = UserAddress.app_id
+	//    WHERE UserAddress.user_id = ?
+	//    app_id 在 x_app 里不存在的地址**不会出现**，count() 用的也是同一个 JOIN。
+	//
+	// 用 RawData（行的键是 DB 列名 + App 的别名 platform_name）。
+	// 需登录。
+	GetAddressList(context.Context, *GetAddressListRequest) (*RawData, error)
 	// GetUserInfo 当前登录用户信息
 	// 原: UserController::info -> UserLogic::info($this->userId)
 	// 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
@@ -70,6 +88,7 @@ func RegisterUserServiceHTTPServer(s *http.Server, srv UserServiceHTTPServer) {
 	r.GET("/v1/user/info", _UserService_GetUserInfo0_HTTP_Handler(srv))
 	r.GET("/v1/user/notice/getNew", _UserService_GetUserNoticeNew0_HTTP_Handler(srv))
 	r.GET("/v1/user/address/default", _UserService_GetAddressDefault0_HTTP_Handler(srv))
+	r.GET("/v1/user/address", _UserService_GetAddressList0_HTTP_Handler(srv))
 }
 
 func _UserService_GetUserInfo0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
@@ -129,6 +148,25 @@ func _UserService_GetAddressDefault0_HTTP_Handler(srv UserServiceHTTPServer) fun
 	}
 }
 
+func _UserService_GetAddressList0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetAddressListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserServiceGetAddressList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetAddressList(ctx, req.(*GetAddressListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type UserServiceHTTPClient interface {
 	// GetAddressDefault 用户默认地址
 	//
@@ -144,6 +182,23 @@ type UserServiceHTTPClient interface {
 	//
 	// 需登录（AddressController 未声明 $notNeedLogin）。
 	GetAddressDefault(ctx context.Context, req *GetAddressDefaultRequest, opts ...http.CallOption) (rsp *GetAddressDefaultReply, err error)
+	// GetAddressList 地址列表（分页）
+	//
+	// 原实现 v1/user/AddressController::index -> $this->dataLists(new AddressLists())
+	//
+	//	UserAddress::hasWhere('app', ['UserAddress.user_id'=>$userId],
+	//	    'App.name platform_name,App.flag,UserAddress.id,UserAddress.contact_user,
+	//	     UserAddress.contact_phone,UserAddress.address,UserAddress.fettle,UserAddress.is_default')
+	//
+	// ⚠️ hasWhere 生成的是 **INNER JOIN**（app 关联是 hasOne(App::class,'id','app_id')）：
+	//    FROM x_user_address UserAddress
+	//    INNER JOIN x_app App ON App.id = UserAddress.app_id
+	//    WHERE UserAddress.user_id = ?
+	//    app_id 在 x_app 里不存在的地址**不会出现**，count() 用的也是同一个 JOIN。
+	//
+	// 用 RawData（行的键是 DB 列名 + App 的别名 platform_name）。
+	// 需登录。
+	GetAddressList(ctx context.Context, req *GetAddressListRequest, opts ...http.CallOption) (rsp *RawData, err error)
 	// GetUserInfo 当前登录用户信息
 	// 原: UserController::info -> UserLogic::info($this->userId)
 	// 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
@@ -198,6 +253,36 @@ func (c *UserServiceHTTPClientImpl) GetAddressDefault(ctx context.Context, in *G
 	pattern := "/v1/user/address/default"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationUserServiceGetAddressDefault))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetAddressList 地址列表（分页）
+//
+// 原实现 v1/user/AddressController::index -> $this->dataLists(new AddressLists())
+//
+//	UserAddress::hasWhere('app', ['UserAddress.user_id'=>$userId],
+//	    'App.name platform_name,App.flag,UserAddress.id,UserAddress.contact_user,
+//	     UserAddress.contact_phone,UserAddress.address,UserAddress.fettle,UserAddress.is_default')
+//
+// ⚠️ hasWhere 生成的是 **INNER JOIN**（app 关联是 hasOne(App::class,'id','app_id')）：
+//
+//	FROM x_user_address UserAddress
+//	INNER JOIN x_app App ON App.id = UserAddress.app_id
+//	WHERE UserAddress.user_id = ?
+//	app_id 在 x_app 里不存在的地址**不会出现**，count() 用的也是同一个 JOIN。
+//
+// 用 RawData（行的键是 DB 列名 + App 的别名 platform_name）。
+// 需登录。
+func (c *UserServiceHTTPClientImpl) GetAddressList(ctx context.Context, in *GetAddressListRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/user/address"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationUserServiceGetAddressList))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

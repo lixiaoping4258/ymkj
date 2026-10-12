@@ -69,3 +69,85 @@ func (r *addressRepo) FindDefault(ctx context.Context, userID uint32) (*biz.Addr
 func (r *addressRepo) FindFirst(ctx context.Context, userID uint32) (*biz.AddressRow, bool, error) {
 	return r.scan(ctx, r.db.Where("user_id = ?", userID).Order("id ASC"))
 }
+
+/* ------------------------------------------------- 地址列表 */
+
+type addressListRepo struct {
+	db     *gorm.DB
+	prefix string
+}
+
+func NewAddressListRepo(db *gorm.DB, c *conf.Data) biz.AddressListRepo {
+	prefix := "la_"
+	if c != nil && c.Database != nil && c.Database.Prefix != "" {
+		prefix = c.Database.Prefix
+	}
+	return &addressListRepo{db: db, prefix: prefix}
+}
+
+// baseJoin 构造与 PHP `hasWhere(”app”, ...)` 等价的 INNER JOIN。
+//
+// ⚠️ 必须是 INNER JOIN —— 见 biz 层 AddressListUsecase.List 的说明。
+// ⚠️ list 与 count 共用这一个方法，保证 JOIN 条件一致（否则分页会错位）。
+func (r *addressListRepo) baseJoin(ctx context.Context, userID uint32) *gorm.DB {
+	return r.db.WithContext(ctx).
+		Table(r.prefix+"user_address AS ua").
+		Joins("INNER JOIN "+r.prefix+"app AS app ON app.id = ua.app_id").
+		Where("ua.user_id = ?", userID)
+}
+
+// ListAddresses 逐字对应 AddressLists::lists()。
+func (r *addressListRepo) ListAddresses(
+	ctx context.Context, userID uint32, offset, limit int,
+) ([]map[string]any, error) {
+	var rows []struct {
+		PlatformName *string `gorm:"column:platform_name"`
+		Flag         *string `gorm:"column:flag"`
+		ID           int64   `gorm:"column:id"`
+		ContactUser  *string `gorm:"column:contact_user"`
+		ContactPhone *string `gorm:"column:contact_phone"`
+		Address      string  `gorm:"column:address"`
+		Fettle       *string `gorm:"column:fettle"`
+		IsDefault    int32   `gorm:"column:is_default"`
+	}
+	err := r.baseJoin(ctx, userID).
+		Select(biz.AddressListSelect).
+		Offset(offset).Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(rows))
+	for _, x := range rows {
+		out = append(out, map[string]any{
+			"platform_name": derefStrOrNil(x.PlatformName),
+			"flag":          derefStrOrNil(x.Flag),
+			"id":            x.ID,
+			"contact_user":  derefStrOrNil(x.ContactUser),
+			"contact_phone": derefStrOrNil(x.ContactPhone),
+			"address":       x.Address,
+			"fettle":        derefStrOrNil(x.Fettle),
+			"is_default":    x.IsDefault,
+		})
+	}
+	return out, nil
+}
+
+// CountAddresses 逐字对应 AddressLists::count() —— **同一个 INNER JOIN**。
+func (r *addressListRepo) CountAddresses(ctx context.Context, userID uint32) (int64, error) {
+	var n int64
+	err := r.baseJoin(ctx, userID).Count(&n).Error
+	return n, err
+}
+
+// derefStrOrNil 把 *string 转成 any：nil -> null，否则字符串。
+//
+// ⚠️ 这是**对外契约**的要求，不是风格问题：
+// PHP 的 toArray() 对可空列输出 null，用普通 string 会变成 ""，
+// 类型和值都不对（前端区分得了 null 和空串）。
+func derefStrOrNil(v *string) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}

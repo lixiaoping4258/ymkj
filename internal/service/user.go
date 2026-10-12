@@ -5,19 +5,21 @@ import (
 
 	v1 "github.com/lixiaoping4258/ymkj/api/xtravel/v1"
 	"github.com/lixiaoping4258/ymkj/internal/biz"
+	"github.com/lixiaoping4258/ymkj/internal/pkg/httpx"
 	"github.com/lixiaoping4258/ymkj/internal/pkg/pbconv"
 )
 
 // UserService 对应原项目 app/api/controller/v1/user/UserController.php。
 type UserService struct {
 	v1.UnimplementedUserServiceServer
-	users     *biz.UserUsecase
-	noticeNew *biz.NoticeNewUsecase
-	address   *biz.AddressUsecase
+	users       *biz.UserUsecase
+	noticeNew   *biz.NoticeNewUsecase
+	address     *biz.AddressUsecase
+	addressList *biz.AddressListUsecase
 }
 
-func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase) *UserService {
-	return &UserService{users: users, noticeNew: noticeNew, address: address}
+func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase, addressList *biz.AddressListUsecase) *UserService {
+	return &UserService{users: users, noticeNew: noticeNew, address: address, addressList: addressList}
 }
 
 // GetUserInfo 对应 UserController::info。
@@ -121,4 +123,26 @@ func (s *UserService) GetAddressDefault(
 	return &v1.GetAddressDefaultReply{
 		Id: row.ID, IsDefault: row.IsDefault, Address: row.Address,
 	}, nil
+}
+
+// GetAddressList 对应 v1/user/AddressController::index。
+//
+// 原实现：`return $this->dataLists(new AddressLists());`
+//
+// ⚠️ 这条**需登录**：AddressController 未声明 $notNeedLogin。
+// ⚠️ 内部是 INNER JOIN x_app，见 proto 注释。
+func (s *UserService) GetAddressList(
+	ctx context.Context, _ *v1.GetAddressListRequest,
+) (*v1.RawData, error) {
+	userID := biz.UserIDFromContext(ctx)
+	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
+	ld, err := s.addressList.List(ctx, uint32(userID), p)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := ld.ToJSON()
+	if err != nil {
+		return nil, err
+	}
+	return &v1.RawData{Json: raw}, nil
 }

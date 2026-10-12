@@ -22,6 +22,7 @@ const (
 	UserService_GetUserInfo_FullMethodName       = "/xtravel.v1.UserService/GetUserInfo"
 	UserService_GetUserNoticeNew_FullMethodName  = "/xtravel.v1.UserService/GetUserNoticeNew"
 	UserService_GetAddressDefault_FullMethodName = "/xtravel.v1.UserService/GetAddressDefault"
+	UserService_GetAddressList_FullMethodName    = "/xtravel.v1.UserService/GetAddressList"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -71,6 +72,24 @@ type UserServiceClient interface {
 	//
 	// 需登录（AddressController 未声明 $notNeedLogin）。
 	GetAddressDefault(ctx context.Context, in *GetAddressDefaultRequest, opts ...grpc.CallOption) (*GetAddressDefaultReply, error)
+	// 地址列表（分页）
+	//
+	// 原实现 v1/user/AddressController::index -> $this->dataLists(new AddressLists())
+	//
+	//	UserAddress::hasWhere('app', ['UserAddress.user_id'=>$userId],
+	//	    'App.name platform_name,App.flag,UserAddress.id,UserAddress.contact_user,
+	//	     UserAddress.contact_phone,UserAddress.address,UserAddress.fettle,UserAddress.is_default')
+	//
+	// ⚠️ hasWhere 生成的是 **INNER JOIN**（app 关联是 hasOne(App::class,'id','app_id')）：
+	//
+	//	FROM x_user_address UserAddress
+	//	INNER JOIN x_app App ON App.id = UserAddress.app_id
+	//	WHERE UserAddress.user_id = ?
+	//	app_id 在 x_app 里不存在的地址**不会出现**，count() 用的也是同一个 JOIN。
+	//
+	// 用 RawData（行的键是 DB 列名 + App 的别名 platform_name）。
+	// 需登录。
+	GetAddressList(ctx context.Context, in *GetAddressListRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type userServiceClient struct {
@@ -105,6 +124,16 @@ func (c *userServiceClient) GetAddressDefault(ctx context.Context, in *GetAddres
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetAddressDefaultReply)
 	err := c.cc.Invoke(ctx, UserService_GetAddressDefault_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetAddressList(ctx context.Context, in *GetAddressListRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, UserService_GetAddressList_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -158,6 +187,24 @@ type UserServiceServer interface {
 	//
 	// 需登录（AddressController 未声明 $notNeedLogin）。
 	GetAddressDefault(context.Context, *GetAddressDefaultRequest) (*GetAddressDefaultReply, error)
+	// 地址列表（分页）
+	//
+	// 原实现 v1/user/AddressController::index -> $this->dataLists(new AddressLists())
+	//
+	//	UserAddress::hasWhere('app', ['UserAddress.user_id'=>$userId],
+	//	    'App.name platform_name,App.flag,UserAddress.id,UserAddress.contact_user,
+	//	     UserAddress.contact_phone,UserAddress.address,UserAddress.fettle,UserAddress.is_default')
+	//
+	// ⚠️ hasWhere 生成的是 **INNER JOIN**（app 关联是 hasOne(App::class,'id','app_id')）：
+	//
+	//	FROM x_user_address UserAddress
+	//	INNER JOIN x_app App ON App.id = UserAddress.app_id
+	//	WHERE UserAddress.user_id = ?
+	//	app_id 在 x_app 里不存在的地址**不会出现**，count() 用的也是同一个 JOIN。
+	//
+	// 用 RawData（行的键是 DB 列名 + App 的别名 platform_name）。
+	// 需登录。
+	GetAddressList(context.Context, *GetAddressListRequest) (*RawData, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -176,6 +223,9 @@ func (UnimplementedUserServiceServer) GetUserNoticeNew(context.Context, *GetUser
 }
 func (UnimplementedUserServiceServer) GetAddressDefault(context.Context, *GetAddressDefaultRequest) (*GetAddressDefaultReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAddressDefault not implemented")
+}
+func (UnimplementedUserServiceServer) GetAddressList(context.Context, *GetAddressListRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAddressList not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -252,6 +302,24 @@ func _UserService_GetAddressDefault_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_GetAddressList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAddressListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetAddressList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetAddressList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetAddressList(ctx, req.(*GetAddressListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -270,6 +338,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAddressDefault",
 			Handler:    _UserService_GetAddressDefault_Handler,
+		},
+		{
+			MethodName: "GetAddressList",
+			Handler:    _UserService_GetAddressList_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

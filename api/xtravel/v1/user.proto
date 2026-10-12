@@ -58,6 +58,26 @@ service UserService {
   rpc GetAddressDefault(GetAddressDefaultRequest) returns (GetAddressDefaultReply) {
     option (google.api.http) = {get: "/v1/user/address/default"};
   }
+
+  // 地址列表（分页）
+  //
+  // 原实现 v1/user/AddressController::index -> $this->dataLists(new AddressLists())
+  //
+  //	UserAddress::hasWhere('app', ['UserAddress.user_id'=>$userId],
+  //	    'App.name platform_name,App.flag,UserAddress.id,UserAddress.contact_user,
+  //	     UserAddress.contact_phone,UserAddress.address,UserAddress.fettle,UserAddress.is_default')
+  //
+  // ⚠️ hasWhere 生成的是 **INNER JOIN**（app 关联是 hasOne(App::class,'id','app_id')）：
+  //    FROM x_user_address UserAddress
+  //    INNER JOIN x_app App ON App.id = UserAddress.app_id
+  //    WHERE UserAddress.user_id = ?
+  //    app_id 在 x_app 里不存在的地址**不会出现**，count() 用的也是同一个 JOIN。
+  //
+  // 用 RawData（行的键是 DB 列名 + App 的别名 platform_name）。
+  // 需登录。
+  rpc GetAddressList(GetAddressListRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/user/address"};
+  }
 }
 
 message GetUserInfoRequest {}
@@ -124,3 +144,5 @@ message GetAddressDefaultReply {
   int32 is_default = 2 [json_name = "is_default"];
   string address = 3 [json_name = "address"];
 }
+
+message GetAddressListRequest {}
