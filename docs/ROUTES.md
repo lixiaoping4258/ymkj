@@ -6,7 +6,7 @@
 
 > 改路由后重新生成：`.\scripts\gen-routes.ps1`
 
-**已实现 47 / 131 条（35.9%）；其中免登录 14 条。**
+**已实现 50 / 131 条（38.2%）；其中免登录 14 条。**
 
 ## 免登录（无需 token）
 
@@ -64,6 +64,9 @@
 | GET | `/v1/user/real/info` | UserService.GetRealInfo | `user.proto` |
 | GET | `/v1/user/unregisr/check` | UserService.GetUnregisterCheck | `user.proto` |
 | GET | `/v1/wallet/balance/query` | WalletService.GetBalance | `wallet.proto` |
+| GET | `/v1/whitelist/check` | WhitelistService.CheckWhitelistItem | `whitelist.proto` |
+| GET | `/v1/whitelist/group` | WhitelistService.GetWhitelistGroup | `whitelist.proto` |
+| GET | `/v1/whitelist/permissions` | WhitelistService.GetWhitelistPermissions | `whitelist.proto` |
 
 ## 接口约定（三条，改动会直接打挂前端）
 

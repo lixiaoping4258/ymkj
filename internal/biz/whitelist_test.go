@@ -48,8 +48,17 @@ func (f *fakeWhitelistRepo) PurchasePayWay(_ context.Context, id uint64) (int32,
 	return 0, false, nil
 }
 
+// fakeWhitelistGroupRepo 供 group 接口的测试用（可以为空 —— 本文件不测 group）。
+type fakeWhitelistGroupRepo struct{}
+
+func (f *fakeWhitelistGroupRepo) FindGroupRow(context.Context, uint64) (map[string]any, bool, error) {
+	return nil, false, nil
+}
+
 func newWhitelistUsecase(repo *fakeWhitelistRepo) *WhitelistUsecase {
-	return NewWhitelistUsecase(repo, newFakeTokenCacheForWL(), log.NewStdLogger(io.Discard))
+	return NewWhitelistUsecase(
+		repo, &fakeWhitelistGroupRepo{}, newFakeTokenCacheForWL(), log.NewStdLogger(io.Discard),
+	)
 }
 
 // 复用 token 测试里的假缓存：白名单缓存存的是 map[string]any
