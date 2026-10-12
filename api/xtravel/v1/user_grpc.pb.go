@@ -19,11 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	UserService_GetUserInfo_FullMethodName       = "/xtravel.v1.UserService/GetUserInfo"
-	UserService_GetUserNoticeNew_FullMethodName  = "/xtravel.v1.UserService/GetUserNoticeNew"
-	UserService_GetAddressDefault_FullMethodName = "/xtravel.v1.UserService/GetAddressDefault"
-	UserService_GetAddressList_FullMethodName    = "/xtravel.v1.UserService/GetAddressList"
-	UserService_GetRealInfo_FullMethodName       = "/xtravel.v1.UserService/GetRealInfo"
+	UserService_GetUserInfo_FullMethodName        = "/xtravel.v1.UserService/GetUserInfo"
+	UserService_GetUserNoticeNew_FullMethodName   = "/xtravel.v1.UserService/GetUserNoticeNew"
+	UserService_GetAddressDefault_FullMethodName  = "/xtravel.v1.UserService/GetAddressDefault"
+	UserService_GetAddressList_FullMethodName     = "/xtravel.v1.UserService/GetAddressList"
+	UserService_GetRealInfo_FullMethodName        = "/xtravel.v1.UserService/GetRealInfo"
+	UserService_GetUnregisterCheck_FullMethodName = "/xtravel.v1.UserService/GetUnregisterCheck"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -106,6 +107,19 @@ type UserServiceClient interface {
 	// ⚠️ 脱敏是按**字符**(mb_*)算的，中文名要用 rune 处理。
 	// 需登录。
 	GetRealInfo(ctx context.Context, in *GetRealInfoRequest, opts ...grpc.CallOption) (*GetRealInfoReply, error)
+	// 注销前检查（三项）
+	//
+	// 原实现 UserController::unregisterCheck -> UserLogic::unregisterCheck($userId)
+	// 控制器：`return $this->success('请求成功', $result);`
+	//
+	//	① 未结清订单：MarketPurchase where user_id AND (state='WANTED' OR pay_state='PAYING')
+	//	② 平台未解绑：UserAccounts where user_id AND type=2 AND app_id IN (3,4)
+	//	③ 积分未清零：UserWallet 逐行判断 amount>0 || frozen_amount>0
+	//
+	// ⚠️ 三项的顺序决定 errWord 的先后；只要有一项不过 state 就是 0。
+	// ⚠️ 用的是 success('请求成功', ...) —— **不是 data()**，所以 msg 是 "请求成功"。
+	// 需登录。
+	GetUnregisterCheck(ctx context.Context, in *GetUnregisterCheckRequest, opts ...grpc.CallOption) (*GetUnregisterCheckReply, error)
 }
 
 type userServiceClient struct {
@@ -160,6 +174,16 @@ func (c *userServiceClient) GetRealInfo(ctx context.Context, in *GetRealInfoRequ
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetRealInfoReply)
 	err := c.cc.Invoke(ctx, UserService_GetRealInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetUnregisterCheck(ctx context.Context, in *GetUnregisterCheckRequest, opts ...grpc.CallOption) (*GetUnregisterCheckReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUnregisterCheckReply)
+	err := c.cc.Invoke(ctx, UserService_GetUnregisterCheck_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -246,6 +270,19 @@ type UserServiceServer interface {
 	// ⚠️ 脱敏是按**字符**(mb_*)算的，中文名要用 rune 处理。
 	// 需登录。
 	GetRealInfo(context.Context, *GetRealInfoRequest) (*GetRealInfoReply, error)
+	// 注销前检查（三项）
+	//
+	// 原实现 UserController::unregisterCheck -> UserLogic::unregisterCheck($userId)
+	// 控制器：`return $this->success('请求成功', $result);`
+	//
+	//	① 未结清订单：MarketPurchase where user_id AND (state='WANTED' OR pay_state='PAYING')
+	//	② 平台未解绑：UserAccounts where user_id AND type=2 AND app_id IN (3,4)
+	//	③ 积分未清零：UserWallet 逐行判断 amount>0 || frozen_amount>0
+	//
+	// ⚠️ 三项的顺序决定 errWord 的先后；只要有一项不过 state 就是 0。
+	// ⚠️ 用的是 success('请求成功', ...) —— **不是 data()**，所以 msg 是 "请求成功"。
+	// 需登录。
+	GetUnregisterCheck(context.Context, *GetUnregisterCheckRequest) (*GetUnregisterCheckReply, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -270,6 +307,9 @@ func (UnimplementedUserServiceServer) GetAddressList(context.Context, *GetAddres
 }
 func (UnimplementedUserServiceServer) GetRealInfo(context.Context, *GetRealInfoRequest) (*GetRealInfoReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRealInfo not implemented")
+}
+func (UnimplementedUserServiceServer) GetUnregisterCheck(context.Context, *GetUnregisterCheckRequest) (*GetUnregisterCheckReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUnregisterCheck not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -382,6 +422,24 @@ func _UserService_GetRealInfo_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_GetUnregisterCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUnregisterCheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetUnregisterCheck(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetUnregisterCheck_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetUnregisterCheck(ctx, req.(*GetUnregisterCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -408,6 +466,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRealInfo",
 			Handler:    _UserService_GetRealInfo_Handler,
+		},
+		{
+			MethodName: "GetUnregisterCheck",
+			Handler:    _UserService_GetUnregisterCheck_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

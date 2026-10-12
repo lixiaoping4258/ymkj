@@ -22,6 +22,7 @@ const _ = http.SupportPackageIsVersion1
 const OperationUserServiceGetAddressDefault = "/xtravel.v1.UserService/GetAddressDefault"
 const OperationUserServiceGetAddressList = "/xtravel.v1.UserService/GetAddressList"
 const OperationUserServiceGetRealInfo = "/xtravel.v1.UserService/GetRealInfo"
+const OperationUserServiceGetUnregisterCheck = "/xtravel.v1.UserService/GetUnregisterCheck"
 const OperationUserServiceGetUserInfo = "/xtravel.v1.UserService/GetUserInfo"
 const OperationUserServiceGetUserNoticeNew = "/xtravel.v1.UserService/GetUserNoticeNew"
 
@@ -72,6 +73,19 @@ type UserServiceHTTPServer interface {
 	// ⚠️ 脱敏是按**字符**(mb_*)算的，中文名要用 rune 处理。
 	// 需登录。
 	GetRealInfo(context.Context, *GetRealInfoRequest) (*GetRealInfoReply, error)
+	// GetUnregisterCheck 注销前检查（三项）
+	//
+	// 原实现 UserController::unregisterCheck -> UserLogic::unregisterCheck($userId)
+	// 控制器：`return $this->success('请求成功', $result);`
+	//
+	//	① 未结清订单：MarketPurchase where user_id AND (state='WANTED' OR pay_state='PAYING')
+	//	② 平台未解绑：UserAccounts where user_id AND type=2 AND app_id IN (3,4)
+	//	③ 积分未清零：UserWallet 逐行判断 amount>0 || frozen_amount>0
+	//
+	// ⚠️ 三项的顺序决定 errWord 的先后；只要有一项不过 state 就是 0。
+	// ⚠️ 用的是 success('请求成功', ...) —— **不是 data()**，所以 msg 是 "请求成功"。
+	// 需登录。
+	GetUnregisterCheck(context.Context, *GetUnregisterCheckRequest) (*GetUnregisterCheckReply, error)
 	// GetUserInfo 当前登录用户信息
 	// 原: UserController::info -> UserLogic::info($this->userId)
 	// 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
@@ -106,6 +120,7 @@ func RegisterUserServiceHTTPServer(s *http.Server, srv UserServiceHTTPServer) {
 	r.GET("/v1/user/address/default", _UserService_GetAddressDefault0_HTTP_Handler(srv))
 	r.GET("/v1/user/address", _UserService_GetAddressList0_HTTP_Handler(srv))
 	r.GET("/v1/user/real/info", _UserService_GetRealInfo0_HTTP_Handler(srv))
+	r.GET("/v1/user/unregisr/check", _UserService_GetUnregisterCheck0_HTTP_Handler(srv))
 }
 
 func _UserService_GetUserInfo0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
@@ -203,6 +218,25 @@ func _UserService_GetRealInfo0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx 
 	}
 }
 
+func _UserService_GetUnregisterCheck0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetUnregisterCheckRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserServiceGetUnregisterCheck)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetUnregisterCheck(ctx, req.(*GetUnregisterCheckRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetUnregisterCheckReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type UserServiceHTTPClient interface {
 	// GetAddressDefault 用户默认地址
 	//
@@ -250,6 +284,19 @@ type UserServiceHTTPClient interface {
 	// ⚠️ 脱敏是按**字符**(mb_*)算的，中文名要用 rune 处理。
 	// 需登录。
 	GetRealInfo(ctx context.Context, req *GetRealInfoRequest, opts ...http.CallOption) (rsp *GetRealInfoReply, err error)
+	// GetUnregisterCheck 注销前检查（三项）
+	//
+	// 原实现 UserController::unregisterCheck -> UserLogic::unregisterCheck($userId)
+	// 控制器：`return $this->success('请求成功', $result);`
+	//
+	//	① 未结清订单：MarketPurchase where user_id AND (state='WANTED' OR pay_state='PAYING')
+	//	② 平台未解绑：UserAccounts where user_id AND type=2 AND app_id IN (3,4)
+	//	③ 积分未清零：UserWallet 逐行判断 amount>0 || frozen_amount>0
+	//
+	// ⚠️ 三项的顺序决定 errWord 的先后；只要有一项不过 state 就是 0。
+	// ⚠️ 用的是 success('请求成功', ...) —— **不是 data()**，所以 msg 是 "请求成功"。
+	// 需登录。
+	GetUnregisterCheck(ctx context.Context, req *GetUnregisterCheckRequest, opts ...http.CallOption) (rsp *GetUnregisterCheckReply, err error)
 	// GetUserInfo 当前登录用户信息
 	// 原: UserController::info -> UserLogic::info($this->userId)
 	// 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
@@ -361,6 +408,31 @@ func (c *UserServiceHTTPClientImpl) GetRealInfo(ctx context.Context, in *GetReal
 	pattern := "/v1/user/real/info"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationUserServiceGetRealInfo))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetUnregisterCheck 注销前检查（三项）
+//
+// 原实现 UserController::unregisterCheck -> UserLogic::unregisterCheck($userId)
+// 控制器：`return $this->success('请求成功', $result);`
+//
+//	① 未结清订单：MarketPurchase where user_id AND (state='WANTED' OR pay_state='PAYING')
+//	② 平台未解绑：UserAccounts where user_id AND type=2 AND app_id IN (3,4)
+//	③ 积分未清零：UserWallet 逐行判断 amount>0 || frozen_amount>0
+//
+// ⚠️ 三项的顺序决定 errWord 的先后；只要有一项不过 state 就是 0。
+// ⚠️ 用的是 success('请求成功', ...) —— **不是 data()**，所以 msg 是 "请求成功"。
+// 需登录。
+func (c *UserServiceHTTPClientImpl) GetUnregisterCheck(ctx context.Context, in *GetUnregisterCheckRequest, opts ...http.CallOption) (*GetUnregisterCheckReply, error) {
+	var out GetUnregisterCheckReply
+	pattern := "/v1/user/unregisr/check"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationUserServiceGetUnregisterCheck))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

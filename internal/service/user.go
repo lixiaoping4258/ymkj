@@ -19,10 +19,11 @@ type UserService struct {
 	address     *biz.AddressUsecase
 	addressList *biz.AddressListUsecase
 	realInfo    *biz.RealInfoUsecase
+	unreg       *biz.UnregisterCheckUsecase
 }
 
-func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase, addressList *biz.AddressListUsecase, realInfo *biz.RealInfoUsecase) *UserService {
-	return &UserService{users: users, noticeNew: noticeNew, address: address, addressList: addressList, realInfo: realInfo}
+func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase, addressList *biz.AddressListUsecase, realInfo *biz.RealInfoUsecase, unreg *biz.UnregisterCheckUsecase) *UserService {
+	return &UserService{users: users, noticeNew: noticeNew, address: address, addressList: addressList, realInfo: realInfo, unreg: unreg}
 }
 
 // GetUserInfo 对应 UserController::info。
@@ -180,4 +181,25 @@ func (s *UserService) GetRealInfo(
 		reply.Address = wrapperspb.String(*res.Address)
 	}
 	return reply, nil
+}
+
+// GetUnregisterCheck 对应 UserController::unregisterCheck。
+//
+// 原实现：
+//
+//	$result = UserLogic::unregisterCheck($this->userId);
+//	return $this->success('请求成功', $result);     // ⚠️ 不是 data()
+func (s *UserService) GetUnregisterCheck(
+	ctx context.Context, _ *v1.GetUnregisterCheckRequest,
+) (*v1.GetUnregisterCheckReply, error) {
+	userID := biz.UserIDFromContext(ctx)
+	res, err := s.unreg.UnregisterCheck(ctx, uint32(userID))
+	if err != nil {
+		return nil, err
+	}
+	words := res.ErrWord
+	if words == nil {
+		words = []string{}
+	}
+	return &v1.GetUnregisterCheckReply{State: res.State, ErrWord: words}, nil
 }

@@ -123,3 +123,14 @@ func (r *GetTestReply) RawBody() []byte {
 func (r *GetAddressDefaultReply) Envelope() (int, int, string, any) {
 	return 1, 0, "成功", r
 }
+
+// Envelope 让注销检查返回 msg="请求成功"。
+//
+// ⚠️ 原实现用的是 `$this->success('请求成功', $result)`，**不是 `$this->data()`**：
+//
+//	data() = success('', $data, 1, 0) -> msg 是空串。
+//	这个接口显式传了 '请求成功'，所以 msg 不同（与 /v1/user/address/default
+//	的 '成功' 是同一类差异，但文案不一样）。
+func (r *GetUnregisterCheckReply) Envelope() (int, int, string, any) {
+	return 1, 0, "请求成功", r
+}
