@@ -162,3 +162,13 @@ func joinFileURLByDomain(domain, uri string) string {
 	u := strings.TrimLeft(uri, "/")
 	return d + "/" + u
 }
+
+// GetTest 对应 IndexController::test（GET /v1/index/test）。
+//
+// ⚠️ 响应体由 GetTestReply.RawBody() 完全自定义 —— 不走信封。
+// 原文 `return json(['code'=>200,'msg'=>'成功'])`。
+func (s *IndexService) GetTest(
+	_ context.Context, _ *v1.GetTestRequest,
+) (*v1.GetTestReply, error) {
+	return &v1.GetTestReply{}, nil
+}

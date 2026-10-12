@@ -68,6 +68,7 @@ var defaultPublicOps = map[string]struct{}{
 	"/xtravel.v1.IndexService/GetDecorate":    {},
 	"/xtravel.v1.IndexService/GetBannerList":  {},
 	"/xtravel.v1.IndexService/GetIndexConfig": {},
+	"/xtravel.v1.IndexService/GetTest":        {},
 	// ArticleController::$notNeedLogin = ['lists','cate','detail']
 	"/xtravel.v1.ArticleService/GetArticleDetail": {},
 }

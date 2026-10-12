@@ -100,3 +100,14 @@ func (r *GetArticleDetailReply) Envelope() (int, int, string, any) {
 	}
 	return 1, 0, "", r
 }
+
+// RawBody 让 index/test 完全跳过信封。
+//
+// 原文：`return json(['code' => 200, 'msg' => '成功']);` —— 响应体只有 code 和 msg，
+// **没有 show 也没有 data**。这是本项目里唯一不走 JsonService 信封的已迁接口。
+//
+// ⚠️ 内容是**固定字面量**，不依赖任何数据。
+// ⚠️ code 是 **200**，不是 1 —— 与信封里的 code 语义完全不同，别混。
+func (r *GetTestReply) RawBody() []byte {
+	return []byte(`{"code":200,"msg":"成功"}`)
+}

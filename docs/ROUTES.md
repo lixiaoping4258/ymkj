@@ -6,7 +6,7 @@
 
 > 改路由后重新生成：`.\scripts\gen-routes.ps1`
 
-**已实现 24 / 131 条（18.3%）；其中免登录 10 条。**
+**已实现 25 / 131 条（19.1%）；其中免登录 11 条。**
 
 ## 免登录（无需 token）
 
@@ -17,6 +17,7 @@
 | GET | `/v1/common/config` | CommonService.GetConfig | `common.proto` |
 | GET | `/v1/common/protocol` | CommonService.GetProtocol | `common.proto` |
 | GET | `/v1/index/bannerList` | IndexService.GetBannerList | `index.proto` |
+| GET | `/v1/index/config` | IndexService.GetIndexConfig | `index.proto` |
 | GET | `/v1/index/decorate` | IndexService.GetDecorate | `index.proto` |
 | GET | `/v1/index/index` | IndexService.GetIndex | `index.proto` |
 | POST | `/v1/login/account` | AccountService.AccountLogin | `account.proto` |

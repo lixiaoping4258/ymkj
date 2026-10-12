@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	IndexService_GetIndex_FullMethodName       = "/xtravel.v1.IndexService/GetIndex"
 	IndexService_GetDecorate_FullMethodName    = "/xtravel.v1.IndexService/GetDecorate"
+	IndexService_GetTest_FullMethodName        = "/xtravel.v1.IndexService/GetTest"
 	IndexService_GetIndexConfig_FullMethodName = "/xtravel.v1.IndexService/GetIndexConfig"
 	IndexService_GetBannerList_FullMethodName  = "/xtravel.v1.IndexService/GetBannerList"
 )
@@ -53,6 +54,20 @@ type IndexServiceClient interface {
 	//
 	//	DecoratePage::field(['type','name','data','meta'])->findOrEmpty($id)->toArray()
 	GetDecorate(ctx context.Context, in *GetDecorateRequest, opts ...grpc.CallOption) (*GetDecorateReply, error)
+	// 连通性自检（调试接口）
+	//
+	// 原实现 IndexController::test —— ⚠️ **不走信封**：
+	//
+	//	public function test(): Json {
+	//	    return json(['code' => 200, 'msg' => '成功']);
+	//	}
+	//
+	// 响应体是 `{"code":200,"msg":"成功"}` —— **没有 show，也没有 data**。
+	// 硬套本项目信封会变成 {"code":1,"show":0,"msg":"","data":{...}}，与线上契约不符。
+	// 所以用 httpx.RawResponder 完全自定义响应体（见 envelope.go 的实现）。
+	//
+	// 免登录（IndexController::$notNeedLogin 含 'test'）。
+	GetTest(ctx context.Context, in *GetTestRequest, opts ...grpc.CallOption) (*GetTestReply, error)
 	// 全局配置（前端启动必读）
 	//
 	// 原实现 IndexLogic::getConfigData() —— 8 个顶层键，来源分散：
@@ -86,6 +101,16 @@ func (c *indexServiceClient) GetDecorate(ctx context.Context, in *GetDecorateReq
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetDecorateReply)
 	err := c.cc.Invoke(ctx, IndexService_GetDecorate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *indexServiceClient) GetTest(ctx context.Context, in *GetTestRequest, opts ...grpc.CallOption) (*GetTestReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTestReply)
+	err := c.cc.Invoke(ctx, IndexService_GetTest_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +165,20 @@ type IndexServiceServer interface {
 	//
 	//	DecoratePage::field(['type','name','data','meta'])->findOrEmpty($id)->toArray()
 	GetDecorate(context.Context, *GetDecorateRequest) (*GetDecorateReply, error)
+	// 连通性自检（调试接口）
+	//
+	// 原实现 IndexController::test —— ⚠️ **不走信封**：
+	//
+	//	public function test(): Json {
+	//	    return json(['code' => 200, 'msg' => '成功']);
+	//	}
+	//
+	// 响应体是 `{"code":200,"msg":"成功"}` —— **没有 show，也没有 data**。
+	// 硬套本项目信封会变成 {"code":1,"show":0,"msg":"","data":{...}}，与线上契约不符。
+	// 所以用 httpx.RawResponder 完全自定义响应体（见 envelope.go 的实现）。
+	//
+	// 免登录（IndexController::$notNeedLogin 含 'test'）。
+	GetTest(context.Context, *GetTestRequest) (*GetTestReply, error)
 	// 全局配置（前端启动必读）
 	//
 	// 原实现 IndexLogic::getConfigData() —— 8 个顶层键，来源分散：
@@ -164,6 +203,9 @@ func (UnimplementedIndexServiceServer) GetIndex(context.Context, *GetIndexReques
 }
 func (UnimplementedIndexServiceServer) GetDecorate(context.Context, *GetDecorateRequest) (*GetDecorateReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetDecorate not implemented")
+}
+func (UnimplementedIndexServiceServer) GetTest(context.Context, *GetTestRequest) (*GetTestReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTest not implemented")
 }
 func (UnimplementedIndexServiceServer) GetIndexConfig(context.Context, *GetIndexConfigRequest) (*GetIndexConfigReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetIndexConfig not implemented")
@@ -228,6 +270,24 @@ func _IndexService_GetDecorate_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IndexService_GetTest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IndexServiceServer).GetTest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IndexService_GetTest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IndexServiceServer).GetTest(ctx, req.(*GetTestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _IndexService_GetIndexConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetIndexConfigRequest)
 	if err := dec(in); err != nil {
@@ -278,6 +338,10 @@ var IndexService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetDecorate",
 			Handler:    _IndexService_GetDecorate_Handler,
+		},
+		{
+			MethodName: "GetTest",
+			Handler:    _IndexService_GetTest_Handler,
 		},
 		{
 			MethodName: "GetIndexConfig",

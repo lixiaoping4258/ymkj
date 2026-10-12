@@ -23,6 +23,7 @@ const OperationIndexServiceGetBannerList = "/xtravel.v1.IndexService/GetBannerLi
 const OperationIndexServiceGetDecorate = "/xtravel.v1.IndexService/GetDecorate"
 const OperationIndexServiceGetIndex = "/xtravel.v1.IndexService/GetIndex"
 const OperationIndexServiceGetIndexConfig = "/xtravel.v1.IndexService/GetIndexConfig"
+const OperationIndexServiceGetTest = "/xtravel.v1.IndexService/GetTest"
 
 type IndexServiceHTTPServer interface {
 	// GetBannerList 轮播图列表
@@ -43,12 +44,27 @@ type IndexServiceHTTPServer interface {
 	// 4 段 x_config + 1 张表 + config/project.php 兜底 + 请求域名。
 	// 真机数据与逐项说明见 docs/RECON-index-config.md。
 	GetIndexConfig(context.Context, *GetIndexConfigRequest) (*GetIndexConfigReply, error)
+	// GetTest 连通性自检（调试接口）
+	//
+	// 原实现 IndexController::test —— ⚠️ **不走信封**：
+	//
+	//	public function test(): Json {
+	//	    return json(['code' => 200, 'msg' => '成功']);
+	//	}
+	//
+	// 响应体是 `{"code":200,"msg":"成功"}` —— **没有 show，也没有 data**。
+	// 硬套本项目信封会变成 {"code":1,"show":0,"msg":"","data":{...}}，与线上契约不符。
+	// 所以用 httpx.RawResponder 完全自定义响应体（见 envelope.go 的实现）。
+	//
+	// 免登录（IndexController::$notNeedLogin 含 'test'）。
+	GetTest(context.Context, *GetTestRequest) (*GetTestReply, error)
 }
 
 func RegisterIndexServiceHTTPServer(s *http.Server, srv IndexServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/v1/index/index", _IndexService_GetIndex0_HTTP_Handler(srv))
 	r.GET("/v1/index/decorate", _IndexService_GetDecorate0_HTTP_Handler(srv))
+	r.GET("/v1/index/test", _IndexService_GetTest0_HTTP_Handler(srv))
 	r.GET("/v1/index/config", _IndexService_GetIndexConfig0_HTTP_Handler(srv))
 	r.GET("/v1/index/bannerList", _IndexService_GetBannerList0_HTTP_Handler(srv))
 }
@@ -87,6 +103,25 @@ func _IndexService_GetDecorate0_HTTP_Handler(srv IndexServiceHTTPServer) func(ct
 			return err
 		}
 		reply := out.(*GetDecorateReply)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _IndexService_GetTest0_HTTP_Handler(srv IndexServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetTestRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationIndexServiceGetTest)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetTest(ctx, req.(*GetTestRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetTestReply)
 		return ctx.Result(200, reply)
 	}
 }
@@ -148,6 +183,20 @@ type IndexServiceHTTPClient interface {
 	// 4 段 x_config + 1 张表 + config/project.php 兜底 + 请求域名。
 	// 真机数据与逐项说明见 docs/RECON-index-config.md。
 	GetIndexConfig(ctx context.Context, req *GetIndexConfigRequest, opts ...http.CallOption) (rsp *GetIndexConfigReply, err error)
+	// GetTest 连通性自检（调试接口）
+	//
+	// 原实现 IndexController::test —— ⚠️ **不走信封**：
+	//
+	//	public function test(): Json {
+	//	    return json(['code' => 200, 'msg' => '成功']);
+	//	}
+	//
+	// 响应体是 `{"code":200,"msg":"成功"}` —— **没有 show，也没有 data**。
+	// 硬套本项目信封会变成 {"code":1,"show":0,"msg":"","data":{...}}，与线上契约不符。
+	// 所以用 httpx.RawResponder 完全自定义响应体（见 envelope.go 的实现）。
+	//
+	// 免登录（IndexController::$notNeedLogin 含 'test'）。
+	GetTest(ctx context.Context, req *GetTestRequest, opts ...http.CallOption) (rsp *GetTestReply, err error)
 }
 
 type IndexServiceHTTPClientImpl struct {
@@ -217,6 +266,32 @@ func (c *IndexServiceHTTPClientImpl) GetIndexConfig(ctx context.Context, in *Get
 	pattern := "/v1/index/config"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationIndexServiceGetIndexConfig))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetTest 连通性自检（调试接口）
+//
+// 原实现 IndexController::test —— ⚠️ **不走信封**：
+//
+//	public function test(): Json {
+//	    return json(['code' => 200, 'msg' => '成功']);
+//	}
+//
+// 响应体是 `{"code":200,"msg":"成功"}` —— **没有 show，也没有 data**。
+// 硬套本项目信封会变成 {"code":1,"show":0,"msg":"","data":{...}}，与线上契约不符。
+// 所以用 httpx.RawResponder 完全自定义响应体（见 envelope.go 的实现）。
+//
+// 免登录（IndexController::$notNeedLogin 含 'test'）。
+func (c *IndexServiceHTTPClientImpl) GetTest(ctx context.Context, in *GetTestRequest, opts ...http.CallOption) (*GetTestReply, error) {
+	var out GetTestReply
+	pattern := "/v1/index/test"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationIndexServiceGetTest))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

@@ -34,6 +34,22 @@ service IndexService {
     option (google.api.http) = {get: "/v1/index/decorate"};
   }
 
+  // 连通性自检（调试接口）
+  //
+  // 原实现 IndexController::test —— ⚠️ **不走信封**：
+  //
+  //	public function test(): Json {
+  //	    return json(['code' => 200, 'msg' => '成功']);
+  //	}
+  //
+  // 响应体是 `{"code":200,"msg":"成功"}` —— **没有 show，也没有 data**。
+  // 硬套本项目信封会变成 {"code":1,"show":0,"msg":"","data":{...}}，与线上契约不符。
+  // 所以用 httpx.RawResponder 完全自定义响应体（见 envelope.go 的实现）。
+  //
+  // 免登录（IndexController::$notNeedLogin 含 'test'）。
+  rpc GetTest(GetTestRequest) returns (GetTestReply) {
+    option (google.api.http) = {get: "/v1/index/test"};
+  }
   // 全局配置（前端启动必读）
   //
   // 原实现 IndexLogic::getConfigData() —— 8 个顶层键，来源分散：
@@ -178,3 +194,8 @@ message WebPageConfig {
   // ⚠️ request()->domain() . '/mobile' —— **取自当前请求**，不能用配置
   string url = 4 [json_name = "url"];
 }
+message GetTestRequest {}
+
+// GetTestReply 是空消息 —— 响应体完全由 RawBody() 自定义，
+// 不走 protojson 序列化（原实现返回的 {"code":200,"msg":"成功"} 不是信封结构）。
+message GetTestReply {}

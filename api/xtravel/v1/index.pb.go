@@ -1065,6 +1065,80 @@ func (x *WebPageConfig) GetUrl() string {
 	return ""
 }
 
+type GetTestRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTestRequest) Reset() {
+	*x = GetTestRequest{}
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTestRequest) ProtoMessage() {}
+
+func (x *GetTestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTestRequest.ProtoReflect.Descriptor instead.
+func (*GetTestRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_index_proto_rawDescGZIP(), []int{16}
+}
+
+// GetTestReply 是空消息 —— 响应体完全由 RawBody() 自定义，
+// 不走 protojson 序列化（原实现返回的 {"code":200,"msg":"成功"} 不是信封结构）。
+type GetTestReply struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTestReply) Reset() {
+	*x = GetTestReply{}
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTestReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTestReply) ProtoMessage() {}
+
+func (x *GetTestReply) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTestReply.ProtoReflect.Descriptor instead.
+func (*GetTestReply) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_index_proto_rawDescGZIP(), []int{17}
+}
+
 var File_api_xtravel_v1_index_proto protoreflect.FileDescriptor
 
 const file_api_xtravel_v1_index_proto_rawDesc = "" +
@@ -1147,10 +1221,13 @@ const file_api_xtravel_v1_index_proto_rawDesc = "" +
 	"\x06status\x18\x01 \x01(\x05R\x06status\x12 \n" +
 	"\vpage_status\x18\x02 \x01(\x05R\vpage_status\x12\x1a\n" +
 	"\bpage_url\x18\x03 \x01(\tR\bpage_url\x12\x10\n" +
-	"\x03url\x18\x04 \x01(\tR\x03url2\xb5\x03\n" +
+	"\x03url\x18\x04 \x01(\tR\x03url\"\x10\n" +
+	"\x0eGetTestRequest\"\x0e\n" +
+	"\fGetTestReply2\x8e\x04\n" +
 	"\fIndexService\x12[\n" +
 	"\bGetIndex\x12\x1b.xtravel.v1.GetIndexRequest\x1a\x19.xtravel.v1.GetIndexReply\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/index/index\x12g\n" +
-	"\vGetDecorate\x12\x1e.xtravel.v1.GetDecorateRequest\x1a\x1c.xtravel.v1.GetDecorateReply\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/index/decorate\x12n\n" +
+	"\vGetDecorate\x12\x1e.xtravel.v1.GetDecorateRequest\x1a\x1c.xtravel.v1.GetDecorateReply\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/index/decorate\x12W\n" +
+	"\aGetTest\x12\x1a.xtravel.v1.GetTestRequest\x1a\x18.xtravel.v1.GetTestReply\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/v1/index/test\x12n\n" +
 	"\x0eGetIndexConfig\x12!.xtravel.v1.GetIndexConfigRequest\x1a\x1f.xtravel.v1.GetIndexConfigReply\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/index/config\x12o\n" +
 	"\rGetBannerList\x12 .xtravel.v1.GetBannerListRequest\x1a\x1e.xtravel.v1.GetBannerListReply\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/index/bannerListB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
 
@@ -1166,7 +1243,7 @@ func file_api_xtravel_v1_index_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_index_proto_rawDescData
 }
 
-var file_api_xtravel_v1_index_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_api_xtravel_v1_index_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_api_xtravel_v1_index_proto_goTypes = []any{
 	(*GetIndexRequest)(nil),       // 0: xtravel.v1.GetIndexRequest
 	(*GetIndexReply)(nil),         // 1: xtravel.v1.GetIndexReply
@@ -1184,7 +1261,9 @@ var file_api_xtravel_v1_index_proto_goTypes = []any{
 	(*LoginConfig)(nil),           // 13: xtravel.v1.LoginConfig
 	(*WebsiteConfig)(nil),         // 14: xtravel.v1.WebsiteConfig
 	(*WebPageConfig)(nil),         // 15: xtravel.v1.WebPageConfig
-	(*structpb.Struct)(nil),       // 16: google.protobuf.Struct
+	(*GetTestRequest)(nil),        // 16: xtravel.v1.GetTestRequest
+	(*GetTestReply)(nil),          // 17: xtravel.v1.GetTestReply
+	(*structpb.Struct)(nil),       // 18: google.protobuf.Struct
 }
 var file_api_xtravel_v1_index_proto_depIdxs = []int32{
 	2,  // 0: xtravel.v1.GetIndexReply.page:type_name -> xtravel.v1.DecoratePage
@@ -1196,18 +1275,20 @@ var file_api_xtravel_v1_index_proto_depIdxs = []int32{
 	13, // 6: xtravel.v1.GetIndexConfigReply.login:type_name -> xtravel.v1.LoginConfig
 	14, // 7: xtravel.v1.GetIndexConfigReply.website:type_name -> xtravel.v1.WebsiteConfig
 	15, // 8: xtravel.v1.GetIndexConfigReply.webPage:type_name -> xtravel.v1.WebPageConfig
-	16, // 9: xtravel.v1.GetIndexConfigReply.copyright:type_name -> google.protobuf.Struct
-	16, // 10: xtravel.v1.Tabbar.link:type_name -> google.protobuf.Struct
+	18, // 9: xtravel.v1.GetIndexConfigReply.copyright:type_name -> google.protobuf.Struct
+	18, // 10: xtravel.v1.Tabbar.link:type_name -> google.protobuf.Struct
 	0,  // 11: xtravel.v1.IndexService.GetIndex:input_type -> xtravel.v1.GetIndexRequest
 	4,  // 12: xtravel.v1.IndexService.GetDecorate:input_type -> xtravel.v1.GetDecorateRequest
-	9,  // 13: xtravel.v1.IndexService.GetIndexConfig:input_type -> xtravel.v1.GetIndexConfigRequest
-	6,  // 14: xtravel.v1.IndexService.GetBannerList:input_type -> xtravel.v1.GetBannerListRequest
-	1,  // 15: xtravel.v1.IndexService.GetIndex:output_type -> xtravel.v1.GetIndexReply
-	5,  // 16: xtravel.v1.IndexService.GetDecorate:output_type -> xtravel.v1.GetDecorateReply
-	10, // 17: xtravel.v1.IndexService.GetIndexConfig:output_type -> xtravel.v1.GetIndexConfigReply
-	7,  // 18: xtravel.v1.IndexService.GetBannerList:output_type -> xtravel.v1.GetBannerListReply
-	15, // [15:19] is the sub-list for method output_type
-	11, // [11:15] is the sub-list for method input_type
+	16, // 13: xtravel.v1.IndexService.GetTest:input_type -> xtravel.v1.GetTestRequest
+	9,  // 14: xtravel.v1.IndexService.GetIndexConfig:input_type -> xtravel.v1.GetIndexConfigRequest
+	6,  // 15: xtravel.v1.IndexService.GetBannerList:input_type -> xtravel.v1.GetBannerListRequest
+	1,  // 16: xtravel.v1.IndexService.GetIndex:output_type -> xtravel.v1.GetIndexReply
+	5,  // 17: xtravel.v1.IndexService.GetDecorate:output_type -> xtravel.v1.GetDecorateReply
+	17, // 18: xtravel.v1.IndexService.GetTest:output_type -> xtravel.v1.GetTestReply
+	10, // 19: xtravel.v1.IndexService.GetIndexConfig:output_type -> xtravel.v1.GetIndexConfigReply
+	7,  // 20: xtravel.v1.IndexService.GetBannerList:output_type -> xtravel.v1.GetBannerListReply
+	16, // [16:21] is the sub-list for method output_type
+	11, // [11:16] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
 	11, // [11:11] is the sub-list for extension extendee
 	0,  // [0:11] is the sub-list for field type_name
@@ -1224,7 +1305,7 @@ func file_api_xtravel_v1_index_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_index_proto_rawDesc), len(file_api_xtravel_v1_index_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

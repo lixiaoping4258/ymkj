@@ -226,7 +226,32 @@ func writeEnvelope(w http.ResponseWriter, code, show int, msg string, data any) 
 // ResponseEncoder 替换 Kratos 的 http.DefaultResponseEncoder。
 //
 // 对应原项目 JsonService::data()：code=1, show=0, msg=""。
+// RawResponder 让 handler 完全跳过信封，直接把字节写进响应体。
+//
+// 为什么需要：**原项目并非所有接口都走 JsonService 信封**。
+// 例如 IndexController::test 直接 `return json(['code'=>200,'msg'=>'成功'])`，
+// 响应体是 `{"code":200,"msg":"成功"}` —— **没有 show，也没有 data**。
+// 硬套信封会变成 `{"code":1,"show":0,"msg":"","data":{"code":200,...}}`，
+// 与线上契约不符。
+//
+// ⚠️ 用它时要自己负责 HTTP 状态码（这里固定 200，与 CompatHTTPStatus 一致）
+//
+//	和 Content-Type。
+type RawResponder interface {
+	RawBody() []byte
+}
+
 func ResponseEncoder(w http.ResponseWriter, r *http.Request, v any) error {
+	// 优先处理"完全自定义响应体"的情况（如 index/test）
+	if rr, ok := v.(RawResponder); ok {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if CompatHTTPStatus {
+			w.WriteHeader(http.StatusOK)
+		}
+		_, err := w.Write(rr.RawBody())
+		return err
+	}
+
 	code, show, msg, data := CodeSuccess, 0, "", v
 	if e, ok := v.(Enveloper); ok {
 		code, show, msg, data = e.Envelope()
