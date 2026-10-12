@@ -1545,6 +1545,44 @@ Go 的 `len()` / `s[i]` 是字节 —— 中文名会算错：
 - **不要**为了"看看返回什么"而拿真实业务数据试
 - 破坏性接口优先只验证**校验分支**与**未找到分支**（这两类安全）
 
+### 14. 🔴 提交前**必须**跑 `scripts/gate.ps1`（本会话踩过 2 次）
+
+**两次**在 `go vet` / `go test` 失败的情况下提交并推送了代码。两次的原因相同：
+
+把 vet / test 和别的命令串在同一条 pwsh 里，又用 `Select-Object` 截断了输出 ——
+于是 `[build failed]` 被截掉、没看见就继续提交。
+
+**现在改为跑一个脚本**（`scripts/gate.ps1`），它把四道门串起来、
+**不截断任何输出**、最后只汇总一行：
+
+```powershell
+.\scripts\gate.ps1
+if ($LASTEXITCODE -ne 0) { throw "质量门未通过，禁止提交" }
+```
+
+门的顺序：`gofmt -l` → `go build ./...` → `go vet ./...` → `go test ./... -count=1` → `smoke.ps1`
+
+**这个脚本本身做过负向测试**（故意制造格式错误 / 编译错误，确认它真的会 FAIL
+并返回非 0），不是"看起来能跑"。
+
+#### 写这个脚本时踩到的 3 个 PowerShell 坑（都实际发生过）
+
+| # | 坑 | 现象 | 解法 |
+|---|---|---|---|
+| 1 | `-match` **默认大小写不敏感** | `'FAIL'` 匹配到了 `PASS  auth failure ...` 这行，把通过的判成失败 | 判断日志里的 FAIL/ERROR 用 **`-cmatch`** |
+| 2 | **管道会重置 `$LASTEXITCODE`** | `cmd 2>&1 \| ...` 之后再读 `$LASTEXITCODE` 拿到的是管道的退出码 | 先执行、**立刻**记下退出码，**再**处理已捕获到变量里的输出 |
+| 3 | `Write-Host` **不走管道** | `smoke.ps1` 用 `Write-Host` 输出，`2>&1` 抓不到，解析时得到空字符串 | 用 **`*>&1`** 捕获所有流（含 Information stream 6） |
+
+#### 还有一个坑：脚本块里的 `throw` 会穿透
+
+`Step` 里如果直接 `& $Body` 而不 try/catch，脚本块内的 `throw` 会
+**终止整个脚本** —— 后续的门不跑、也不打印 `GATE FAIL` 汇总。
+必须：
+
+```powershell
+try { $out = & $Body; $code = $LASTEXITCODE }
+catch { $out = @("$_"); $code = 1 }
+```
 ### 13. 需要联网/外部服务的接口先跳过
 
 `open.php` 的 `authUser*` / `lockGoods` / `unlockGoods` / `userArchiveList`
