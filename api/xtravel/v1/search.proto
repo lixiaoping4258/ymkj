@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package xtravel.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
+
+// SearchService 搜索相关。
+// 对应原项目 app/api/route/search.php：
+//
+//	Route::group('/v1/search', function () {
+//	    Route::get('hotLists', [SearchController::class, 'hotLists']);
+//	});
+//
+// SearchController::$notNeedLogin = ['hotLists'] -> **免登录**。
+service SearchService {
+  // 热搜列表
+  //
+  // 原实现 SearchController::hotLists -> SearchLogic::hotLists()：
+  //
+  //	$data = HotSearch::field(['name','sort'])
+  //	    ->order(['sort'=>'desc','id'=>'desc'])->select()->toArray();
+  //	return [
+  //	    'status' => ConfigService::get('hot_search', 'status', 0),
+  //	    'data'   => $data,
+  //	];
+  //
+  // ⚠️ status 的默认值是 **0（关闭）**，且本项目 x_config 里**没有 hot_search 段**
+  //    —— 所以当前恒为 0，接口返回的是"功能已关闭 + 空列表"。
+  rpc GetHotLists(GetHotListsRequest) returns (GetHotListsReply) {
+    option (google.api.http) = {get: "/v1/search/hotLists"};
+  }
+}
+
+message GetHotListsRequest {}
+
+// GetHotListsReply 对应 ['status'=>..., 'data'=>...]。
+message GetHotListsReply {
+  // 功能状态 0-关闭 1-开启（x_config 的 hot_search.status，缺省 0）
+  int32 status = 1 [json_name = "status"];
+  repeated HotSearchItem data = 2 [json_name = "data"];
+}
+
+// HotSearchItem 对应 field(['name','sort'])。
+message HotSearchItem {
+  string name = 1 [json_name = "name"];
+  int32 sort = 2 [json_name = "sort"];
+}
