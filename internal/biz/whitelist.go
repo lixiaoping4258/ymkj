@@ -63,13 +63,18 @@ type WhitelistParams struct {
 
 // WhitelistUsecase 白名单用例。
 type WhitelistUsecase struct {
-	repo  WhitelistRepo
-	cache Cache
-	log   *log.Helper
+	repo      WhitelistRepo
+	groupRepo WhitelistGroupRepo
+	cache     Cache
+	log       *log.Helper
 }
 
-func NewWhitelistUsecase(repo WhitelistRepo, cache Cache, logger log.Logger) *WhitelistUsecase {
-	return &WhitelistUsecase{repo: repo, cache: cache, log: log.NewHelper(logger)}
+func NewWhitelistUsecase(
+	repo WhitelistRepo, groupRepo WhitelistGroupRepo, cache Cache, logger log.Logger,
+) *WhitelistUsecase {
+	return &WhitelistUsecase{
+		repo: repo, groupRepo: groupRepo, cache: cache, log: log.NewHelper(logger),
+	}
 }
 
 // UserPermissions 对应 WhitelistLogic::getUserPermissions（带 5 分钟缓存）。

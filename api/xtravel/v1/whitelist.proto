@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package xtravel.v1;
+
+import "api/xtravel/v1/common.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
+
+// WhitelistService 白名单权限相关。
+// 对应原项目 app/api/route/whitelist.php：
+//
+//	Route::group('/v1/whitelist', function () {
+//	    Route::get('check',       [WhitelistController::class, 'check']);
+//	    Route::get('permissions', [WhitelistController::class, 'permissions']);
+//	    Route::get('group',       [WhitelistController::class, 'group']);
+//	});
+service WhitelistService {
+  // 检查用户是否有指定限制项的权限
+  //
+  // 原实现 WhitelistController::check：
+  //
+  //	$itemCode = $this->request->get('item_code', '');
+  //	if (empty($itemCode)) { return $this->fail('缺少限制项标识(item_code)'); }
+  //	$hasPermission = WhitelistLogic::checkPermission($this->userId, $itemCode);
+  //	return $this->data(['has_permission' => $hasPermission, 'item_code' => $itemCode]);
+  //
+  // ⚠️ `has_permission` **为 true 表示该用户被禁止做这类操作**
+  //    （与中间件 checkPermissionWithContext 的语义一致：true = 拦截）。
+  rpc CheckWhitelistItem(CheckWhitelistItemRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/whitelist/check"};
+  }
+
+  // 获取当前用户所有限制项权限状态
+  //
+  // 原实现 WhitelistController::permissions：
+  //
+  //	$permissions = WhitelistLogic::getUserPermissions($this->userId);
+  //	return $this->data(['permissions' => $permissions]);
+  //
+  // ⚠️ 值是 **bool**：true = 受限（禁止）。
+  // ⚠️ 带 5 分钟缓存（key: whitelist:user_perm:{userId}，与 PHP 共用）。
+  rpc GetWhitelistPermissions(GetWhitelistPermissionsRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/whitelist/permissions"};
+  }
+
+  // 获取当前用户所在白名单组信息
+  //
+  // 原实现 WhitelistController::group -> WhitelistLogic::getUserGroup($userId)：
+  //
+  //	$whitelistUser = WhitelistUser::where('user_id', $userId)->find();
+  //	if (!$whitelistUser) { return null; }
+  //	$group = WhitelistGroup::find($whitelistUser['group_id']);
+  //	if (!$group || $group['status'] != 1) { return null; }
+  //	return $group->toArray();
+  //
+  // ⚠️ **不在组里** 与 **组被禁用(status!=1)** 两种情况对外都是 `null`。
+  // ⚠️ `create_time` / `update_time` 库里是 **int unix 时间戳**，但模型读取时
+  //    会转成 `"Y-m-d H:i:s"` 字符串（已用真实 PHP 对拍）。
+  rpc GetWhitelistGroup(GetWhitelistGroupRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/whitelist/group"};
+  }
+}
+
+message CheckWhitelistItemRequest {
+  // 对应 `$this->request->get('item_code', '')`
+  string item_code = 1 [json_name = "item_code"];
+}
+
+message GetWhitelistPermissionsRequest {}
+
+message GetWhitelistGroupRequest {}

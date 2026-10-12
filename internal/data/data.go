@@ -37,6 +37,8 @@ var ProviderSet = wire.NewSet(
 	NewRedisLocker,
 	NewMarketPurchaseRepo,
 	NewWhitelistRepo,
+	wire.Bind(new(biz.WhitelistRepo), new(*whitelistRepo)),
+	wire.Bind(new(biz.WhitelistGroupRepo), new(*whitelistRepo)),
 	NewPurchaseFaceRepo,
 	NewSaleFaceRepo,
 	NewStockRepo,

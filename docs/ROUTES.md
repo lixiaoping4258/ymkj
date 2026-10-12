@@ -6,7 +6,7 @@
 
 > 改路由后重新生成：`.\scripts\gen-routes.ps1`
 
-**已实现 46 / 131 条（35.1%）；其中免登录 14 条。**
+**已实现 47 / 131 条（35.9%）；其中免登录 14 条。**
 
 ## 免登录（无需 token）
 
@@ -52,6 +52,7 @@
 | GET | `/v1/open/authUrl` | OpenAppService.GetAuthUrl | `openapp.proto` |
 | GET | `/v1/open/authUserDetail` | OpenAppService.GetAuthUserDetail | `openapp.proto` |
 | GET | `/v1/open/authUserList` | OpenAppService.GetAuthUserList | `openapp.proto` |
+| GET | `/v1/open/userGoodsList` | OpenAppService.GetUserGoodsList | `openapp.proto` |
 | GET | `/v1/payment/channel` | PayService.GetChannel | `pay.proto` |
 | GET | `/v1/user/address` | UserService.GetAddressList | `user.proto` |
 | GET | `/v1/user/address/default` | UserService.GetAddressDefault | `user.proto` |

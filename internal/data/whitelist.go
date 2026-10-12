@@ -6,16 +6,22 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/lixiaoping4258/ymkj/internal/biz"
+	"github.com/lixiaoping4258/ymkj/internal/conf"
 	"github.com/lixiaoping4258/ymkj/internal/data/model"
 )
 
 type whitelistRepo struct {
-	db *gorm.DB
+	db     *gorm.DB
+	prefix string
 }
 
-func NewWhitelistRepo(db *gorm.DB) biz.WhitelistRepo {
-	return &whitelistRepo{db: db}
+// NewWhitelistRepo 返回**具体类型**，便于 data.go 里用 wire.Bind 绑定两个接口。
+func NewWhitelistRepo(db *gorm.DB, cf *conf.Data) *whitelistRepo {
+	prefix := "la_"
+	if cf != nil && cf.Database != nil && cf.Database.Prefix != "" {
+		prefix = cf.Database.Prefix
+	}
+	return &whitelistRepo{db: db, prefix: prefix}
 }
 
 // EnabledItems 对应 WhitelistItem::where('status',1)->column('code','id')。
@@ -115,4 +121,35 @@ func (r *whitelistRepo) PurchasePayWay(ctx context.Context, purchaseID uint64) (
 		return 0, true, nil
 	}
 	return *row.PayWay, true, nil
+}
+
+/* ------------------------------------------------- group 接口 */
+
+// FindGroupRow 逐字对应 `WhitelistGroup::find($groupID)`。
+//
+// ⚠️ 真实 SQL 是 **`SELECT * FROM x_whitelist_group WHERE id = ?`**
+//
+//	（无 `delete_time` 过滤；该表也没有该列）。
+//
+// ⚠️ 用 map 扫描承接任意列，再由 biz 层把 int 时间戳转成 datetime 字符串
+//
+//	（已用真实 PHP 对拍：toArray() 输出的是 "2026-08-18 18:01:34"）。
+//
+// ⚠️ 表名前缀用 `conf` 里的（默认 la_）—— 这里沿用注入的 db 的 NamingStrategy？
+//
+//	不：GORM 的 Table() **不会**自动加前缀，必须手工拼。
+func (r *whitelistRepo) FindGroupRow(ctx context.Context, groupID uint64) (map[string]any, bool, error) {
+	var rows []map[string]any
+	err := r.db.WithContext(ctx).
+		Table(r.prefix+"whitelist_group").
+		Where("id = ?", groupID).
+		Limit(1).
+		Find(&rows).Error
+	if err != nil {
+		return nil, false, err
+	}
+	if len(rows) == 0 {
+		return nil, false, nil
+	}
+	return rows[0], true, nil
 }
