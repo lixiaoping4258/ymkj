@@ -94,3 +94,36 @@ func (s *OpenAppService) GetAppDetail(
 	}
 	return &v1.RawData{Json: body}, nil
 }
+
+// GetAuthUrl 对应 OpenAppController::authUrl（GET /v1/open/authUrl）。
+//
+// 原实现：
+//
+//	$data = (new AuthUrlValidate())->get()->goCheck();
+//	$result = OpenAppLogic::authUrl($data['app_id'], $data['redirect_url']);
+//	if (false === $result) { return $this->fail(OpenAppLogic::getError()); }
+//	return $this->data($result);
+//
+// 校验文案（AuthUrlValidate）：
+//
+//	'app_id.require'       => '一级平台ID不能为空',
+//	'redirect_url.require' => '跳转地址不能为空',
+func (s *OpenAppService) GetAuthUrl(
+	ctx context.Context, req *v1.GetAuthUrlRequest,
+) (*v1.RawData, error) {
+	if req.AppId == nil {
+		return nil, bizFail(biz.NewBizError("一级平台ID不能为空"))
+	}
+	if req.GetRedirectUrl() == "" {
+		return nil, bizFail(biz.NewBizError("跳转地址不能为空"))
+	}
+	res, err := s.app.AuthURL(ctx, req.AppId.Value, req.GetRedirectUrl())
+	if err != nil {
+		return nil, bizFail(biz.NewBizError(err.Error()))
+	}
+	body, merr := biz.MarshalNoHTMLEscape(map[string]any{"auth_url": res.AuthURL})
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
+}

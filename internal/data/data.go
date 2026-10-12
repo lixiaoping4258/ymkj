@@ -70,6 +70,9 @@ var ProviderSet = wire.NewSet(
 	NewPayChannelRepo,
 	NewBalanceQueryRepo,
 	NewOpenAppRepo,
+	// 同一个 *openAppRepo 同时满足 biz.OpenAppRepo 与 biz.OpenAppAuthRepo
+	wire.Bind(new(biz.OpenAppRepo), new(*openAppRepo)),
+	wire.Bind(new(biz.OpenAppAuthRepo), new(*openAppRepo)),
 )
 
 // gormWriter 把 GORM 的 SQL 日志转接到 Kratos 的 logger。

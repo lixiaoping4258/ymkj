@@ -104,6 +104,61 @@ func (x *GetAppDetailRequest) GetAppId() *wrapperspb.Int64Value {
 	return nil
 }
 
+type GetAuthUrlRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 对应 `$data['app_id']`；规则 require（文案 '一级平台ID不能为空'）
+	AppId *wrapperspb.Int64Value `protobuf:"bytes,1,opt,name=app_id,proto3" json:"app_id,omitempty"`
+	// 对应 `$data['redirect_url']`；规则 require（文案 '跳转地址不能为空'）
+	// ⚠️ 原实现**不做 URL 编码**，直接拼进 auth_url
+	RedirectUrl   string `protobuf:"bytes,2,opt,name=redirect_url,proto3" json:"redirect_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAuthUrlRequest) Reset() {
+	*x = GetAuthUrlRequest{}
+	mi := &file_api_xtravel_v1_openapp_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAuthUrlRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAuthUrlRequest) ProtoMessage() {}
+
+func (x *GetAuthUrlRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_openapp_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAuthUrlRequest.ProtoReflect.Descriptor instead.
+func (*GetAuthUrlRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_openapp_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *GetAuthUrlRequest) GetAppId() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.AppId
+	}
+	return nil
+}
+
+func (x *GetAuthUrlRequest) GetRedirectUrl() string {
+	if x != nil {
+		return x.RedirectUrl
+	}
+	return ""
+}
+
 var File_api_xtravel_v1_openapp_proto protoreflect.FileDescriptor
 
 const file_api_xtravel_v1_openapp_proto_rawDesc = "" +
@@ -112,10 +167,15 @@ const file_api_xtravel_v1_openapp_proto_rawDesc = "" +
 	"xtravel.v1\x1a\x1bapi/xtravel/v1/common.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1egoogle/protobuf/wrappers.proto\"\x13\n" +
 	"\x11GetAppListRequest\"J\n" +
 	"\x13GetAppDetailRequest\x123\n" +
-	"\x06app_id\x18\x01 \x01(\v2\x1b.google.protobuf.Int64ValueR\x06app_id2\xce\x01\n" +
+	"\x06app_id\x18\x01 \x01(\v2\x1b.google.protobuf.Int64ValueR\x06app_id\"l\n" +
+	"\x11GetAuthUrlRequest\x123\n" +
+	"\x06app_id\x18\x01 \x01(\v2\x1b.google.protobuf.Int64ValueR\x06app_id\x12\"\n" +
+	"\fredirect_url\x18\x02 \x01(\tR\fredirect_url2\xaa\x02\n" +
 	"\x0eOpenAppService\x12Z\n" +
 	"\n" +
-	"GetAppList\x12\x1d.xtravel.v1.GetAppListRequest\x1a\x13.xtravel.v1.RawData\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/open/appList\x12`\n" +
+	"GetAppList\x12\x1d.xtravel.v1.GetAppListRequest\x1a\x13.xtravel.v1.RawData\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/open/appList\x12Z\n" +
+	"\n" +
+	"GetAuthUrl\x12\x1d.xtravel.v1.GetAuthUrlRequest\x1a\x13.xtravel.v1.RawData\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/open/authUrl\x12`\n" +
 	"\fGetAppDetail\x12\x1f.xtravel.v1.GetAppDetailRequest\x1a\x13.xtravel.v1.RawData\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/open/appDetailB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
 
 var (
@@ -130,24 +190,28 @@ func file_api_xtravel_v1_openapp_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_openapp_proto_rawDescData
 }
 
-var file_api_xtravel_v1_openapp_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_api_xtravel_v1_openapp_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_api_xtravel_v1_openapp_proto_goTypes = []any{
 	(*GetAppListRequest)(nil),     // 0: xtravel.v1.GetAppListRequest
 	(*GetAppDetailRequest)(nil),   // 1: xtravel.v1.GetAppDetailRequest
-	(*wrapperspb.Int64Value)(nil), // 2: google.protobuf.Int64Value
-	(*RawData)(nil),               // 3: xtravel.v1.RawData
+	(*GetAuthUrlRequest)(nil),     // 2: xtravel.v1.GetAuthUrlRequest
+	(*wrapperspb.Int64Value)(nil), // 3: google.protobuf.Int64Value
+	(*RawData)(nil),               // 4: xtravel.v1.RawData
 }
 var file_api_xtravel_v1_openapp_proto_depIdxs = []int32{
-	2, // 0: xtravel.v1.GetAppDetailRequest.app_id:type_name -> google.protobuf.Int64Value
-	0, // 1: xtravel.v1.OpenAppService.GetAppList:input_type -> xtravel.v1.GetAppListRequest
-	1, // 2: xtravel.v1.OpenAppService.GetAppDetail:input_type -> xtravel.v1.GetAppDetailRequest
-	3, // 3: xtravel.v1.OpenAppService.GetAppList:output_type -> xtravel.v1.RawData
-	3, // 4: xtravel.v1.OpenAppService.GetAppDetail:output_type -> xtravel.v1.RawData
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3, // 0: xtravel.v1.GetAppDetailRequest.app_id:type_name -> google.protobuf.Int64Value
+	3, // 1: xtravel.v1.GetAuthUrlRequest.app_id:type_name -> google.protobuf.Int64Value
+	0, // 2: xtravel.v1.OpenAppService.GetAppList:input_type -> xtravel.v1.GetAppListRequest
+	2, // 3: xtravel.v1.OpenAppService.GetAuthUrl:input_type -> xtravel.v1.GetAuthUrlRequest
+	1, // 4: xtravel.v1.OpenAppService.GetAppDetail:input_type -> xtravel.v1.GetAppDetailRequest
+	4, // 5: xtravel.v1.OpenAppService.GetAppList:output_type -> xtravel.v1.RawData
+	4, // 6: xtravel.v1.OpenAppService.GetAuthUrl:output_type -> xtravel.v1.RawData
+	4, // 7: xtravel.v1.OpenAppService.GetAppDetail:output_type -> xtravel.v1.RawData
+	5, // [5:8] is the sub-list for method output_type
+	2, // [2:5] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_api_xtravel_v1_openapp_proto_init() }
@@ -162,7 +226,7 @@ func file_api_xtravel_v1_openapp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_openapp_proto_rawDesc), len(file_api_xtravel_v1_openapp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

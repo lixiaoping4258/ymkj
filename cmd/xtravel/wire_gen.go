@@ -124,7 +124,7 @@ func wireApp(confServer *conf.Server, confData *conf.Data, app *conf.App, confLo
 	balanceQueryUsecase := biz.NewBalanceQueryUsecase(balanceQueryRepo)
 	walletService := service.NewWalletService(balanceQueryUsecase)
 	openAppRepo := data.NewOpenAppRepo(db, confData)
-	openAppUsecase := biz.NewOpenAppUsecase(openAppRepo)
+	openAppUsecase := biz.NewOpenAppUsecase(openAppRepo, openAppRepo)
 	openAppService := service.NewOpenAppService(openAppUsecase)
 	whitelistRepo := data.NewWhitelistRepo(db)
 	whitelistUsecase := biz.NewWhitelistUsecase(whitelistRepo, cache, logger)

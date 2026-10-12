@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	OpenAppService_GetAppList_FullMethodName   = "/xtravel.v1.OpenAppService/GetAppList"
+	OpenAppService_GetAuthUrl_FullMethodName   = "/xtravel.v1.OpenAppService/GetAuthUrl"
 	OpenAppService_GetAppDetail_FullMethodName = "/xtravel.v1.OpenAppService/GetAppDetail"
 )
 
@@ -57,6 +58,18 @@ type OpenAppServiceClient interface {
 	//
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 获取一级平台授权地址
+	//
+	// 原实现 OpenAppController::authUrl -> OpenAppLogic::authUrl($appId,$redirect_url)：
+	//
+	//	$app = App::where('state','=',1)->where('id','=',$appId)->find();
+	//	if (!$app) { setError('未获取到一级平台信息'); return false; }
+	//	if (!$app->auth_url) { setError('未获取到一级平台信息授权地址'); return false; }
+	//	$url = sprintf('%s&appId=%s&state=111&redirectUrl=%s', $app->auth_url, $appId, $redirect_url);
+	//
+	// ⚠️ **state=111 是硬编码的**；auth_url 原样拼接；**redirectUrl 不做 URL 编码**。
+	// ⚠️ 只筛 state=1，**不筛 type**（与 appList 不同）。
+	GetAuthUrl(ctx context.Context, in *GetAuthUrlRequest, opts ...grpc.CallOption) (*RawData, error)
 	GetAppDetail(ctx context.Context, in *GetAppDetailRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
@@ -72,6 +85,16 @@ func (c *openAppServiceClient) GetAppList(ctx context.Context, in *GetAppListReq
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, OpenAppService_GetAppList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openAppServiceClient) GetAuthUrl(ctx context.Context, in *GetAuthUrlRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, OpenAppService_GetAuthUrl_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -122,6 +145,18 @@ type OpenAppServiceServer interface {
 	//
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 获取一级平台授权地址
+	//
+	// 原实现 OpenAppController::authUrl -> OpenAppLogic::authUrl($appId,$redirect_url)：
+	//
+	//	$app = App::where('state','=',1)->where('id','=',$appId)->find();
+	//	if (!$app) { setError('未获取到一级平台信息'); return false; }
+	//	if (!$app->auth_url) { setError('未获取到一级平台信息授权地址'); return false; }
+	//	$url = sprintf('%s&appId=%s&state=111&redirectUrl=%s', $app->auth_url, $appId, $redirect_url);
+	//
+	// ⚠️ **state=111 是硬编码的**；auth_url 原样拼接；**redirectUrl 不做 URL 编码**。
+	// ⚠️ 只筛 state=1，**不筛 type**（与 appList 不同）。
+	GetAuthUrl(context.Context, *GetAuthUrlRequest) (*RawData, error)
 	GetAppDetail(context.Context, *GetAppDetailRequest) (*RawData, error)
 	mustEmbedUnimplementedOpenAppServiceServer()
 }
@@ -135,6 +170,9 @@ type UnimplementedOpenAppServiceServer struct{}
 
 func (UnimplementedOpenAppServiceServer) GetAppList(context.Context, *GetAppListRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAppList not implemented")
+}
+func (UnimplementedOpenAppServiceServer) GetAuthUrl(context.Context, *GetAuthUrlRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAuthUrl not implemented")
 }
 func (UnimplementedOpenAppServiceServer) GetAppDetail(context.Context, *GetAppDetailRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAppDetail not implemented")
@@ -178,6 +216,24 @@ func _OpenAppService_GetAppList_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OpenAppService_GetAuthUrl_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAuthUrlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenAppServiceServer).GetAuthUrl(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OpenAppService_GetAuthUrl_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenAppServiceServer).GetAuthUrl(ctx, req.(*GetAuthUrlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _OpenAppService_GetAppDetail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetAppDetailRequest)
 	if err := dec(in); err != nil {
@@ -206,6 +262,10 @@ var OpenAppService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAppList",
 			Handler:    _OpenAppService_GetAppList_Handler,
+		},
+		{
+			MethodName: "GetAuthUrl",
+			Handler:    _OpenAppService_GetAuthUrl_Handler,
 		},
 		{
 			MethodName: "GetAppDetail",

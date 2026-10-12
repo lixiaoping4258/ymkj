@@ -16,7 +16,8 @@ type openAppRepo struct {
 	prefix string
 }
 
-func NewOpenAppRepo(db *gorm.DB, c *conf.Data) biz.OpenAppRepo {
+// NewOpenAppRepo 返回**具体类型**，以便 data.go 里用 wire.Bind 同时绑定两个接口。
+func NewOpenAppRepo(db *gorm.DB, c *conf.Data) *openAppRepo {
 	prefix := "la_"
 	if c != nil && c.Database != nil && c.Database.Prefix != "" {
 		prefix = c.Database.Prefix
@@ -101,4 +102,32 @@ func (r *openAppRepo) FindApp(ctx context.Context, appID int64) (*biz.OpenAppDet
 		ID: row.ID, Name: row.Name, Logo: row.Logo,
 		Type: row.Type, FeeRate: row.FeeRate, Flag: row.Flag,
 	}, true, nil
+}
+
+// FindAuthURL 逐字对应 OpenAppLogic::authUrl 的第一段查询：
+//
+//	App::where('state','=',1)->where('id','=',$appId)->find()
+//
+// ⚠️ **不筛 type** —— 与 AppLists 不同，type=1 的本地系统也能查到。
+// ⚠️ 只取 auth_url 一列。
+func (r *openAppRepo) FindAuthURL(ctx context.Context, appID int64) (string, bool, error) {
+	var row struct {
+		AuthURL *string `gorm:"column:auth_url"`
+	}
+	err := r.db.WithContext(ctx).
+		Table(r.prefix+"app").
+		Select("auth_url").
+		Where("state = ?", 1).
+		Where("id = ?", appID).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if row.AuthURL == nil {
+		return "", true, nil // 行存在但 auth_url 是 NULL -> 后面走"未获取到授权地址"
+	}
+	return *row.AuthURL, true, nil
 }

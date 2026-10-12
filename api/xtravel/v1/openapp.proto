@@ -39,6 +39,21 @@ service OpenAppService {
   //    原项目的不一致，照搬。
   // ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
   // ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+  // 获取一级平台授权地址
+  //
+  // 原实现 OpenAppController::authUrl -> OpenAppLogic::authUrl($appId,$redirect_url)：
+  //
+  //	$app = App::where('state','=',1)->where('id','=',$appId)->find();
+  //	if (!$app) { setError('未获取到一级平台信息'); return false; }
+  //	if (!$app->auth_url) { setError('未获取到一级平台信息授权地址'); return false; }
+  //	$url = sprintf('%s&appId=%s&state=111&redirectUrl=%s', $app->auth_url, $appId, $redirect_url);
+  //
+  // ⚠️ **state=111 是硬编码的**；auth_url 原样拼接；**redirectUrl 不做 URL 编码**。
+  // ⚠️ 只筛 state=1，**不筛 type**（与 appList 不同）。
+  rpc GetAuthUrl(GetAuthUrlRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/open/authUrl"};
+  }
+
   rpc GetAppDetail(GetAppDetailRequest) returns (RawData) {
     option (google.api.http) = {get: "/v1/open/appDetail"};
   }
@@ -49,4 +64,12 @@ message GetAppListRequest {}
 message GetAppDetailRequest {
   // 对应 `$this->params['app_id']`
   google.protobuf.Int64Value app_id = 1 [json_name = "app_id"];
+}
+
+message GetAuthUrlRequest {
+  // 对应 `$data['app_id']`；规则 require（文案 '一级平台ID不能为空'）
+  google.protobuf.Int64Value app_id = 1 [json_name = "app_id"];
+  // 对应 `$data['redirect_url']`；规则 require（文案 '跳转地址不能为空'）
+  // ⚠️ 原实现**不做 URL 编码**，直接拼进 auth_url
+  string redirect_url = 2 [json_name = "redirect_url"];
 }
