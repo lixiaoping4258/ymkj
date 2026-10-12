@@ -1545,6 +1545,33 @@ Go 的 `len()` / `s[i]` 是字节 —— 中文名会算错：
 - **不要**为了"看看返回什么"而拿真实业务数据试
 - 破坏性接口优先只验证**校验分支**与**未找到分支**（这两类安全）
 
+### 13. 🔴 同名 / 同形的两块代码，行为**几乎一定不同** —— 必须逐个 diff 或对拍
+
+这条是本会话**出现次数最多**的坑（已 6 类实例）。凡是看到"这两个接口看起来是对称的"
+"这两个函数长得一样"，**默认它们不同**，然后去证实。
+
+**已实际遇到的 6 类**：
+
+| # | 看着一样的两个东西 | 实际差异 |
+|---|---|---|
+| 1 | `sales/on` vs `sales/out` | **五处**不同：查找函数（`findSales` vs `getArchive`）、id 语义（list_sales.id vs app_archive.id+state=1）、错误文案（`记录不存在` vs `存档记录不存在`）、状态（ON_SALE vs SELL_OUT）、额外字段（无 vs `sale_time_text=''`） |
+| 2 | `authMyUserList` vs `authUserList` 的手机号掩码 | `substr_replace($m,'****',3,**6**)` vs `substr_replace($m,'****',3,**4**)` —— 前者结果短 2 位、后者等长 |
+| 3 | `AppLists::lists()` vs `AppLists::detail()` 的 logo | lists **拼域名**，detail **返回相对路径**（同一个模型的两条路径） |
+| 4 | `lists()` vs `count()` 的 JOIN | 已遇 **3 次**：`AuthMyUserLists`（三表 vs 两表）、`AppUserGoodsLists`（三 JOIN vs 一 JOIN）、`SaleOn/SaleOutCollectionLists`（两 JOIN vs 一 JOIN） |
+| 5 | datetim 列的输出形态 | `x_article.create_time` 是 **int**（输出数字）；`x_notices.create_time` 是 datetime；`x_whitelist_group.create_time` 库里是 **int 但 toArray() 输出 datetime 字符串** —— **同一张库、不同模型，行为不同** |
+| 6 | `Db::name()` vs `Model::` | 前者不应用软删除/获取器，后者应用（见第 8.5 条） |
+
+**做法**：
+
+1. **能 diff 就 diff** —— 两个列表类/两个 Logic 方法，直接
+   `Compare-Object (Get-Content A) (Get-Content B)`，差异一目了然（第 1 条就是这么发现的）。
+2. **不能 diff 就对拍** —— 用真实 PHP 跑一遍拿输出当期望值（第 2、5 条）。
+3. **别复制粘贴** —— 复制前先 diff；复制后**逐字**核对每一处差异。
+4. **交叉验证** —— 同一个 id 分别打两个接口，看错误文案/结果是否如你所料
+   （第 1 条的四处结果互证就是这么做的）。
+
+> 这一条之所以单独列出来，是因为**这类错误不会报错** —— 接口照常返回 200 与 code=1，
+> 只是数据少几条、文案不一样。**运行时不报，测试也测不出来，只有对拍才能发现。**
 ### 14. 🔴 提交前**必须**跑 `scripts/gate.ps1`（本会话踩过 2 次）
 
 **两次**在 `go vet` / `go test` 失败的情况下提交并推送了代码。两次的原因相同：
@@ -1583,7 +1610,7 @@ if ($LASTEXITCODE -ne 0) { throw "质量门未通过，禁止提交" }
 try { $out = & $Body; $code = $LASTEXITCODE }
 catch { $out = @("$_"); $code = 1 }
 ```
-### 13. 需要联网/外部服务的接口先跳过
+### 15. 需要联网/外部服务的接口先跳过
 
 `open.php` 的 `authUser*` / `lockGoods` / `unlockGoods` / `userArchiveList`
 要调第三方 HTTP（`TransactionService`）。**先跳过**，等有测试环境再动。

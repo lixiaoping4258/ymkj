@@ -87,10 +87,12 @@ if (-not $SkipSmoke) {
     }
 }
 
+$ran = if ($SkipSmoke) { 'gofmt / build / vet / test' } else { 'gofmt / build / vet / test / smoke' }
 Write-Host ""
 if ($failed.Count -gt 0) {
     Write-Host "GATE FAIL: $($failed -join ', ')" -ForegroundColor Red
     exit 1
 }
-Write-Host "GATE PASS: 全部门通过（gofmt / build / vet / test / smoke）" -ForegroundColor Green
+# ⚠️ 汇总里必须如实列出**实际跑过**的门 —— 跳过了 smoke 却写 "smoke 通过" 是误导。
+Write-Host "GATE PASS: 已跑的门全部通过（$ran）" -ForegroundColor Green
 exit 0
