@@ -33,6 +33,7 @@ func NewHTTPServer(
 	index *service.IndexService,
 	search *service.SearchService,
 	pay *service.PayService,
+	wallet *service.WalletService,
 	tokens *biz.UserTokenUsecase,
 	whitelist *biz.WhitelistUsecase,
 	logger log.Logger,
@@ -71,6 +72,7 @@ func NewHTTPServer(
 	v1.RegisterIndexServiceHTTPServer(srv, index)
 	v1.RegisterSearchServiceHTTPServer(srv, search)
 	v1.RegisterPayServiceHTTPServer(srv, pay)
+	v1.RegisterWalletServiceHTTPServer(srv, wallet)
 	v1.RegisterUserServiceHTTPServer(srv, user)
 	v1.RegisterMarketServiceHTTPServer(srv, market)
 	return srv

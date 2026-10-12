@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package xtravel.v1;
+
+import "api/xtravel/v1/common.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
+
+// WalletService 钱包相关。
+// 对应原项目 app/api/route/wallet.php：
+//
+//	Route::group('v1/wallet', function () {
+//	    Route::get('balance/query', [UserWalletController::class, 'balance']);
+//	});
+service WalletService {
+  // 查询渠道余额
+  //
+  // 原实现 UserWalletController::balance -> BalanceWalletLogic::queryBalance($userId,$channel)：
+  //
+  //	$condition = ['PayWay.id' => $channel, 'PayWay.status' => 1];
+  //	$record = PayWay::hasWhere('payConfig', $condition, 'PayConfig.id,PayConfig.pay_way')->find();
+  //	if (!$record) { return 0; }
+  //	switch ($record->pay_way) {
+  //	    case 1:  return User::where(['id'=>$userId,'is_disable'=>0])->value('user_money');
+  //	    case 2:  return 0;
+  //	    case 3:  return 0;
+  //	    default: return -1;
+  //	}
+  //
+  // ⚠️ `channel` 是 **PayWay.id**（支付方式 ID），不是 scene。
+  // ⚠️ 返回值类型会变（int 0 / -1、string 余额、null）——用 RawData 保类型。
+  // 需登录（UserWalletController 未声明 $notNeedLogin）。
+  rpc GetBalance(GetBalanceRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/wallet/balance/query"};
+  }
+}
+
+message GetBalanceRequest {
+  // 对应 `$params['channel']`；规则 require|integer（文案 '兑换渠道不正确'）。
+  // ⚠️ 是 x_dev_pay_way.id
+  google.protobuf.Int64Value channel = 1 [json_name = "channel"];
+}

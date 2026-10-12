@@ -6,7 +6,7 @@
 
 > 改路由后重新生成：`.\scripts\gen-routes.ps1`
 
-**已实现 37 / 131 条（28.2%）；其中免登录 14 条。**
+**已实现 38 / 131 条（29%）；其中免登录 14 条。**
 
 ## 免登录（无需 token）
 
@@ -45,6 +45,7 @@
 | GET | `/v1/market/sales` | MarketService.SaleIndex | `market.proto` |
 | GET | `/v1/market/sales/info` | MarketService.SaleInfo | `market.proto` |
 | GET | `/v1/market/stock/lookall` | MarketService.StockLookAll | `market.proto` |
+| GET | `/v1/payment/channel` | PayService.GetChannel | `pay.proto` |
 | GET | `/v1/user/address` | UserService.GetAddressList | `user.proto` |
 | GET | `/v1/user/address/default` | UserService.GetAddressDefault | `user.proto` |
 | GET | `/v1/user/address/delete` | UserService.DeleteAddress | `user.proto` |
