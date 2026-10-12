@@ -19,10 +19,25 @@ var _ = binding.EncodeURL
 
 const _ = http.SupportPackageIsVersion1
 
+const OperationUserServiceGetAddressDefault = "/xtravel.v1.UserService/GetAddressDefault"
 const OperationUserServiceGetUserInfo = "/xtravel.v1.UserService/GetUserInfo"
 const OperationUserServiceGetUserNoticeNew = "/xtravel.v1.UserService/GetUserNoticeNew"
 
 type UserServiceHTTPServer interface {
+	// GetAddressDefault 用户默认地址
+	//
+	// 原实现 v1/user/AddressController::addressDefault -> AddressLogic::addressDefault($params,$userId)
+	//
+	//	$cacheKey = "purchase:addressDefault:$userId";   // ⚠️ 名字带 purchase，与采购无关
+	//	$fields = "id,is_default,address";               // ⚠️ 只返回这三列
+	//	带 id -> where(user_id,id)；否则先查 is_default=1，没有则 order(id asc) 取第一条
+	//	都找不到 -> setError('未找到地址记录') -> fail
+	//
+	// ⚠️ 控制器用的是 `$this->success('成功', $result)` —— **不是 data()**，
+	//    所以 msg 是 "成功" 而不是空串（见 Envelope 实现）。
+	//
+	// 需登录（AddressController 未声明 $notNeedLogin）。
+	GetAddressDefault(context.Context, *GetAddressDefaultRequest) (*GetAddressDefaultReply, error)
 	// GetUserInfo 当前登录用户信息
 	// 原: UserController::info -> UserLogic::info($this->userId)
 	// 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
@@ -54,6 +69,7 @@ func RegisterUserServiceHTTPServer(s *http.Server, srv UserServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/v1/user/info", _UserService_GetUserInfo0_HTTP_Handler(srv))
 	r.GET("/v1/user/notice/getNew", _UserService_GetUserNoticeNew0_HTTP_Handler(srv))
+	r.GET("/v1/user/address/default", _UserService_GetAddressDefault0_HTTP_Handler(srv))
 }
 
 func _UserService_GetUserInfo0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
@@ -94,7 +110,40 @@ func _UserService_GetUserNoticeNew0_HTTP_Handler(srv UserServiceHTTPServer) func
 	}
 }
 
+func _UserService_GetAddressDefault0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetAddressDefaultRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserServiceGetAddressDefault)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetAddressDefault(ctx, req.(*GetAddressDefaultRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetAddressDefaultReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type UserServiceHTTPClient interface {
+	// GetAddressDefault 用户默认地址
+	//
+	// 原实现 v1/user/AddressController::addressDefault -> AddressLogic::addressDefault($params,$userId)
+	//
+	//	$cacheKey = "purchase:addressDefault:$userId";   // ⚠️ 名字带 purchase，与采购无关
+	//	$fields = "id,is_default,address";               // ⚠️ 只返回这三列
+	//	带 id -> where(user_id,id)；否则先查 is_default=1，没有则 order(id asc) 取第一条
+	//	都找不到 -> setError('未找到地址记录') -> fail
+	//
+	// ⚠️ 控制器用的是 `$this->success('成功', $result)` —— **不是 data()**，
+	//    所以 msg 是 "成功" 而不是空串（见 Envelope 实现）。
+	//
+	// 需登录（AddressController 未声明 $notNeedLogin）。
+	GetAddressDefault(ctx context.Context, req *GetAddressDefaultRequest, opts ...http.CallOption) (rsp *GetAddressDefaultReply, err error)
 	// GetUserInfo 当前登录用户信息
 	// 原: UserController::info -> UserLogic::info($this->userId)
 	// 需要登录（UserController 的 $notNeedLogin 只放行了 resetPassword）
@@ -128,6 +177,33 @@ type UserServiceHTTPClientImpl struct {
 
 func NewUserServiceHTTPClient(client *http.Client) UserServiceHTTPClient {
 	return &UserServiceHTTPClientImpl{client}
+}
+
+// GetAddressDefault 用户默认地址
+//
+// 原实现 v1/user/AddressController::addressDefault -> AddressLogic::addressDefault($params,$userId)
+//
+//	$cacheKey = "purchase:addressDefault:$userId";   // ⚠️ 名字带 purchase，与采购无关
+//	$fields = "id,is_default,address";               // ⚠️ 只返回这三列
+//	带 id -> where(user_id,id)；否则先查 is_default=1，没有则 order(id asc) 取第一条
+//	都找不到 -> setError('未找到地址记录') -> fail
+//
+// ⚠️ 控制器用的是 `$this->success('成功', $result)` —— **不是 data()**，
+//
+//	所以 msg 是 "成功" 而不是空串（见 Envelope 实现）。
+//
+// 需登录（AddressController 未声明 $notNeedLogin）。
+func (c *UserServiceHTTPClientImpl) GetAddressDefault(ctx context.Context, in *GetAddressDefaultRequest, opts ...http.CallOption) (*GetAddressDefaultReply, error) {
+	var out GetAddressDefaultReply
+	pattern := "/v1/user/address/default"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationUserServiceGetAddressDefault))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // GetUserInfo 当前登录用户信息

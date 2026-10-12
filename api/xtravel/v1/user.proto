@@ -41,6 +41,23 @@ service UserService {
   rpc GetUserNoticeNew(GetUserNoticeNewRequest) returns (RawData) {
     option (google.api.http) = {get: "/v1/user/notice/getNew"};
   }
+
+  // 用户默认地址
+  //
+  // 原实现 v1/user/AddressController::addressDefault -> AddressLogic::addressDefault($params,$userId)
+  //
+  //	$cacheKey = "purchase:addressDefault:$userId";   // ⚠️ 名字带 purchase，与采购无关
+  //	$fields = "id,is_default,address";               // ⚠️ 只返回这三列
+  //	带 id -> where(user_id,id)；否则先查 is_default=1，没有则 order(id asc) 取第一条
+  //	都找不到 -> setError('未找到地址记录') -> fail
+  //
+  // ⚠️ 控制器用的是 `$this->success('成功', $result)` —— **不是 data()**，
+  //    所以 msg 是 "成功" 而不是空串（见 Envelope 实现）。
+  //
+  // 需登录（AddressController 未声明 $notNeedLogin）。
+  rpc GetAddressDefault(GetAddressDefaultRequest) returns (GetAddressDefaultReply) {
+    option (google.api.http) = {get: "/v1/user/address/default"};
+  }
 }
 
 message GetUserInfoRequest {}
@@ -95,3 +112,15 @@ message UserCodeAuth {
 }
 
 message GetUserNoticeNewRequest {}
+
+message GetAddressDefaultRequest {
+  // 对应 `$params['id']`；> 0 时走精准查询，否则查默认地址
+  int64 id = 1 [json_name = "id"];
+}
+
+// GetAddressDefaultReply 对应 field('id,is_default,address') —— 只有这三列。
+message GetAddressDefaultReply {
+  int64 id = 1 [json_name = "id"];
+  int32 is_default = 2 [json_name = "is_default"];
+  string address = 3 [json_name = "address"];
+}

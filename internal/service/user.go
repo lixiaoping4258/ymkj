@@ -13,10 +13,11 @@ type UserService struct {
 	v1.UnimplementedUserServiceServer
 	users     *biz.UserUsecase
 	noticeNew *biz.NoticeNewUsecase
+	address   *biz.AddressUsecase
 }
 
-func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase) *UserService {
-	return &UserService{users: users, noticeNew: noticeNew}
+func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase) *UserService {
+	return &UserService{users: users, noticeNew: noticeNew, address: address}
 }
 
 // GetUserInfo 对应 UserController::info。
@@ -93,4 +94,31 @@ func (s *UserService) GetUserNoticeNew(
 	out = append(out, body...)
 	out = append(out, '}')
 	return &v1.RawData{Json: out}, nil
+}
+
+// GetAddressDefault 对应 v1/user/AddressController::addressDefault。
+//
+// 原实现：
+//
+//	$params = request()->get();
+//	$result = AddressLogic::addressDefault($params, $this->userId);
+//	if ($result) { return $this->success('成功', $result); }
+//	else { return $this->fail(AddressLogic::getError()); }
+//
+// ⚠️ 用的是 `success('成功', ...)` —— **不是 data()**。
+//
+//	BaseLikeAdminController::success 的默认 msg 是 'success'，
+//	这里显式传了 '成功'，所以响应里 **msg 是 "成功"**（其他接口是空串）。
+//	这个差异写在 GetAddressDefaultReply.Envelope() 里。
+func (s *UserService) GetAddressDefault(
+	ctx context.Context, req *v1.GetAddressDefaultRequest,
+) (*v1.GetAddressDefaultReply, error) {
+	userID := biz.UserIDFromContext(ctx)
+	row, err := s.address.AddressDefault(ctx, uint32(userID), req.GetId())
+	if err != nil {
+		return nil, bizFail(biz.NewBizError(err.Error()))
+	}
+	return &v1.GetAddressDefaultReply{
+		Id: row.ID, IsDefault: row.IsDefault, Address: row.Address,
+	}, nil
 }

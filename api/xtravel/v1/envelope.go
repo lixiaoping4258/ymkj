@@ -111,3 +111,15 @@ func (r *GetArticleDetailReply) Envelope() (int, int, string, any) {
 func (r *GetTestReply) RawBody() []byte {
 	return []byte(`{"code":200,"msg":"成功"}`)
 }
+
+// Envelope 让地址接口返回 msg="成功"。
+//
+// ⚠️ 原实现用的是 `$this->success('成功', $result)`，**不是 `$this->data()`**：
+//
+//	success(string $msg = 'success', array $data = [], int $code = 1, int $show = 0)
+//	data() = success('', $data, 1, 0)      // msg 是**空串**
+//
+// 所以这一个接口的 msg 是 "成功"，与绝大多数接口（msg=""）不同。
+func (r *GetAddressDefaultReply) Envelope() (int, int, string, any) {
+	return 1, 0, "成功", r
+}

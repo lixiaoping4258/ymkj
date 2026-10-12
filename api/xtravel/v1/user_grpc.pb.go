@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	UserService_GetUserInfo_FullMethodName      = "/xtravel.v1.UserService/GetUserInfo"
-	UserService_GetUserNoticeNew_FullMethodName = "/xtravel.v1.UserService/GetUserNoticeNew"
+	UserService_GetUserInfo_FullMethodName       = "/xtravel.v1.UserService/GetUserInfo"
+	UserService_GetUserNoticeNew_FullMethodName  = "/xtravel.v1.UserService/GetUserNoticeNew"
+	UserService_GetAddressDefault_FullMethodName = "/xtravel.v1.UserService/GetAddressDefault"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -55,6 +56,21 @@ type UserServiceClient interface {
 	//
 	// 免登录（v1/user/NoticeController::$notNeedLogin = ['getNew']）。
 	GetUserNoticeNew(ctx context.Context, in *GetUserNoticeNewRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 用户默认地址
+	//
+	// 原实现 v1/user/AddressController::addressDefault -> AddressLogic::addressDefault($params,$userId)
+	//
+	//	$cacheKey = "purchase:addressDefault:$userId";   // ⚠️ 名字带 purchase，与采购无关
+	//	$fields = "id,is_default,address";               // ⚠️ 只返回这三列
+	//	带 id -> where(user_id,id)；否则先查 is_default=1，没有则 order(id asc) 取第一条
+	//	都找不到 -> setError('未找到地址记录') -> fail
+	//
+	// ⚠️ 控制器用的是 `$this->success('成功', $result)` —— **不是 data()**，
+	//
+	//	所以 msg 是 "成功" 而不是空串（见 Envelope 实现）。
+	//
+	// 需登录（AddressController 未声明 $notNeedLogin）。
+	GetAddressDefault(ctx context.Context, in *GetAddressDefaultRequest, opts ...grpc.CallOption) (*GetAddressDefaultReply, error)
 }
 
 type userServiceClient struct {
@@ -79,6 +95,16 @@ func (c *userServiceClient) GetUserNoticeNew(ctx context.Context, in *GetUserNot
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, UserService_GetUserNoticeNew_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetAddressDefault(ctx context.Context, in *GetAddressDefaultRequest, opts ...grpc.CallOption) (*GetAddressDefaultReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAddressDefaultReply)
+	err := c.cc.Invoke(ctx, UserService_GetAddressDefault_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +143,21 @@ type UserServiceServer interface {
 	//
 	// 免登录（v1/user/NoticeController::$notNeedLogin = ['getNew']）。
 	GetUserNoticeNew(context.Context, *GetUserNoticeNewRequest) (*RawData, error)
+	// 用户默认地址
+	//
+	// 原实现 v1/user/AddressController::addressDefault -> AddressLogic::addressDefault($params,$userId)
+	//
+	//	$cacheKey = "purchase:addressDefault:$userId";   // ⚠️ 名字带 purchase，与采购无关
+	//	$fields = "id,is_default,address";               // ⚠️ 只返回这三列
+	//	带 id -> where(user_id,id)；否则先查 is_default=1，没有则 order(id asc) 取第一条
+	//	都找不到 -> setError('未找到地址记录') -> fail
+	//
+	// ⚠️ 控制器用的是 `$this->success('成功', $result)` —— **不是 data()**，
+	//
+	//	所以 msg 是 "成功" 而不是空串（见 Envelope 实现）。
+	//
+	// 需登录（AddressController 未声明 $notNeedLogin）。
+	GetAddressDefault(context.Context, *GetAddressDefaultRequest) (*GetAddressDefaultReply, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -132,6 +173,9 @@ func (UnimplementedUserServiceServer) GetUserInfo(context.Context, *GetUserInfoR
 }
 func (UnimplementedUserServiceServer) GetUserNoticeNew(context.Context, *GetUserNoticeNewRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUserNoticeNew not implemented")
+}
+func (UnimplementedUserServiceServer) GetAddressDefault(context.Context, *GetAddressDefaultRequest) (*GetAddressDefaultReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAddressDefault not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -190,6 +234,24 @@ func _UserService_GetUserNoticeNew_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_GetAddressDefault_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAddressDefaultRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetAddressDefault(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetAddressDefault_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetAddressDefault(ctx, req.(*GetAddressDefaultRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -204,6 +266,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserNoticeNew",
 			Handler:    _UserService_GetUserNoticeNew_Handler,
+		},
+		{
+			MethodName: "GetAddressDefault",
+			Handler:    _UserService_GetAddressDefault_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
