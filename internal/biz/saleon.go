@@ -29,12 +29,15 @@ func (errSaleOnNotFound) Error() string { return "记录不存在" }
 
 // SaleOnRepo 秒转在售藏品。
 type SaleOnRepo interface {
-	// ListOnSale 对应 lists() —— **两张表**：
+	// ListByState 对应 lists() —— **两张表**：
 	//   MarketSales INNER JOIN x_app_archive AppArchive (hasWhere('archive'))
 	//               INNER JOIN x_app         app          (join('app'))
-	ListOnSale(ctx context.Context, archiveID int64, offset, limit int) ([]map[string]any, error)
-	// CountOnSale 对应 count() —— ⚠️ **只有 hasWhere('archive') 一个 JOIN**
-	CountOnSale(ctx context.Context, archiveID int64) (int64, error)
+	//
+	// ⚠️ state 由调用方传入：sale/on 用 'ON_SALE'，sale/out 用 'SELL_OUT'
+	//    （两个列表类除状态外完全相同，所以共用这一个仓储接口）。
+	ListByState(ctx context.Context, archiveID int64, state string, offset, limit int) ([]map[string]any, error)
+	// CountByState 对应 count() —— ⚠️ **只有 hasWhere('archive') 一个 JOIN**
+	CountByState(ctx context.Context, archiveID int64, state string) (int64, error)
 }
 
 // SaleOnSelect 逐字对应 lists() 的 field（7 项）。
@@ -76,11 +79,11 @@ const SaleOnSelect = "MarketSales.id AS id, MarketSales.sn AS sn, MarketSales.pr
 //
 // ⚠️ `archiveID` 由调用方通过 `findSales(id)` 得到后传入。
 func (uc *SaleOnUsecase) List(ctx context.Context, archiveID int64, p PageParams) (*ListData, error) {
-	count, err := uc.repo.CountOnSale(ctx, archiveID)
+	count, err := uc.repo.CountByState(ctx, archiveID, SalesStateOnSale)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := uc.repo.ListOnSale(ctx, archiveID, p.Offset, p.Limit)
+	rows, err := uc.repo.ListByState(ctx, archiveID, SalesStateOnSale, p.Offset, p.Limit)
 	if err != nil {
 		return nil, err
 	}

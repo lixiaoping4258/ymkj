@@ -165,6 +165,22 @@ service MarketService {
   rpc GetSaleOn(GetSaleOnRequest) returns (RawData) {
     option (google.api.http) = {get: "/v1/market/sales/on"};
   }
+
+  // 秒转已兑出的藏品（分页）
+  //
+  // 原实现 SaleController::salesOut -> `$this->dataLists(new SaleOutCollectionLists())`
+  // 校验 SaleOutValidate: 'id' => 'require'（'秒转种类ID不能为空'）
+  //
+  // ⚠️⚠️ 与 /v1/market/sales/on **看着对称，实则三处不同**：
+  //	查找：`SaleLogic::getArchive($id)`（不是 findSales）—— 查的是 **x_app_archive.id 且 state=1**
+  //	错误文案：'存档记录不存在'（不是 '记录不存在'）
+  //	状态：SELL_OUT（不是 ON_SALE）
+  //	额外字段：每行加 `sale_time_text = ''`（硬编码空串）
+  //
+  // 其余同 sale/on：7 字段、images json_decode、lists 两个 JOIN / count 一个 JOIN。
+  rpc GetSaleOut(GetSaleOutRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/market/sales/out"};
+  }
 }
 
 message PurchaseOnRequest {
@@ -275,5 +291,10 @@ message GetSaleDetailRequest {
 
 message GetSaleOnRequest {
   // 规则 require（'秒转种类ID不能为空'）
+  string id = 1 [json_name = "id"];
+}
+
+message GetSaleOutRequest {
+  // 规则 require（'秒转种类ID不能为空'）。⚠️ 是 **x_app_archive.id**
   string id = 1 [json_name = "id"];
 }

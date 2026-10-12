@@ -26,18 +26,18 @@ func NewSaleOnRepo(db *gorm.DB, c *conf.Data) *saleOnRepo {
 // base 构造 queryWhere()：
 //
 //	[['MarketSales.archive_id','=',$archiveID], ['MarketSales.state','=','ON_SALE']]
-func (r *saleOnRepo) base(ctx context.Context, archiveID int64) *gorm.DB {
+func (r *saleOnRepo) base(ctx context.Context, archiveID int64, state string) *gorm.DB {
 	return r.db.WithContext(ctx).
 		Table(r.prefix+"market_sales AS MarketSales").
 		Where("MarketSales.archive_id = ?", archiveID).
-		Where("MarketSales.state = ?", biz.SalesStateOnSale)
+		Where("MarketSales.state = ?", state)
 }
 
 // archiveJoin 是 `hasWhere('archive', ...)` 生成的 INNER JOIN：
 //
 //	INNER JOIN x_app_archive AppArchive ON AppArchive.id = MarketSales.archive_id
-func (r *saleOnRepo) archiveJoin(ctx context.Context, archiveID int64) *gorm.DB {
-	return r.base(ctx, archiveID).
+func (r *saleOnRepo) archiveJoin(ctx context.Context, archiveID int64, state string) *gorm.DB {
+	return r.base(ctx, archiveID, state).
 		Joins("INNER JOIN " + r.prefix + "app_archive AS AppArchive ON AppArchive.id = MarketSales.archive_id")
 }
 
@@ -49,11 +49,11 @@ func (r *saleOnRepo) archiveJoin(ctx context.Context, archiveID int64) *gorm.DB 
 //	都可能有 id，MySQL 取左表。显式写 MarketSales.id DESC 固定行为。
 //
 // ⚠️ MarketSales **无软删除**。
-func (r *saleOnRepo) ListOnSale(
-	ctx context.Context, archiveID int64, offset, limit int,
+func (r *saleOnRepo) ListByState(
+	ctx context.Context, archiveID int64, state string, offset, limit int,
 ) ([]map[string]any, error) {
 	var rows []map[string]any
-	err := r.archiveJoin(ctx, archiveID).
+	err := r.archiveJoin(ctx, archiveID, state).
 		Joins("INNER JOIN " + r.prefix + "app AS app ON MarketSales.app_id = app.id").
 		Select(biz.SaleOnSelect).
 		Order("MarketSales.id DESC").
@@ -71,8 +71,8 @@ func (r *saleOnRepo) ListOnSale(
 // CountOnSale 逐字对应 count() —— 🔴 **只有 hasWhere('archive') 一个 JOIN**。
 //
 // 与 lists() 的两个 JOIN 不一致（清单第 3 条），照搬。
-func (r *saleOnRepo) CountOnSale(ctx context.Context, archiveID int64) (int64, error) {
+func (r *saleOnRepo) CountByState(ctx context.Context, archiveID int64, state string) (int64, error) {
 	var n int64
-	err := r.archiveJoin(ctx, archiveID).Count(&n).Error
+	err := r.archiveJoin(ctx, archiveID, state).Count(&n).Error
 	return n, err
 }

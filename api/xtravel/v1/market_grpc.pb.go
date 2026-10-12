@@ -32,6 +32,7 @@ const (
 	MarketService_PurchaseOn_FullMethodName        = "/xtravel.v1.MarketService/PurchaseOn"
 	MarketService_GetSaleDetail_FullMethodName     = "/xtravel.v1.MarketService/GetSaleDetail"
 	MarketService_GetSaleOn_FullMethodName         = "/xtravel.v1.MarketService/GetSaleOn"
+	MarketService_GetSaleOut_FullMethodName        = "/xtravel.v1.MarketService/GetSaleOut"
 )
 
 // MarketServiceClient is the client API for MarketService service.
@@ -163,6 +164,20 @@ type MarketServiceClient interface {
 	//
 	// 🔴 lists 两个 JOIN、count 只有一个 —— 又一处不一致（清单第 3 条）
 	GetSaleOn(ctx context.Context, in *GetSaleOnRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 秒转已兑出的藏品（分页）
+	//
+	// 原实现 SaleController::salesOut -> `$this->dataLists(new SaleOutCollectionLists())`
+	// 校验 SaleOutValidate: 'id' => 'require'（'秒转种类ID不能为空'）
+	//
+	// ⚠️⚠️ 与 /v1/market/sales/on **看着对称，实则三处不同**：
+	//
+	//	查找：`SaleLogic::getArchive($id)`（不是 findSales）—— 查的是 **x_app_archive.id 且 state=1**
+	//	错误文案：'存档记录不存在'（不是 '记录不存在'）
+	//	状态：SELL_OUT（不是 ON_SALE）
+	//	额外字段：每行加 `sale_time_text = ''`（硬编码空串）
+	//
+	// 其余同 sale/on：7 字段、images json_decode、lists 两个 JOIN / count 一个 JOIN。
+	GetSaleOut(ctx context.Context, in *GetSaleOutRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type marketServiceClient struct {
@@ -303,6 +318,16 @@ func (c *marketServiceClient) GetSaleOn(ctx context.Context, in *GetSaleOnReques
 	return out, nil
 }
 
+func (c *marketServiceClient) GetSaleOut(ctx context.Context, in *GetSaleOutRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, MarketService_GetSaleOut_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketServiceServer is the server API for MarketService service.
 // All implementations must embed UnimplementedMarketServiceServer
 // for forward compatibility.
@@ -432,6 +457,20 @@ type MarketServiceServer interface {
 	//
 	// 🔴 lists 两个 JOIN、count 只有一个 —— 又一处不一致（清单第 3 条）
 	GetSaleOn(context.Context, *GetSaleOnRequest) (*RawData, error)
+	// 秒转已兑出的藏品（分页）
+	//
+	// 原实现 SaleController::salesOut -> `$this->dataLists(new SaleOutCollectionLists())`
+	// 校验 SaleOutValidate: 'id' => 'require'（'秒转种类ID不能为空'）
+	//
+	// ⚠️⚠️ 与 /v1/market/sales/on **看着对称，实则三处不同**：
+	//
+	//	查找：`SaleLogic::getArchive($id)`（不是 findSales）—— 查的是 **x_app_archive.id 且 state=1**
+	//	错误文案：'存档记录不存在'（不是 '记录不存在'）
+	//	状态：SELL_OUT（不是 ON_SALE）
+	//	额外字段：每行加 `sale_time_text = ''`（硬编码空串）
+	//
+	// 其余同 sale/on：7 字段、images json_decode、lists 两个 JOIN / count 一个 JOIN。
+	GetSaleOut(context.Context, *GetSaleOutRequest) (*RawData, error)
 	mustEmbedUnimplementedMarketServiceServer()
 }
 
@@ -480,6 +519,9 @@ func (UnimplementedMarketServiceServer) GetSaleDetail(context.Context, *GetSaleD
 }
 func (UnimplementedMarketServiceServer) GetSaleOn(context.Context, *GetSaleOnRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSaleOn not implemented")
+}
+func (UnimplementedMarketServiceServer) GetSaleOut(context.Context, *GetSaleOutRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSaleOut not implemented")
 }
 func (UnimplementedMarketServiceServer) mustEmbedUnimplementedMarketServiceServer() {}
 func (UnimplementedMarketServiceServer) testEmbeddedByValue()                       {}
@@ -736,6 +778,24 @@ func _MarketService_GetSaleOn_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketService_GetSaleOut_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSaleOutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).GetSaleOut(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_GetSaleOut_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).GetSaleOut(ctx, req.(*GetSaleOutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketService_ServiceDesc is the grpc.ServiceDesc for MarketService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -794,6 +854,10 @@ var MarketService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSaleOn",
 			Handler:    _MarketService_GetSaleOn_Handler,
+		},
+		{
+			MethodName: "GetSaleOut",
+			Handler:    _MarketService_GetSaleOut_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -37,6 +37,7 @@ type MarketService struct {
 	// saleDetail 对应 SaleLogic::getSaleDetail
 	saleDetail *biz.SaleDetailUsecase
 	saleOn     *biz.SaleOnUsecase
+	saleOut    *biz.SaleOutUsecase
 	log        *log.Helper
 }
 
@@ -52,13 +53,14 @@ func NewMarketService(
 	stale *biz.StaleCache,
 	saleDetail *biz.SaleDetailUsecase,
 	saleOn *biz.SaleOnUsecase,
+	saleOut *biz.SaleOutUsecase,
 	logger log.Logger,
 ) *MarketService {
 	return &MarketService{
 		market: market, purchase: purchase, sale: sale,
 		stock: stock, archive: archive, fee: fee,
 		purchaseState: purchaseState, rawCache: rawCache, stale: stale,
-		saleDetail: saleDetail, saleOn: saleOn,
+		saleDetail: saleDetail, saleOn: saleOn, saleOut: saleOut,
 		log: log.NewHelper(logger),
 	}
 }
@@ -505,6 +507,61 @@ func (s *MarketService) GetSaleOn(
 	}
 	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
 	ld, err := s.saleOn.List(ctx, archiveID, p)
+	if err != nil {
+		return nil, err
+	}
+	items, _ := ld.Lists.([]map[string]any)
+	rows := make([]map[string]any, 0, len(items))
+	rows = append(rows, items...)
+	body, merr := biz.MarshalNoHTMLEscape(map[string]any{
+		"lists":     rows,
+		"count":     ld.Count,
+		"page_no":   ld.PageNo,
+		"page_size": ld.PageSize,
+		"extend":    ld.Extend,
+	})
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
+}
+
+// GetSaleOut 对应 SaleController::salesOut（GET /v1/market/sales/out?id=N）。
+//
+// 原实现：
+//
+//	(new SaleOutValidate())->get()->goCheck();      // id => require
+//	return $this->dataLists(new SaleOutCollectionLists());
+//
+// ⚠️⚠️ 与 GetSaleOn **看着对称，实则三处不同**（见 proto 注释）。
+//
+//	这里 `id` 是 **x_app_archive.id**（且要求 state=1），不是 list_sales.id。
+//
+// ⚠️ 构造函数里是 `throw new \Exception('存档记录不存在')`（不是 fail()）——
+//
+//	这里按 fail 实现，与 GetSaleOn 的处理一致。
+func (s *MarketService) GetSaleOut(
+	ctx context.Context, in *v1.GetSaleOutRequest,
+) (*v1.RawData, error) {
+	idStr := strings.TrimSpace(in.GetId())
+	if idStr == "" {
+		return nil, bizFail(biz.NewBizError("秒转种类ID不能为空"))
+	}
+	archiveID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return nil, bizFail(biz.NewBizError("存档记录不存在"))
+	}
+	// 构造里的 SaleLogic::getArchive($id) —— 已实现（含隔离缓存，TTL 3600）
+	archive, err := s.archive.GetSaleArchive(ctx, archiveID)
+	if err != nil {
+		return nil, err
+	}
+	if archive == nil {
+		return nil, bizFail(biz.NewBizError("存档记录不存在"))
+	}
+	// `$this->params['archive_id'] = $archive['id'];` —— 就是入参本身
+	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
+	ld, err := s.saleOut.List(ctx, archiveID, p)
 	if err != nil {
 		return nil, err
 	}
