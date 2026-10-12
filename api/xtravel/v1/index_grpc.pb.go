@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	IndexService_GetIndex_FullMethodName      = "/xtravel.v1.IndexService/GetIndex"
-	IndexService_GetDecorate_FullMethodName   = "/xtravel.v1.IndexService/GetDecorate"
-	IndexService_GetBannerList_FullMethodName = "/xtravel.v1.IndexService/GetBannerList"
+	IndexService_GetIndex_FullMethodName       = "/xtravel.v1.IndexService/GetIndex"
+	IndexService_GetDecorate_FullMethodName    = "/xtravel.v1.IndexService/GetDecorate"
+	IndexService_GetIndexConfig_FullMethodName = "/xtravel.v1.IndexService/GetIndexConfig"
+	IndexService_GetBannerList_FullMethodName  = "/xtravel.v1.IndexService/GetBannerList"
 )
 
 // IndexServiceClient is the client API for IndexService service.
@@ -52,6 +53,12 @@ type IndexServiceClient interface {
 	//
 	//	DecoratePage::field(['type','name','data','meta'])->findOrEmpty($id)->toArray()
 	GetDecorate(ctx context.Context, in *GetDecorateRequest, opts ...grpc.CallOption) (*GetDecorateReply, error)
+	// 全局配置（前端启动必读）
+	//
+	// 原实现 IndexLogic::getConfigData() —— 8 个顶层键，来源分散：
+	// 4 段 x_config + 1 张表 + config/project.php 兜底 + 请求域名。
+	// 真机数据与逐项说明见 docs/RECON-index-config.md。
+	GetIndexConfig(ctx context.Context, in *GetIndexConfigRequest, opts ...grpc.CallOption) (*GetIndexConfigReply, error)
 	// 轮播图列表
 	// 原: GetListLogic::getList()（有 10 秒缓存，键 'banner:list'，与 PHP 共用）
 	GetBannerList(ctx context.Context, in *GetBannerListRequest, opts ...grpc.CallOption) (*GetBannerListReply, error)
@@ -79,6 +86,16 @@ func (c *indexServiceClient) GetDecorate(ctx context.Context, in *GetDecorateReq
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetDecorateReply)
 	err := c.cc.Invoke(ctx, IndexService_GetDecorate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *indexServiceClient) GetIndexConfig(ctx context.Context, in *GetIndexConfigRequest, opts ...grpc.CallOption) (*GetIndexConfigReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetIndexConfigReply)
+	err := c.cc.Invoke(ctx, IndexService_GetIndexConfig_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -123,6 +140,12 @@ type IndexServiceServer interface {
 	//
 	//	DecoratePage::field(['type','name','data','meta'])->findOrEmpty($id)->toArray()
 	GetDecorate(context.Context, *GetDecorateRequest) (*GetDecorateReply, error)
+	// 全局配置（前端启动必读）
+	//
+	// 原实现 IndexLogic::getConfigData() —— 8 个顶层键，来源分散：
+	// 4 段 x_config + 1 张表 + config/project.php 兜底 + 请求域名。
+	// 真机数据与逐项说明见 docs/RECON-index-config.md。
+	GetIndexConfig(context.Context, *GetIndexConfigRequest) (*GetIndexConfigReply, error)
 	// 轮播图列表
 	// 原: GetListLogic::getList()（有 10 秒缓存，键 'banner:list'，与 PHP 共用）
 	GetBannerList(context.Context, *GetBannerListRequest) (*GetBannerListReply, error)
@@ -141,6 +164,9 @@ func (UnimplementedIndexServiceServer) GetIndex(context.Context, *GetIndexReques
 }
 func (UnimplementedIndexServiceServer) GetDecorate(context.Context, *GetDecorateRequest) (*GetDecorateReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetDecorate not implemented")
+}
+func (UnimplementedIndexServiceServer) GetIndexConfig(context.Context, *GetIndexConfigRequest) (*GetIndexConfigReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetIndexConfig not implemented")
 }
 func (UnimplementedIndexServiceServer) GetBannerList(context.Context, *GetBannerListRequest) (*GetBannerListReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBannerList not implemented")
@@ -202,6 +228,24 @@ func _IndexService_GetDecorate_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IndexService_GetIndexConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetIndexConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IndexServiceServer).GetIndexConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IndexService_GetIndexConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IndexServiceServer).GetIndexConfig(ctx, req.(*GetIndexConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _IndexService_GetBannerList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetBannerListRequest)
 	if err := dec(in); err != nil {
@@ -234,6 +278,10 @@ var IndexService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetDecorate",
 			Handler:    _IndexService_GetDecorate_Handler,
+		},
+		{
+			MethodName: "GetIndexConfig",
+			Handler:    _IndexService_GetIndexConfig_Handler,
 		},
 		{
 			MethodName: "GetBannerList",

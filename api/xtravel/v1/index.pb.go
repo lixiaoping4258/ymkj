@@ -10,6 +10,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -550,12 +551,526 @@ func (x *BannerItem) GetCreateTime() string {
 	return ""
 }
 
+type GetIndexConfigRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIndexConfigRequest) Reset() {
+	*x = GetIndexConfigRequest{}
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIndexConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIndexConfigRequest) ProtoMessage() {}
+
+func (x *GetIndexConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIndexConfigRequest.ProtoReflect.Descriptor instead.
+func (*GetIndexConfigRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_index_proto_rawDescGZIP(), []int{9}
+}
+
+// GetIndexConfigReply 对应 getConfigData 的 8 个顶层键。
+type GetIndexConfigReply struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ⚠️ 对应 `FileService::getFileUrl()` —— **无参数调用**，
+	// 等于 format(domain, ”) = "<domain>/"（**带尾斜杠**）
+	Domain  string         `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
+	Style   *TabbarStyle   `protobuf:"bytes,2,opt,name=style,proto3" json:"style,omitempty"`
+	Tabbar  []*Tabbar      `protobuf:"bytes,3,rep,name=tabbar,proto3" json:"tabbar,omitempty"`
+	Login   *LoginConfig   `protobuf:"bytes,4,opt,name=login,proto3" json:"login,omitempty"`
+	Website *WebsiteConfig `protobuf:"bytes,5,opt,name=website,proto3" json:"website,omitempty"`
+	WebPage *WebPageConfig `protobuf:"bytes,6,opt,name=webPage,proto3" json:"webPage,omitempty"`
+	Version string         `protobuf:"bytes,7,opt,name=version,proto3" json:"version,omitempty"`
+	// ⚠️ 本项目 x_config 无 copyright 段 -> 空数组。PHP json_encode([]) = `[]`（不是 `{}`）
+	Copyright     []*structpb.Struct `protobuf:"bytes,8,rep,name=copyright,proto3" json:"copyright,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIndexConfigReply) Reset() {
+	*x = GetIndexConfigReply{}
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIndexConfigReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIndexConfigReply) ProtoMessage() {}
+
+func (x *GetIndexConfigReply) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIndexConfigReply.ProtoReflect.Descriptor instead.
+func (*GetIndexConfigReply) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_index_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *GetIndexConfigReply) GetDomain() string {
+	if x != nil {
+		return x.Domain
+	}
+	return ""
+}
+
+func (x *GetIndexConfigReply) GetStyle() *TabbarStyle {
+	if x != nil {
+		return x.Style
+	}
+	return nil
+}
+
+func (x *GetIndexConfigReply) GetTabbar() []*Tabbar {
+	if x != nil {
+		return x.Tabbar
+	}
+	return nil
+}
+
+func (x *GetIndexConfigReply) GetLogin() *LoginConfig {
+	if x != nil {
+		return x.Login
+	}
+	return nil
+}
+
+func (x *GetIndexConfigReply) GetWebsite() *WebsiteConfig {
+	if x != nil {
+		return x.Website
+	}
+	return nil
+}
+
+func (x *GetIndexConfigReply) GetWebPage() *WebPageConfig {
+	if x != nil {
+		return x.WebPage
+	}
+	return nil
+}
+
+func (x *GetIndexConfigReply) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *GetIndexConfigReply) GetCopyright() []*structpb.Struct {
+	if x != nil {
+		return x.Copyright
+	}
+	return nil
+}
+
+// TabbarStyle 对应 tabbar.style（ConfigService::get 会 json_decode -> 对象）。
+type TabbarStyle struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DefaultColor  string                 `protobuf:"bytes,1,opt,name=default_color,proto3" json:"default_color,omitempty"`
+	SelectedColor string                 `protobuf:"bytes,2,opt,name=selected_color,proto3" json:"selected_color,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TabbarStyle) Reset() {
+	*x = TabbarStyle{}
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TabbarStyle) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TabbarStyle) ProtoMessage() {}
+
+func (x *TabbarStyle) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TabbarStyle.ProtoReflect.Descriptor instead.
+func (*TabbarStyle) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_index_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *TabbarStyle) GetDefaultColor() string {
+	if x != nil {
+		return x.DefaultColor
+	}
+	return ""
+}
+
+func (x *TabbarStyle) GetSelectedColor() string {
+	if x != nil {
+		return x.SelectedColor
+	}
+	return ""
+}
+
+// Tabbar 对应 x_decorate_tabbar 一行（在 getTabbarLists 里处理过图片 URL）。
+type Tabbar struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// 已经过 FileService::getFileUrl
+	Selected   string `protobuf:"bytes,3,opt,name=selected,proto3" json:"selected,omitempty"`
+	Unselected string `protobuf:"bytes,4,opt,name=unselected,proto3" json:"unselected,omitempty"`
+	// ⚠️ 模型声明了 `protected $json = ['link']` + `$jsonAssoc = true`，
+	// 所以 `link` 是**嵌套对象**（{"path":...,"name":...,"type":...}），不是字符串。
+	Link          *structpb.Struct `protobuf:"bytes,5,opt,name=link,proto3" json:"link,omitempty"`
+	IsShow        int32            `protobuf:"varint,6,opt,name=is_show,proto3" json:"is_show,omitempty"`
+	CreateTime    int64            `protobuf:"varint,7,opt,name=create_time,proto3" json:"create_time,omitempty"`
+	UpdateTime    int64            `protobuf:"varint,8,opt,name=update_time,proto3" json:"update_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Tabbar) Reset() {
+	*x = Tabbar{}
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Tabbar) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Tabbar) ProtoMessage() {}
+
+func (x *Tabbar) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Tabbar.ProtoReflect.Descriptor instead.
+func (*Tabbar) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_index_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *Tabbar) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *Tabbar) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Tabbar) GetSelected() string {
+	if x != nil {
+		return x.Selected
+	}
+	return ""
+}
+
+func (x *Tabbar) GetUnselected() string {
+	if x != nil {
+		return x.Unselected
+	}
+	return ""
+}
+
+func (x *Tabbar) GetLink() *structpb.Struct {
+	if x != nil {
+		return x.Link
+	}
+	return nil
+}
+
+func (x *Tabbar) GetIsShow() int32 {
+	if x != nil {
+		return x.IsShow
+	}
+	return 0
+}
+
+func (x *Tabbar) GetCreateTime() int64 {
+	if x != nil {
+		return x.CreateTime
+	}
+	return 0
+}
+
+func (x *Tabbar) GetUpdateTime() int64 {
+	if x != nil {
+		return x.UpdateTime
+	}
+	return 0
+}
+
+// LoginConfig 对应 $loginConfig。本项目 6 项全部来自 config/project.php。
+type LoginConfig struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ⚠️ 是**字符串数组** ["1","2"]，不要转成数字
+	LoginWay       []string `protobuf:"bytes,1,rep,name=login_way,proto3" json:"login_way,omitempty"`
+	CoerceMobile   int32    `protobuf:"varint,2,opt,name=coerce_mobile,proto3" json:"coerce_mobile,omitempty"`
+	LoginAgreement int32    `protobuf:"varint,3,opt,name=login_agreement,proto3" json:"login_agreement,omitempty"`
+	ThirdAuth      int32    `protobuf:"varint,4,opt,name=third_auth,proto3" json:"third_auth,omitempty"`
+	WechatAuth     int32    `protobuf:"varint,5,opt,name=wechat_auth,proto3" json:"wechat_auth,omitempty"`
+	QqAuth         int32    `protobuf:"varint,6,opt,name=qq_auth,proto3" json:"qq_auth,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *LoginConfig) Reset() {
+	*x = LoginConfig{}
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LoginConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LoginConfig) ProtoMessage() {}
+
+func (x *LoginConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LoginConfig.ProtoReflect.Descriptor instead.
+func (*LoginConfig) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_index_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *LoginConfig) GetLoginWay() []string {
+	if x != nil {
+		return x.LoginWay
+	}
+	return nil
+}
+
+func (x *LoginConfig) GetCoerceMobile() int32 {
+	if x != nil {
+		return x.CoerceMobile
+	}
+	return 0
+}
+
+func (x *LoginConfig) GetLoginAgreement() int32 {
+	if x != nil {
+		return x.LoginAgreement
+	}
+	return 0
+}
+
+func (x *LoginConfig) GetThirdAuth() int32 {
+	if x != nil {
+		return x.ThirdAuth
+	}
+	return 0
+}
+
+func (x *LoginConfig) GetWechatAuth() int32 {
+	if x != nil {
+		return x.WechatAuth
+	}
+	return 0
+}
+
+func (x *LoginConfig) GetQqAuth() int32 {
+	if x != nil {
+		return x.QqAuth
+	}
+	return 0
+}
+
+// WebsiteConfig 对应 $website（h5_favicon / shop_logo 经 getFileUrl）。
+type WebsiteConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	H5Favicon     string                 `protobuf:"bytes,1,opt,name=h5_favicon,proto3" json:"h5_favicon,omitempty"`
+	ShopName      string                 `protobuf:"bytes,2,opt,name=shop_name,proto3" json:"shop_name,omitempty"`
+	ShopLogo      string                 `protobuf:"bytes,3,opt,name=shop_logo,proto3" json:"shop_logo,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WebsiteConfig) Reset() {
+	*x = WebsiteConfig{}
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WebsiteConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WebsiteConfig) ProtoMessage() {}
+
+func (x *WebsiteConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WebsiteConfig.ProtoReflect.Descriptor instead.
+func (*WebsiteConfig) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_index_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *WebsiteConfig) GetH5Favicon() string {
+	if x != nil {
+		return x.H5Favicon
+	}
+	return ""
+}
+
+func (x *WebsiteConfig) GetShopName() string {
+	if x != nil {
+		return x.ShopName
+	}
+	return ""
+}
+
+func (x *WebsiteConfig) GetShopLogo() string {
+	if x != nil {
+		return x.ShopLogo
+	}
+	return ""
+}
+
+// WebPageConfig 对应 $webPage。
+type WebPageConfig struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Status     int32                  `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	PageStatus int32                  `protobuf:"varint,2,opt,name=page_status,proto3" json:"page_status,omitempty"`
+	PageUrl    string                 `protobuf:"bytes,3,opt,name=page_url,proto3" json:"page_url,omitempty"`
+	// ⚠️ request()->domain() . '/mobile' —— **取自当前请求**，不能用配置
+	Url           string `protobuf:"bytes,4,opt,name=url,proto3" json:"url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WebPageConfig) Reset() {
+	*x = WebPageConfig{}
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WebPageConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WebPageConfig) ProtoMessage() {}
+
+func (x *WebPageConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_index_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WebPageConfig.ProtoReflect.Descriptor instead.
+func (*WebPageConfig) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_index_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *WebPageConfig) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *WebPageConfig) GetPageStatus() int32 {
+	if x != nil {
+		return x.PageStatus
+	}
+	return 0
+}
+
+func (x *WebPageConfig) GetPageUrl() string {
+	if x != nil {
+		return x.PageUrl
+	}
+	return ""
+}
+
+func (x *WebPageConfig) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
 var File_api_xtravel_v1_index_proto protoreflect.FileDescriptor
 
 const file_api_xtravel_v1_index_proto_rawDesc = "" +
 	"\n" +
 	"\x1aapi/xtravel/v1/index.proto\x12\n" +
-	"xtravel.v1\x1a\x1cgoogle/api/annotations.proto\"\x11\n" +
+	"xtravel.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1cgoogle/protobuf/struct.proto\"\x11\n" +
 	"\x0fGetIndexRequest\"p\n" +
 	"\rGetIndexReply\x12,\n" +
 	"\x04page\x18\x01 \x01(\v2\x18.xtravel.v1.DecoratePageR\x04page\x121\n" +
@@ -588,10 +1103,55 @@ const file_api_xtravel_v1_index_proto_rawDesc = "" +
 	"\x05image\x18\x03 \x01(\tR\x05image\x12\x1a\n" +
 	"\bjump_url\x18\x04 \x01(\tR\bjump_url\x12\x12\n" +
 	"\x04sort\x18\x05 \x01(\x05R\x04sort\x12 \n" +
-	"\vcreate_time\x18\x06 \x01(\tR\vcreate_time2\xc5\x02\n" +
+	"\vcreate_time\x18\x06 \x01(\tR\vcreate_time\"\x17\n" +
+	"\x15GetIndexConfigRequest\"\xf2\x02\n" +
+	"\x13GetIndexConfigReply\x12\x16\n" +
+	"\x06domain\x18\x01 \x01(\tR\x06domain\x12-\n" +
+	"\x05style\x18\x02 \x01(\v2\x17.xtravel.v1.TabbarStyleR\x05style\x12*\n" +
+	"\x06tabbar\x18\x03 \x03(\v2\x12.xtravel.v1.TabbarR\x06tabbar\x12-\n" +
+	"\x05login\x18\x04 \x01(\v2\x17.xtravel.v1.LoginConfigR\x05login\x123\n" +
+	"\awebsite\x18\x05 \x01(\v2\x19.xtravel.v1.WebsiteConfigR\awebsite\x123\n" +
+	"\awebPage\x18\x06 \x01(\v2\x19.xtravel.v1.WebPageConfigR\awebPage\x12\x18\n" +
+	"\aversion\x18\a \x01(\tR\aversion\x125\n" +
+	"\tcopyright\x18\b \x03(\v2\x17.google.protobuf.StructR\tcopyright\"[\n" +
+	"\vTabbarStyle\x12$\n" +
+	"\rdefault_color\x18\x01 \x01(\tR\rdefault_color\x12&\n" +
+	"\x0eselected_color\x18\x02 \x01(\tR\x0eselected_color\"\xf3\x01\n" +
+	"\x06Tabbar\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
+	"\bselected\x18\x03 \x01(\tR\bselected\x12\x1e\n" +
+	"\n" +
+	"unselected\x18\x04 \x01(\tR\n" +
+	"unselected\x12+\n" +
+	"\x04link\x18\x05 \x01(\v2\x17.google.protobuf.StructR\x04link\x12\x18\n" +
+	"\ais_show\x18\x06 \x01(\x05R\ais_show\x12 \n" +
+	"\vcreate_time\x18\a \x01(\x03R\vcreate_time\x12 \n" +
+	"\vupdate_time\x18\b \x01(\x03R\vupdate_time\"\xd7\x01\n" +
+	"\vLoginConfig\x12\x1c\n" +
+	"\tlogin_way\x18\x01 \x03(\tR\tlogin_way\x12$\n" +
+	"\rcoerce_mobile\x18\x02 \x01(\x05R\rcoerce_mobile\x12(\n" +
+	"\x0flogin_agreement\x18\x03 \x01(\x05R\x0flogin_agreement\x12\x1e\n" +
+	"\n" +
+	"third_auth\x18\x04 \x01(\x05R\n" +
+	"third_auth\x12 \n" +
+	"\vwechat_auth\x18\x05 \x01(\x05R\vwechat_auth\x12\x18\n" +
+	"\aqq_auth\x18\x06 \x01(\x05R\aqq_auth\"k\n" +
+	"\rWebsiteConfig\x12\x1e\n" +
+	"\n" +
+	"h5_favicon\x18\x01 \x01(\tR\n" +
+	"h5_favicon\x12\x1c\n" +
+	"\tshop_name\x18\x02 \x01(\tR\tshop_name\x12\x1c\n" +
+	"\tshop_logo\x18\x03 \x01(\tR\tshop_logo\"w\n" +
+	"\rWebPageConfig\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\x05R\x06status\x12 \n" +
+	"\vpage_status\x18\x02 \x01(\x05R\vpage_status\x12\x1a\n" +
+	"\bpage_url\x18\x03 \x01(\tR\bpage_url\x12\x10\n" +
+	"\x03url\x18\x04 \x01(\tR\x03url2\xb5\x03\n" +
 	"\fIndexService\x12[\n" +
 	"\bGetIndex\x12\x1b.xtravel.v1.GetIndexRequest\x1a\x19.xtravel.v1.GetIndexReply\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/index/index\x12g\n" +
-	"\vGetDecorate\x12\x1e.xtravel.v1.GetDecorateRequest\x1a\x1c.xtravel.v1.GetDecorateReply\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/index/decorate\x12o\n" +
+	"\vGetDecorate\x12\x1e.xtravel.v1.GetDecorateRequest\x1a\x1c.xtravel.v1.GetDecorateReply\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/index/decorate\x12n\n" +
+	"\x0eGetIndexConfig\x12!.xtravel.v1.GetIndexConfigRequest\x1a\x1f.xtravel.v1.GetIndexConfigReply\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/index/config\x12o\n" +
 	"\rGetBannerList\x12 .xtravel.v1.GetBannerListRequest\x1a\x1e.xtravel.v1.GetBannerListReply\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/index/bannerListB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
 
 var (
@@ -606,34 +1166,51 @@ func file_api_xtravel_v1_index_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_index_proto_rawDescData
 }
 
-var file_api_xtravel_v1_index_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_api_xtravel_v1_index_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_api_xtravel_v1_index_proto_goTypes = []any{
-	(*GetIndexRequest)(nil),      // 0: xtravel.v1.GetIndexRequest
-	(*GetIndexReply)(nil),        // 1: xtravel.v1.GetIndexReply
-	(*DecoratePage)(nil),         // 2: xtravel.v1.DecoratePage
-	(*HomeArticle)(nil),          // 3: xtravel.v1.HomeArticle
-	(*GetDecorateRequest)(nil),   // 4: xtravel.v1.GetDecorateRequest
-	(*GetDecorateReply)(nil),     // 5: xtravel.v1.GetDecorateReply
-	(*GetBannerListRequest)(nil), // 6: xtravel.v1.GetBannerListRequest
-	(*GetBannerListReply)(nil),   // 7: xtravel.v1.GetBannerListReply
-	(*BannerItem)(nil),           // 8: xtravel.v1.BannerItem
+	(*GetIndexRequest)(nil),       // 0: xtravel.v1.GetIndexRequest
+	(*GetIndexReply)(nil),         // 1: xtravel.v1.GetIndexReply
+	(*DecoratePage)(nil),          // 2: xtravel.v1.DecoratePage
+	(*HomeArticle)(nil),           // 3: xtravel.v1.HomeArticle
+	(*GetDecorateRequest)(nil),    // 4: xtravel.v1.GetDecorateRequest
+	(*GetDecorateReply)(nil),      // 5: xtravel.v1.GetDecorateReply
+	(*GetBannerListRequest)(nil),  // 6: xtravel.v1.GetBannerListRequest
+	(*GetBannerListReply)(nil),    // 7: xtravel.v1.GetBannerListReply
+	(*BannerItem)(nil),            // 8: xtravel.v1.BannerItem
+	(*GetIndexConfigRequest)(nil), // 9: xtravel.v1.GetIndexConfigRequest
+	(*GetIndexConfigReply)(nil),   // 10: xtravel.v1.GetIndexConfigReply
+	(*TabbarStyle)(nil),           // 11: xtravel.v1.TabbarStyle
+	(*Tabbar)(nil),                // 12: xtravel.v1.Tabbar
+	(*LoginConfig)(nil),           // 13: xtravel.v1.LoginConfig
+	(*WebsiteConfig)(nil),         // 14: xtravel.v1.WebsiteConfig
+	(*WebPageConfig)(nil),         // 15: xtravel.v1.WebPageConfig
+	(*structpb.Struct)(nil),       // 16: google.protobuf.Struct
 }
 var file_api_xtravel_v1_index_proto_depIdxs = []int32{
-	2, // 0: xtravel.v1.GetIndexReply.page:type_name -> xtravel.v1.DecoratePage
-	3, // 1: xtravel.v1.GetIndexReply.article:type_name -> xtravel.v1.HomeArticle
-	2, // 2: xtravel.v1.GetDecorateReply.page:type_name -> xtravel.v1.DecoratePage
-	8, // 3: xtravel.v1.GetBannerListReply.items:type_name -> xtravel.v1.BannerItem
-	0, // 4: xtravel.v1.IndexService.GetIndex:input_type -> xtravel.v1.GetIndexRequest
-	4, // 5: xtravel.v1.IndexService.GetDecorate:input_type -> xtravel.v1.GetDecorateRequest
-	6, // 6: xtravel.v1.IndexService.GetBannerList:input_type -> xtravel.v1.GetBannerListRequest
-	1, // 7: xtravel.v1.IndexService.GetIndex:output_type -> xtravel.v1.GetIndexReply
-	5, // 8: xtravel.v1.IndexService.GetDecorate:output_type -> xtravel.v1.GetDecorateReply
-	7, // 9: xtravel.v1.IndexService.GetBannerList:output_type -> xtravel.v1.GetBannerListReply
-	7, // [7:10] is the sub-list for method output_type
-	4, // [4:7] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	2,  // 0: xtravel.v1.GetIndexReply.page:type_name -> xtravel.v1.DecoratePage
+	3,  // 1: xtravel.v1.GetIndexReply.article:type_name -> xtravel.v1.HomeArticle
+	2,  // 2: xtravel.v1.GetDecorateReply.page:type_name -> xtravel.v1.DecoratePage
+	8,  // 3: xtravel.v1.GetBannerListReply.items:type_name -> xtravel.v1.BannerItem
+	11, // 4: xtravel.v1.GetIndexConfigReply.style:type_name -> xtravel.v1.TabbarStyle
+	12, // 5: xtravel.v1.GetIndexConfigReply.tabbar:type_name -> xtravel.v1.Tabbar
+	13, // 6: xtravel.v1.GetIndexConfigReply.login:type_name -> xtravel.v1.LoginConfig
+	14, // 7: xtravel.v1.GetIndexConfigReply.website:type_name -> xtravel.v1.WebsiteConfig
+	15, // 8: xtravel.v1.GetIndexConfigReply.webPage:type_name -> xtravel.v1.WebPageConfig
+	16, // 9: xtravel.v1.GetIndexConfigReply.copyright:type_name -> google.protobuf.Struct
+	16, // 10: xtravel.v1.Tabbar.link:type_name -> google.protobuf.Struct
+	0,  // 11: xtravel.v1.IndexService.GetIndex:input_type -> xtravel.v1.GetIndexRequest
+	4,  // 12: xtravel.v1.IndexService.GetDecorate:input_type -> xtravel.v1.GetDecorateRequest
+	9,  // 13: xtravel.v1.IndexService.GetIndexConfig:input_type -> xtravel.v1.GetIndexConfigRequest
+	6,  // 14: xtravel.v1.IndexService.GetBannerList:input_type -> xtravel.v1.GetBannerListRequest
+	1,  // 15: xtravel.v1.IndexService.GetIndex:output_type -> xtravel.v1.GetIndexReply
+	5,  // 16: xtravel.v1.IndexService.GetDecorate:output_type -> xtravel.v1.GetDecorateReply
+	10, // 17: xtravel.v1.IndexService.GetIndexConfig:output_type -> xtravel.v1.GetIndexConfigReply
+	7,  // 18: xtravel.v1.IndexService.GetBannerList:output_type -> xtravel.v1.GetBannerListReply
+	15, // [15:19] is the sub-list for method output_type
+	11, // [11:15] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_api_xtravel_v1_index_proto_init() }
@@ -647,7 +1224,7 @@ func file_api_xtravel_v1_index_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_index_proto_rawDesc), len(file_api_xtravel_v1_index_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

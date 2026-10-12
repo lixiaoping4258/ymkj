@@ -71,7 +71,7 @@ return $tabbar;
 |---|---|---|
 | 1 | **`FileService::getFileUrl()` 无参数** | `getFileUrl('')` 在 local 驱动下等于 `format(request()->domain(), '')` = **`"<domain>/"`（带尾斜杠）**。所以 `domain` 字段形如 `http://127.0.0.1:18000/` |
 | 2 | **`style` 是 json_decode 后的对象** | `ConfigService::get` 对字符串值会 `json_decode`，实测 `tabbar.style` 存的是 `{"default_color":"#999999","selected_color":"#c455ff"}` → 输出是**对象**，不是字符串 |
-| 3 | **`tabbar` 不是数组而是"对象数组"** | `link` 列本身是 JSON 字符串，但模型没声明 json 转换 → 输出**原始字符串**。而 `selected`/`unselected` 经 `getFileUrl` 变成完整 URL |
+| 3 | **`tabbar.link` 是嵌套对象，不是字符串** | ⚠️ **更正**：`DecorateTabbar` 模型里声明了 `protected $json = ['link']` + `$jsonAssoc = true`，所以 `link` 会被 **json_decode 成关联数组**，对外是嵌套对象 `{"path":...}`，**不是原始字符串**。我第一版写错了。（`selected`/`unselected` 经 `getFileUrl` 变成完整 URL） |
 | 4 | **`tabbar` 是全表** | 没有 `is_show` 过滤。实测 3 行都是 `is_show=1`，但**代码确实没过滤** |
 | 5 | **`webPage.url` 用请求域名** | `request()->domain() . '/mobile'` —— 与 `avatar` 一样，**必须从请求推导**，不能用配置 |
 
@@ -128,7 +128,7 @@ return $tabbar;
     "style": {"default_color":"#999999","selected_color":"#c455ff"},
     "tabbar": [{"id":13,"name":"首页","selected":"http://.../tabbar_home_sel.png",
                 "unselected":"http://.../tabbar_home.png",
-                "link":"{\"path\":\"\\/pages\\/index\\/index\",...}",
+                "link":{"path":"/pages/index/index","name":"商城首页","type":"shop"},
                 "is_show":1,"create_time":1779516710,"update_time":1779516710}, ...],
     "login": {"login_way":["1","2"],"coerce_mobile":1,"login_agreement":1,
               "third_auth":1,"wechat_auth":1,"qq_auth":0},
@@ -145,7 +145,7 @@ return $tabbar;
 
 | # | 项 |
 |---|---|
-| 1 | `project.decorate.tabbar_style` 的实际值（`style` 的兜底；本次没读到） |
+| 1 | ~~`project.decorate.tabbar_style`~~ ✅ 已读到：`['default_color'=>'#999999', 'selected_color'=>'#c455ff']`，与 DB 里的值相同 |
 | 2 | `config('project.version')` = `'1.9.4'` —— 已确认 |
 | 3 | `login_way` 是**字符串数组** `['1','2']` → 响应里就是字符串 `["1","2"]`，**不要转成数字** |
 | 4 | `copyright` 为空数组时 `EmitUnpopulated` 下的输出形态（`[]` vs `{}`）—— 原实现是 PHP 空数组，`json_encode` 是 `[]` |

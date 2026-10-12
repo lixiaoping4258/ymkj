@@ -3,6 +3,7 @@ syntax = "proto3";
 package xtravel.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/struct.proto";
 
 option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
 
@@ -33,6 +34,14 @@ service IndexService {
     option (google.api.http) = {get: "/v1/index/decorate"};
   }
 
+  // 全局配置（前端启动必读）
+  //
+  // 原实现 IndexLogic::getConfigData() —— 8 个顶层键，来源分散：
+  // 4 段 x_config + 1 张表 + config/project.php 兜底 + 请求域名。
+  // 真机数据与逐项说明见 docs/RECON-index-config.md。
+  rpc GetIndexConfig(GetIndexConfigRequest) returns (GetIndexConfigReply) {
+    option (google.api.http) = {get: "/v1/index/config"};
+  }
   // 轮播图列表
   // 原: GetListLogic::getList()（有 10 秒缓存，键 'banner:list'，与 PHP 共用）
   rpc GetBannerList(GetBannerListRequest) returns (GetBannerListReply) {
@@ -103,4 +112,69 @@ message BannerItem {
   int32 sort = 5 [json_name = "sort"];
   // datetime -> PHP 的 'Y-m-d H:i:s' 字符串
   string create_time = 6 [json_name = "create_time"];
+}
+
+message GetIndexConfigRequest {}
+
+// GetIndexConfigReply 对应 getConfigData 的 8 个顶层键。
+message GetIndexConfigReply {
+  // ⚠️ 对应 `FileService::getFileUrl()` —— **无参数调用**，
+  // 等于 format(domain, '') = "<domain>/"（**带尾斜杠**）
+  string domain = 1 [json_name = "domain"];
+  TabbarStyle style = 2 [json_name = "style"];
+  repeated Tabbar tabbar = 3 [json_name = "tabbar"];
+  LoginConfig login = 4 [json_name = "login"];
+  WebsiteConfig website = 5 [json_name = "website"];
+  WebPageConfig webPage = 6 [json_name = "webPage"];
+  string version = 7 [json_name = "version"];
+  // ⚠️ 本项目 x_config 无 copyright 段 -> 空数组。PHP json_encode([]) = `[]`（不是 `{}`）
+  repeated google.protobuf.Struct copyright = 8 [json_name = "copyright"];
+}
+
+// TabbarStyle 对应 tabbar.style（ConfigService::get 会 json_decode -> 对象）。
+message TabbarStyle {
+  string default_color = 1 [json_name = "default_color"];
+  string selected_color = 2 [json_name = "selected_color"];
+}
+
+// Tabbar 对应 x_decorate_tabbar 一行（在 getTabbarLists 里处理过图片 URL）。
+message Tabbar {
+  int64 id = 1 [json_name = "id"];
+  string name = 2 [json_name = "name"];
+  // 已经过 FileService::getFileUrl
+  string selected = 3 [json_name = "selected"];
+  string unselected = 4 [json_name = "unselected"];
+  // ⚠️ 模型声明了 `protected $json = ['link']` + `$jsonAssoc = true`，
+  // 所以 `link` 是**嵌套对象**（{"path":...,"name":...,"type":...}），不是字符串。
+  google.protobuf.Struct link = 5 [json_name = "link"];
+  int32 is_show = 6 [json_name = "is_show"];
+  int64 create_time = 7 [json_name = "create_time"];
+  int64 update_time = 8 [json_name = "update_time"];
+}
+
+// LoginConfig 对应 $loginConfig。本项目 6 项全部来自 config/project.php。
+message LoginConfig {
+  // ⚠️ 是**字符串数组** ["1","2"]，不要转成数字
+  repeated string login_way = 1 [json_name = "login_way"];
+  int32 coerce_mobile = 2 [json_name = "coerce_mobile"];
+  int32 login_agreement = 3 [json_name = "login_agreement"];
+  int32 third_auth = 4 [json_name = "third_auth"];
+  int32 wechat_auth = 5 [json_name = "wechat_auth"];
+  int32 qq_auth = 6 [json_name = "qq_auth"];
+}
+
+// WebsiteConfig 对应 $website（h5_favicon / shop_logo 经 getFileUrl）。
+message WebsiteConfig {
+  string h5_favicon = 1 [json_name = "h5_favicon"];
+  string shop_name = 2 [json_name = "shop_name"];
+  string shop_logo = 3 [json_name = "shop_logo"];
+}
+
+// WebPageConfig 对应 $webPage。
+message WebPageConfig {
+  int32 status = 1 [json_name = "status"];
+  int32 page_status = 2 [json_name = "page_status"];
+  string page_url = 3 [json_name = "page_url"];
+  // ⚠️ request()->domain() . '/mobile' —— **取自当前请求**，不能用配置
+  string url = 4 [json_name = "url"];
 }

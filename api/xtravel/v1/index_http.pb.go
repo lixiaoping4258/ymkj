@@ -22,6 +22,7 @@ const _ = http.SupportPackageIsVersion1
 const OperationIndexServiceGetBannerList = "/xtravel.v1.IndexService/GetBannerList"
 const OperationIndexServiceGetDecorate = "/xtravel.v1.IndexService/GetDecorate"
 const OperationIndexServiceGetIndex = "/xtravel.v1.IndexService/GetIndex"
+const OperationIndexServiceGetIndexConfig = "/xtravel.v1.IndexService/GetIndexConfig"
 
 type IndexServiceHTTPServer interface {
 	// GetBannerList 轮播图列表
@@ -36,12 +37,19 @@ type IndexServiceHTTPServer interface {
 	//
 	//	return ['page' => $decoratePage, 'article' => $article];
 	GetIndex(context.Context, *GetIndexRequest) (*GetIndexReply, error)
+	// GetIndexConfig 全局配置（前端启动必读）
+	//
+	// 原实现 IndexLogic::getConfigData() —— 8 个顶层键，来源分散：
+	// 4 段 x_config + 1 张表 + config/project.php 兜底 + 请求域名。
+	// 真机数据与逐项说明见 docs/RECON-index-config.md。
+	GetIndexConfig(context.Context, *GetIndexConfigRequest) (*GetIndexConfigReply, error)
 }
 
 func RegisterIndexServiceHTTPServer(s *http.Server, srv IndexServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/v1/index/index", _IndexService_GetIndex0_HTTP_Handler(srv))
 	r.GET("/v1/index/decorate", _IndexService_GetDecorate0_HTTP_Handler(srv))
+	r.GET("/v1/index/config", _IndexService_GetIndexConfig0_HTTP_Handler(srv))
 	r.GET("/v1/index/bannerList", _IndexService_GetBannerList0_HTTP_Handler(srv))
 }
 
@@ -83,6 +91,25 @@ func _IndexService_GetDecorate0_HTTP_Handler(srv IndexServiceHTTPServer) func(ct
 	}
 }
 
+func _IndexService_GetIndexConfig0_HTTP_Handler(srv IndexServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetIndexConfigRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationIndexServiceGetIndexConfig)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetIndexConfig(ctx, req.(*GetIndexConfigRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetIndexConfigReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 func _IndexService_GetBannerList0_HTTP_Handler(srv IndexServiceHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in GetBannerListRequest
@@ -115,6 +142,12 @@ type IndexServiceHTTPClient interface {
 	//
 	//	return ['page' => $decoratePage, 'article' => $article];
 	GetIndex(ctx context.Context, req *GetIndexRequest, opts ...http.CallOption) (rsp *GetIndexReply, err error)
+	// GetIndexConfig 全局配置（前端启动必读）
+	//
+	// 原实现 IndexLogic::getConfigData() —— 8 个顶层键，来源分散：
+	// 4 段 x_config + 1 张表 + config/project.php 兜底 + 请求域名。
+	// 真机数据与逐项说明见 docs/RECON-index-config.md。
+	GetIndexConfig(ctx context.Context, req *GetIndexConfigRequest, opts ...http.CallOption) (rsp *GetIndexConfigReply, err error)
 }
 
 type IndexServiceHTTPClientImpl struct {
@@ -166,6 +199,24 @@ func (c *IndexServiceHTTPClientImpl) GetIndex(ctx context.Context, in *GetIndexR
 	pattern := "/v1/index/index"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationIndexServiceGetIndex))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetIndexConfig 全局配置（前端启动必读）
+//
+// 原实现 IndexLogic::getConfigData() —— 8 个顶层键，来源分散：
+// 4 段 x_config + 1 张表 + config/project.php 兜底 + 请求域名。
+// 真机数据与逐项说明见 docs/RECON-index-config.md。
+func (c *IndexServiceHTTPClientImpl) GetIndexConfig(ctx context.Context, in *GetIndexConfigRequest, opts ...http.CallOption) (*GetIndexConfigReply, error) {
+	var out GetIndexConfigReply
+	pattern := "/v1/index/config"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationIndexServiceGetIndexConfig))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {
