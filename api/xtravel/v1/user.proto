@@ -151,6 +151,25 @@ service UserService {
       body: "*"
     };
   }
+
+  // 消息详情
+  //
+  // 原实现 MessageController::detail -> MessageLogic::detail($userId,$params)
+  // 校验用 MessageIdValidate 的 ->get()，规则同 setOneRead（require|integer|gt:0）
+  //
+  //	INNER JOIN messages_body mb ON m.message_id = mb.id
+  //	where: m.message_id = id AND m.recv_id = userId AND m.is_del = 0
+  //	找不到 -> "消息不存在或无权查看"
+  //	自动标已读：if (is_read == 0) Messages::where('id', $messageId)->update([...])
+  //	最后加计算列 type_name = TypeEnum::getTypeDesc(type)
+  //
+  // 🔴 自动标已读那句用的是**主键 id**，而查询按 **message_id** —— 同一个变量两种语义，
+  //    是原项目的 bug。按"不改动原项目逻辑"照搬，详见 biz/message_detail.go。
+  //
+  // 用 RawData：11 个键混来自两张表，且 create_time 未重新格式化。
+  rpc GetMessageDetail(GetMessageDetailRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/user/message/detail"};
+  }
 }
 
 message GetUserInfoRequest {}
@@ -258,5 +277,10 @@ message SetMessageOneReadRequest {
   // 规则按 require -> integer -> gt:0 顺序执行，返回**第一个**失败的文案：
   //   没传 -> "消息ID不能为空"；id=0 -> "消息ID必须大于0"
   // 用普通 int64 时两者都是 0，无法区分。
+  google.protobuf.Int64Value id = 1 [json_name = "id"];
+}
+
+message GetMessageDetailRequest {
+  // 同 setOneRead：用 Int64Value 区分"没传"与"0"
   google.protobuf.Int64Value id = 1 [json_name = "id"];
 }

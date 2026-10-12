@@ -27,6 +27,7 @@ const (
 	UserService_GetUnregisterCheck_FullMethodName = "/xtravel.v1.UserService/GetUnregisterCheck"
 	UserService_SetMessageAllRead_FullMethodName  = "/xtravel.v1.UserService/SetMessageAllRead"
 	UserService_SetMessageOneRead_FullMethodName  = "/xtravel.v1.UserService/SetMessageOneRead"
+	UserService_GetMessageDetail_FullMethodName   = "/xtravel.v1.UserService/GetMessageDetail"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -149,6 +150,23 @@ type UserServiceClient interface {
 	// ⚠️ 带 recv_id -> 越权防护（不能标记别人的消息）。
 	// 控制器：`return $this->data([]);` -> data 是空数组。
 	SetMessageOneRead(ctx context.Context, in *SetMessageOneReadRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 消息详情
+	//
+	// 原实现 MessageController::detail -> MessageLogic::detail($userId,$params)
+	// 校验用 MessageIdValidate 的 ->get()，规则同 setOneRead（require|integer|gt:0）
+	//
+	//	INNER JOIN messages_body mb ON m.message_id = mb.id
+	//	where: m.message_id = id AND m.recv_id = userId AND m.is_del = 0
+	//	找不到 -> "消息不存在或无权查看"
+	//	自动标已读：if (is_read == 0) Messages::where('id', $messageId)->update([...])
+	//	最后加计算列 type_name = TypeEnum::getTypeDesc(type)
+	//
+	// 🔴 自动标已读那句用的是**主键 id**，而查询按 **message_id** —— 同一个变量两种语义，
+	//
+	//	是原项目的 bug。按"不改动原项目逻辑"照搬，详见 biz/message_detail.go。
+	//
+	// 用 RawData：11 个键混来自两张表，且 create_time 未重新格式化。
+	GetMessageDetail(ctx context.Context, in *GetMessageDetailRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type userServiceClient struct {
@@ -233,6 +251,16 @@ func (c *userServiceClient) SetMessageOneRead(ctx context.Context, in *SetMessag
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, UserService_SetMessageOneRead_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetMessageDetail(ctx context.Context, in *GetMessageDetailRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, UserService_GetMessageDetail_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -359,6 +387,23 @@ type UserServiceServer interface {
 	// ⚠️ 带 recv_id -> 越权防护（不能标记别人的消息）。
 	// 控制器：`return $this->data([]);` -> data 是空数组。
 	SetMessageOneRead(context.Context, *SetMessageOneReadRequest) (*RawData, error)
+	// 消息详情
+	//
+	// 原实现 MessageController::detail -> MessageLogic::detail($userId,$params)
+	// 校验用 MessageIdValidate 的 ->get()，规则同 setOneRead（require|integer|gt:0）
+	//
+	//	INNER JOIN messages_body mb ON m.message_id = mb.id
+	//	where: m.message_id = id AND m.recv_id = userId AND m.is_del = 0
+	//	找不到 -> "消息不存在或无权查看"
+	//	自动标已读：if (is_read == 0) Messages::where('id', $messageId)->update([...])
+	//	最后加计算列 type_name = TypeEnum::getTypeDesc(type)
+	//
+	// 🔴 自动标已读那句用的是**主键 id**，而查询按 **message_id** —— 同一个变量两种语义，
+	//
+	//	是原项目的 bug。按"不改动原项目逻辑"照搬，详见 biz/message_detail.go。
+	//
+	// 用 RawData：11 个键混来自两张表，且 create_time 未重新格式化。
+	GetMessageDetail(context.Context, *GetMessageDetailRequest) (*RawData, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -392,6 +437,9 @@ func (UnimplementedUserServiceServer) SetMessageAllRead(context.Context, *SetMes
 }
 func (UnimplementedUserServiceServer) SetMessageOneRead(context.Context, *SetMessageOneReadRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetMessageOneRead not implemented")
+}
+func (UnimplementedUserServiceServer) GetMessageDetail(context.Context, *GetMessageDetailRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMessageDetail not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -558,6 +606,24 @@ func _UserService_SetMessageOneRead_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_GetMessageDetail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMessageDetailRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetMessageDetail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetMessageDetail_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetMessageDetail(ctx, req.(*GetMessageDetailRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -596,6 +662,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetMessageOneRead",
 			Handler:    _UserService_SetMessageOneRead_Handler,
+		},
+		{
+			MethodName: "GetMessageDetail",
+			Handler:    _UserService_GetMessageDetail_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

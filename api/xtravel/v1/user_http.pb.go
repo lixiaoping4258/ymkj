@@ -21,6 +21,7 @@ const _ = http.SupportPackageIsVersion1
 
 const OperationUserServiceGetAddressDefault = "/xtravel.v1.UserService/GetAddressDefault"
 const OperationUserServiceGetAddressList = "/xtravel.v1.UserService/GetAddressList"
+const OperationUserServiceGetMessageDetail = "/xtravel.v1.UserService/GetMessageDetail"
 const OperationUserServiceGetRealInfo = "/xtravel.v1.UserService/GetRealInfo"
 const OperationUserServiceGetUnregisterCheck = "/xtravel.v1.UserService/GetUnregisterCheck"
 const OperationUserServiceGetUserInfo = "/xtravel.v1.UserService/GetUserInfo"
@@ -60,6 +61,22 @@ type UserServiceHTTPServer interface {
 	// 用 RawData（行的键是 DB 列名 + App 的别名 platform_name）。
 	// 需登录。
 	GetAddressList(context.Context, *GetAddressListRequest) (*RawData, error)
+	// GetMessageDetail 消息详情
+	//
+	// 原实现 MessageController::detail -> MessageLogic::detail($userId,$params)
+	// 校验用 MessageIdValidate 的 ->get()，规则同 setOneRead（require|integer|gt:0）
+	//
+	//	INNER JOIN messages_body mb ON m.message_id = mb.id
+	//	where: m.message_id = id AND m.recv_id = userId AND m.is_del = 0
+	//	找不到 -> "消息不存在或无权查看"
+	//	自动标已读：if (is_read == 0) Messages::where('id', $messageId)->update([...])
+	//	最后加计算列 type_name = TypeEnum::getTypeDesc(type)
+	//
+	// 🔴 自动标已读那句用的是**主键 id**，而查询按 **message_id** —— 同一个变量两种语义，
+	//    是原项目的 bug。按"不改动原项目逻辑"照搬，详见 biz/message_detail.go。
+	//
+	// 用 RawData：11 个键混来自两张表，且 create_time 未重新格式化。
+	GetMessageDetail(context.Context, *GetMessageDetailRequest) (*RawData, error)
 	// GetRealInfo 用户实名信息（已脱敏）
 	//
 	// 原实现 UserController::getRealInfo -> CardRealLogic::getUserRealInfo($userId)
@@ -152,6 +169,7 @@ func RegisterUserServiceHTTPServer(s *http.Server, srv UserServiceHTTPServer) {
 	r.GET("/v1/user/unregisr/check", _UserService_GetUnregisterCheck0_HTTP_Handler(srv))
 	r.POST("/v1/user/message/setAllRead", _UserService_SetMessageAllRead0_HTTP_Handler(srv))
 	r.POST("/v1/user/message/setOneRead", _UserService_SetMessageOneRead0_HTTP_Handler(srv))
+	r.GET("/v1/user/message/detail", _UserService_GetMessageDetail0_HTTP_Handler(srv))
 }
 
 func _UserService_GetUserInfo0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
@@ -312,6 +330,25 @@ func _UserService_SetMessageOneRead0_HTTP_Handler(srv UserServiceHTTPServer) fun
 	}
 }
 
+func _UserService_GetMessageDetail0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetMessageDetailRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserServiceGetMessageDetail)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetMessageDetail(ctx, req.(*GetMessageDetailRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type UserServiceHTTPClient interface {
 	// GetAddressDefault 用户默认地址
 	//
@@ -344,6 +381,22 @@ type UserServiceHTTPClient interface {
 	// 用 RawData（行的键是 DB 列名 + App 的别名 platform_name）。
 	// 需登录。
 	GetAddressList(ctx context.Context, req *GetAddressListRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// GetMessageDetail 消息详情
+	//
+	// 原实现 MessageController::detail -> MessageLogic::detail($userId,$params)
+	// 校验用 MessageIdValidate 的 ->get()，规则同 setOneRead（require|integer|gt:0）
+	//
+	//	INNER JOIN messages_body mb ON m.message_id = mb.id
+	//	where: m.message_id = id AND m.recv_id = userId AND m.is_del = 0
+	//	找不到 -> "消息不存在或无权查看"
+	//	自动标已读：if (is_read == 0) Messages::where('id', $messageId)->update([...])
+	//	最后加计算列 type_name = TypeEnum::getTypeDesc(type)
+	//
+	// 🔴 自动标已读那句用的是**主键 id**，而查询按 **message_id** —— 同一个变量两种语义，
+	//    是原项目的 bug。按"不改动原项目逻辑"照搬，详见 biz/message_detail.go。
+	//
+	// 用 RawData：11 个键混来自两张表，且 create_time 未重新格式化。
+	GetMessageDetail(ctx context.Context, req *GetMessageDetailRequest, opts ...http.CallOption) (rsp *RawData, err error)
 	// GetRealInfo 用户实名信息（已脱敏）
 	//
 	// 原实现 UserController::getRealInfo -> CardRealLogic::getUserRealInfo($userId)
@@ -483,6 +536,35 @@ func (c *UserServiceHTTPClientImpl) GetAddressList(ctx context.Context, in *GetA
 	pattern := "/v1/user/address"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationUserServiceGetAddressList))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetMessageDetail 消息详情
+//
+// 原实现 MessageController::detail -> MessageLogic::detail($userId,$params)
+// 校验用 MessageIdValidate 的 ->get()，规则同 setOneRead（require|integer|gt:0）
+//
+//	INNER JOIN messages_body mb ON m.message_id = mb.id
+//	where: m.message_id = id AND m.recv_id = userId AND m.is_del = 0
+//	找不到 -> "消息不存在或无权查看"
+//	自动标已读：if (is_read == 0) Messages::where('id', $messageId)->update([...])
+//	最后加计算列 type_name = TypeEnum::getTypeDesc(type)
+//
+// 🔴 自动标已读那句用的是**主键 id**，而查询按 **message_id** —— 同一个变量两种语义，
+//
+//	是原项目的 bug。按"不改动原项目逻辑"照搬，详见 biz/message_detail.go。
+//
+// 用 RawData：11 个键混来自两张表，且 create_time 未重新格式化。
+func (c *UserServiceHTTPClientImpl) GetMessageDetail(ctx context.Context, in *GetMessageDetailRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/user/message/detail"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationUserServiceGetMessageDetail))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

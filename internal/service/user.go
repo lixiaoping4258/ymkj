@@ -21,10 +21,11 @@ type UserService struct {
 	realInfo    *biz.RealInfoUsecase
 	unreg       *biz.UnregisterCheckUsecase
 	msgRead     *biz.MessageReadUsecase
+	msgDetail   *biz.MessageDetailUsecase
 }
 
-func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase, addressList *biz.AddressListUsecase, realInfo *biz.RealInfoUsecase, unreg *biz.UnregisterCheckUsecase, msgRead *biz.MessageReadUsecase) *UserService {
-	return &UserService{users: users, noticeNew: noticeNew, address: address, addressList: addressList, realInfo: realInfo, unreg: unreg, msgRead: msgRead}
+func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase, addressList *biz.AddressListUsecase, realInfo *biz.RealInfoUsecase, unreg *biz.UnregisterCheckUsecase, msgRead *biz.MessageReadUsecase, msgDetail *biz.MessageDetailUsecase) *UserService {
+	return &UserService{users: users, noticeNew: noticeNew, address: address, addressList: addressList, realInfo: realInfo, unreg: unreg, msgRead: msgRead, msgDetail: msgDetail}
 }
 
 // GetUserInfo 对应 UserController::info。
@@ -259,4 +260,57 @@ func (s *UserService) SetMessageOneRead(
 		return nil, bizFail(biz.NewBizError(err.Error()))
 	}
 	return &v1.RawData{Json: []byte("[]")}, nil
+}
+
+// GetMessageDetail 对应 MessageController::detail（GET /v1/user/message/detail?id=N）。
+//
+// 原实现：
+//
+//	$params = (new MessageIdValidate())->get()->goCheck();   // id: require|integer|gt:0
+//	$data = MessageLogic::detail($this->userId, $params);
+//	if ($data === false) { return $this->fail(MessageLogic::getError()); }
+//	return $this->data($data);
+func (s *UserService) GetMessageDetail(
+	ctx context.Context, req *v1.GetMessageDetailRequest,
+) (*v1.RawData, error) {
+	// 与 setOneRead 同一套校验文案（同一个 Validate 类）
+	if req.Id == nil {
+		return nil, bizFail(biz.NewBizError("消息ID不能为空"))
+	}
+	if req.Id.Value <= 0 {
+		return nil, bizFail(biz.NewBizError("消息ID必须大于0"))
+	}
+	userID := biz.UserIDFromContext(ctx)
+	res, err := s.msgDetail.Detail(ctx, uint32(userID), req.Id.Value)
+	if err != nil {
+		return nil, bizFail(biz.NewBizError(err.Error()))
+	}
+	row := res.Row
+	// 键序按原文 field() 的顺序：m.id, m.send_id, m.recv_id, m.message_id,
+	// m.is_read, m.create_time, mb.type, mb.title, mb.body, mb.flag，最后 type_name
+	body, merr := biz.MarshalNoHTMLEscape(map[string]any{
+		"id":          row.ID,
+		"send_id":     derefI64Any(row.SendID),
+		"recv_id":     derefI64Any(row.RecvID),
+		"message_id":  derefI64Any(row.MessageID),
+		"is_read":     row.IsRead,
+		"create_time": row.CreateTime,
+		"type":        row.Type,
+		"title":       row.Title,
+		"body":        row.Body,
+		"flag":        row.Flag,
+		"type_name":   res.TypeName,
+	})
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
+}
+
+// derefI64Any 把 *int64 转成 any：nil -> null（PHP 对 NULL 列输出 null）
+func derefI64Any(v *int64) any {
+	if v == nil {
+		return nil
+	}
+	return *v
 }
