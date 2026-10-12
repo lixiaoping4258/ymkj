@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package xtravel.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
+
+// PayService 支付相关。
+// 对应原项目 app/api/route/payment.php：
+//
+//	Route::group('v1/payment', function () {
+//	    Route::get('channel', [PaymentController::class, 'channel']);
+//	});
+service PayService {
+  // 支付渠道列表（场景 = 微信小程序）
+  //
+  // 原实现 PaymentController::channel -> PaymentLogic::getScenePayWay(PayEnum::SCENE_MNP)：
+  //
+  //	$condition = ['PayWay.scene' => 3, 'PayWay.status' => YesNoEnum::YES];
+  //	PayWay::hasWhere('payConfig', $condition,
+  //	        'PayWay.id,PayWay.is_default,PayConfig.name,PayConfig.icon,
+  //	         PayConfig.remark,PayConfig.need_pass')
+  //	    ->orderRaw('PayConfig.sort desc')->select()->toArray();
+  //
+  // ⚠️ 表名是 **x_dev_pay_way / x_dev_pay_config**（模型 `protected $name = 'dev_pay_way'`）。
+  // ⚠️ hasWhere 生成 **INNER JOIN**（PayConfig.id = PayWay.pay_config_id）。
+  // ⚠️ `icon` 库里是相对路径，模型有 getIconAttr -> FileService::getFileUrl，
+  //    所以要对外的值**拼上域名**。
+  // 需登录（PaymentController 未声明 $notNeedLogin）。
+  rpc GetChannel(GetChannelRequest) returns (GetChannelReply) {
+    option (google.api.http) = {get: "/v1/payment/channel"};
+  }
+}
+
+message GetChannelRequest {}
+
+// GetChannelReply 对应 field() 的 6 列。
+// data 是**顶层数组**（原实现 select()->toArray() 直接返回），见 envelope.go 的 Envelope()。
+message GetChannelReply {
+  repeated PayChannelItem items = 1;
+}
+
+// PayChannelItem 对应 field('PayWay.id,PayWay.is_default,PayConfig.name,
+// PayConfig.icon,PayConfig.remark,PayConfig.need_pass')。
+message PayChannelItem {
+  // PayWay.id
+  int64 id = 1 [json_name = "id"];
+  // PayWay.is_default
+  int32 is_default = 2 [json_name = "is_default"];
+  // PayConfig.name
+  string name = 3 [json_name = "name"];
+  // PayConfig.icon —— 已由 getIconAttr 拼上域名
+  string icon = 4 [json_name = "icon"];
+  // PayConfig.remark
+  string remark = 5 [json_name = "remark"];
+  // PayConfig.need_pass
+  int32 need_pass = 6 [json_name = "need_pass"];
+}

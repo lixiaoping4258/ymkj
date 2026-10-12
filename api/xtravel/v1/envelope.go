@@ -146,3 +146,11 @@ func (r *GetUnregisterCheckReply) Envelope() (int, int, string, any) {
 func (r *DeleteAddressReply) RawBody() []byte {
 	return []byte(`{"code":1,"show":0,"msg":"删除成功","data":[]}`)
 }
+
+// Envelope 让支付渠道以**顶层数组**返回。
+//
+// 原实现 `PaymentLogic::getScenePayWay()` 直接 `select()->toArray()`，
+// controller 用 `$this->data($data)` —— 所以 data 是数组，不是 {"items":[...]}。
+func (r *GetChannelReply) Envelope() (int, int, string, any) {
+	return 1, 0, "", r.GetItems()
+}
