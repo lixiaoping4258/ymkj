@@ -148,7 +148,10 @@ func wireApp(confServer *conf.Server, confData *conf.Data, app *conf.App, confLo
 	whitelistRepo := data.NewWhitelistRepo(db, confData)
 	whitelistUsecase := biz.NewWhitelistUsecase(whitelistRepo, whitelistRepo, cache, logger)
 	whitelistService := service.NewWhitelistService(whitelistUsecase)
-	httpServer := server.NewHTTPServer(confServer, auth, commonService, userService, marketService, accountService, articleService, indexService, searchService, payService, walletService, openAppService, whitelistService, userTokenUsecase, whitelistUsecase, logger)
+	ticketAmountRepo := data.NewTicketAmountRepo(db, confData)
+	ticketAmountUsecase := biz.NewTicketAmountUsecase(ticketAmountRepo, rawCache)
+	ticketService := service.NewTicketService(ticketAmountUsecase, app)
+	httpServer := server.NewHTTPServer(confServer, auth, commonService, userService, marketService, accountService, articleService, indexService, searchService, payService, walletService, openAppService, whitelistService, ticketService, userTokenUsecase, whitelistUsecase, logger)
 	kratosApp := newApp(logger, httpServer)
 	return kratosApp, func() {
 		cleanup2()
