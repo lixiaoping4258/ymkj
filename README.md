@@ -1126,11 +1126,61 @@ Go 版保持原样以兼容前端，但在 proto 里写了注释说明。
 
 ---
 
+
+### 🔴 `message/detail` 的"自动标已读"用了错误的主键（**刻意照搬**）
+
+`app/api/logic/user/MessageLogic.php::detail()`：
+
+```php
+$messageId = $params['id'] ?? 0;
+$where = [
+    ['m.message_id', '=', $messageId],   // ← 查询按**业务字段** message_id
+    ['m.recv_id',    '=', $userId],
+    ['m.is_del',     '=', 0],
+];
+$message = Messages::alias('m')->join('messages_body mb', 'm.message_id = mb.id')
+    ->where($where)->field([...])->findOrEmpty();
+if ($message->isEmpty()) { self::setError('消息不存在或无权查看'); return false; }
+$result = $message->toArray();
+
+// 自动标记为已读
+if ($result['is_read'] == 0) {
+    Messages::where('id', $messageId)->update(['is_read' => 1]);   // ← 🔴 更新按**主键** id
+    $result['is_read'] = 1;
+}
+```
+
+**同一个 `$messageId` 被当成两种不同的语义使用。**
+
+**后果**：UPDATE 会打到 `x_messages.id = <message_id 的值>` 那一行 ——
+很可能是**别的用户的消息**，或者**根本没有这一行**。
+也就是说"打开消息详情自动标已读"**很可能根本没生效**，甚至可能误标别人的消息。
+
+**Go 版按"不改动原项目逻辑"的要求刻意照搬了这个行为**，
+没有改成本该正确的 `where('message_id', ...)`。
+（若要修，需业务确认 —— 那会改变线上行为。）
+
+对应实现：`internal/biz/message_detail.go` 的 `Detail()`，
+以及 `internal/data/message_detail.go` 的 `MarkReadByPrimaryKey()`，两处都有醒目注释。
+
 ## 九、待迁接口的侦察记录（省下一次重新读源码）
 
 这一节记录已经读过、但**还没到能动手实现**的接口。目的是让下一次接手的人
 不必从零开始读源码。所有事实都来自实际读代码 / 跑真机，不是推测。
 
+### 📄 独立的侦察文档（比本节更详细）
+
+以下几份是单独成文的，**数据与逐行说明都在里面**：
+
+| 文档 | 内容 |
+|---|---|
+| [`docs/ROUTES.md`](docs/ROUTES.md) | **131 条路由 × 鉴权 × 迁移状态**（由 `scripts/gen-routes.ps1` 从 proto 自动生成） |
+| [`docs/ROUTES-AND-AUTH.md`](docs/ROUTES-AND-AUTH.md) | 原项目全量路由 × `$notNeedLogin`（由 `scripts/gen-routes-php.ps1` 生成） |
+| [`docs/RECON-index-config.md`](docs/RECON-index-config.md) | `GET /v1/index/config` —— **数据已全部查好，照着写即可** ✅ 已于第 62 轮实现 |
+| [`docs/RECON-login-spec.md`](docs/RECON-login-spec.md) | 登录域逐分支规格（`login`/`register`/验证码/锁定/`Id::gen`） |
+| [`docs/RECON-user-domain.md`](docs/RECON-user-domain.md) | `user.php` 21 条路由逐个标注复杂度 + `center` 的 6 个坑 |
+| [`docs/RECON-user-message.md`](docs/RECON-user-message.md) | `GET /v1/user/message` —— 读接口藏写操作 + 死代码过滤 + INNER JOIN |
+| [`docs/API-SAMPLES.md`](docs/API-SAMPLES.md) | 早期 14 条已迁接口的真实请求/响应样例 |
 ### `GET /v1/market/purchase/price_range`
 
 调用链：`PurchaseController::priceRange` → `GoodsLogic::priceRange($params)`
