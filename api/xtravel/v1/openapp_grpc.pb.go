@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	OpenAppService_GetAppList_FullMethodName        = "/xtravel.v1.OpenAppService/GetAppList"
+	OpenAppService_GetUserGoodsList_FullMethodName  = "/xtravel.v1.OpenAppService/GetUserGoodsList"
 	OpenAppService_GetAppArchiveList_FullMethodName = "/xtravel.v1.OpenAppService/GetAppArchiveList"
 	OpenAppService_GetAuthUserDetail_FullMethodName = "/xtravel.v1.OpenAppService/GetAuthUserDetail"
 	OpenAppService_GetAuthUserList_FullMethodName   = "/xtravel.v1.OpenAppService/GetAuthUserList"
@@ -62,6 +63,26 @@ type OpenAppServiceClient interface {
 	//
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 一级平台用户商品列表（分页）
+	//
+	// 原实现 OpenAppController::userGoodsList -> `$this->dataLists(new AppUserGoodsLists())`
+	//
+	// **四张表**：MarketSales
+	//
+	//	INNER JOIN x_app_archive AppArchive ON AppArchive.id = MarketSales.archive_id
+	//	INNER JOIN x_app        app        ON MarketSales.app_id = app.id
+	//	INNER JOIN x_app_auth   app_auth   ON MarketSales.app_auth_id = app_auth.id
+	//
+	// order: MarketSales.id desc   12 个字段
+	//
+	// ⚠️ scene: 1=待上架(OFFLINE) 2=销售中(ON_SALE+sale_lock<>LOCK) 3=兑换中(ON_SALE+LOCK)
+	//
+	//	**未传 / 其它 = OFFLINE**（default 与 case 1 相同）
+	//
+	// ⚠️ app_uid 会去查 AppAuth；**查不到时不追加任何条件**（静默放宽）。
+	// ⚠️ images 是 JSON 字符串 -> 逐行 json_decode 成数组。
+	// 🔴 count() 只有 hasWhere('archive') **一个 JOIN**（lists 有三个）—— 又一处不一致。
+	GetUserGoodsList(ctx context.Context, in *GetUserGoodsListRequest, opts ...grpc.CallOption) (*RawData, error)
 	// 一级平台艺术品档案列表（分页）
 	//
 	// 原实现 OpenAppController::appArchiveList -> `$this->dataLists(new AppArchiveLists())`
@@ -149,6 +170,16 @@ func (c *openAppServiceClient) GetAppList(ctx context.Context, in *GetAppListReq
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, OpenAppService_GetAppList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openAppServiceClient) GetUserGoodsList(ctx context.Context, in *GetUserGoodsListRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, OpenAppService_GetUserGoodsList_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -249,6 +280,26 @@ type OpenAppServiceServer interface {
 	//
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 一级平台用户商品列表（分页）
+	//
+	// 原实现 OpenAppController::userGoodsList -> `$this->dataLists(new AppUserGoodsLists())`
+	//
+	// **四张表**：MarketSales
+	//
+	//	INNER JOIN x_app_archive AppArchive ON AppArchive.id = MarketSales.archive_id
+	//	INNER JOIN x_app        app        ON MarketSales.app_id = app.id
+	//	INNER JOIN x_app_auth   app_auth   ON MarketSales.app_auth_id = app_auth.id
+	//
+	// order: MarketSales.id desc   12 个字段
+	//
+	// ⚠️ scene: 1=待上架(OFFLINE) 2=销售中(ON_SALE+sale_lock<>LOCK) 3=兑换中(ON_SALE+LOCK)
+	//
+	//	**未传 / 其它 = OFFLINE**（default 与 case 1 相同）
+	//
+	// ⚠️ app_uid 会去查 AppAuth；**查不到时不追加任何条件**（静默放宽）。
+	// ⚠️ images 是 JSON 字符串 -> 逐行 json_decode 成数组。
+	// 🔴 count() 只有 hasWhere('archive') **一个 JOIN**（lists 有三个）—— 又一处不一致。
+	GetUserGoodsList(context.Context, *GetUserGoodsListRequest) (*RawData, error)
 	// 一级平台艺术品档案列表（分页）
 	//
 	// 原实现 OpenAppController::appArchiveList -> `$this->dataLists(new AppArchiveLists())`
@@ -335,6 +386,9 @@ type UnimplementedOpenAppServiceServer struct{}
 func (UnimplementedOpenAppServiceServer) GetAppList(context.Context, *GetAppListRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAppList not implemented")
 }
+func (UnimplementedOpenAppServiceServer) GetUserGoodsList(context.Context, *GetUserGoodsListRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUserGoodsList not implemented")
+}
 func (UnimplementedOpenAppServiceServer) GetAppArchiveList(context.Context, *GetAppArchiveListRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAppArchiveList not implemented")
 }
@@ -388,6 +442,24 @@ func _OpenAppService_GetAppList_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OpenAppServiceServer).GetAppList(ctx, req.(*GetAppListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenAppService_GetUserGoodsList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserGoodsListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenAppServiceServer).GetUserGoodsList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OpenAppService_GetUserGoodsList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenAppServiceServer).GetUserGoodsList(ctx, req.(*GetUserGoodsListRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -510,6 +582,10 @@ var OpenAppService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAppList",
 			Handler:    _OpenAppService_GetAppList_Handler,
+		},
+		{
+			MethodName: "GetUserGoodsList",
+			Handler:    _OpenAppService_GetUserGoodsList_Handler,
 		},
 		{
 			MethodName: "GetAppArchiveList",

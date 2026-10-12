@@ -39,6 +39,25 @@ service OpenAppService {
   //    原项目的不一致，照搬。
   // ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
   // ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+  // 一级平台用户商品列表（分页）
+  //
+  // 原实现 OpenAppController::userGoodsList -> `$this->dataLists(new AppUserGoodsLists())`
+  //
+  // **四张表**：MarketSales
+  //	INNER JOIN x_app_archive AppArchive ON AppArchive.id = MarketSales.archive_id
+  //	INNER JOIN x_app        app        ON MarketSales.app_id = app.id
+  //	INNER JOIN x_app_auth   app_auth   ON MarketSales.app_auth_id = app_auth.id
+  // order: MarketSales.id desc   12 个字段
+  //
+  // ⚠️ scene: 1=待上架(OFFLINE) 2=销售中(ON_SALE+sale_lock<>LOCK) 3=兑换中(ON_SALE+LOCK)
+  //    **未传 / 其它 = OFFLINE**（default 与 case 1 相同）
+  // ⚠️ app_uid 会去查 AppAuth；**查不到时不追加任何条件**（静默放宽）。
+  // ⚠️ images 是 JSON 字符串 -> 逐行 json_decode 成数组。
+  // 🔴 count() 只有 hasWhere('archive') **一个 JOIN**（lists 有三个）—— 又一处不一致。
+  rpc GetUserGoodsList(GetUserGoodsListRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/open/userGoodsList"};
+  }
+
   // 一级平台艺术品档案列表（分页）
   //
   // 原实现 OpenAppController::appArchiveList -> `$this->dataLists(new AppArchiveLists())`
@@ -157,4 +176,12 @@ message GetAppArchiveListRequest {
   google.protobuf.Int64Value id = 2 [json_name = "id"];
   // 可选：按藏品筛（!empty 才生效）
   string collection_id = 3 [json_name = "collection_id"];
+}
+message GetUserGoodsListRequest {
+  // 对应 `$this->params['scene']`：1=待上架 2=销售中 3=兑换中；其它/未传=待上架
+  google.protobuf.Int32Value scene = 1 [json_name = "scene"];
+  // 对应 `$this->params['app_id']`（!empty 才生效）
+  google.protobuf.Int64Value app_id = 2 [json_name = "app_id"];
+  // 对应 `$this->params['app_uid']`（!empty 才触发 AppAuth 查询）
+  string app_uid = 3 [json_name = "app_uid"];
 }

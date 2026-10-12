@@ -26,21 +26,10 @@ const OperationOpenAppServiceGetAuthMyUserList = "/xtravel.v1.OpenAppService/Get
 const OperationOpenAppServiceGetAuthUrl = "/xtravel.v1.OpenAppService/GetAuthUrl"
 const OperationOpenAppServiceGetAuthUserDetail = "/xtravel.v1.OpenAppService/GetAuthUserDetail"
 const OperationOpenAppServiceGetAuthUserList = "/xtravel.v1.OpenAppService/GetAuthUserList"
+const OperationOpenAppServiceGetUserGoodsList = "/xtravel.v1.OpenAppService/GetUserGoodsList"
 
 type OpenAppServiceHTTPServer interface {
-	// GetAppArchiveList 三方平台详情
-	//
-	// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
-	//
-	//	App::where('id', $app_id ?: $this->params['app_id'])
-	//	    ->field('id, name, logo, type, fee_rate, flag')
-	//	    ->findOrEmpty()->toArray();
-	//
-	// ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
-	//    原项目的不一致，照搬。
-	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
-	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
-	// 一级平台艺术品档案列表（分页）
+	// GetAppArchiveList 一级平台艺术品档案列表（分页）
 	//
 	// 原实现 OpenAppController::appArchiveList -> `$this->dataLists(new AppArchiveLists())`
 	// 校验 AppArchiveListValidate: app_id => require
@@ -118,11 +107,40 @@ type OpenAppServiceHTTPServer interface {
 	// ⚠️ app_info 查不到时输出 **null**（PHP Undefined array key）。
 	// 🔴 count() **没有任何 JOIN**（lists 有）—— 又一处 lists/count 不一致。
 	GetAuthUserList(context.Context, *GetAuthUserListRequest) (*RawData, error)
+	// GetUserGoodsList 三方平台详情
+	//
+	// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
+	//
+	//	App::where('id', $app_id ?: $this->params['app_id'])
+	//	    ->field('id, name, logo, type, fee_rate, flag')
+	//	    ->findOrEmpty()->toArray();
+	//
+	// ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
+	//    原项目的不一致，照搬。
+	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
+	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 一级平台用户商品列表（分页）
+	//
+	// 原实现 OpenAppController::userGoodsList -> `$this->dataLists(new AppUserGoodsLists())`
+	//
+	// **四张表**：MarketSales
+	//	INNER JOIN x_app_archive AppArchive ON AppArchive.id = MarketSales.archive_id
+	//	INNER JOIN x_app        app        ON MarketSales.app_id = app.id
+	//	INNER JOIN x_app_auth   app_auth   ON MarketSales.app_auth_id = app_auth.id
+	// order: MarketSales.id desc   12 个字段
+	//
+	// ⚠️ scene: 1=待上架(OFFLINE) 2=销售中(ON_SALE+sale_lock<>LOCK) 3=兑换中(ON_SALE+LOCK)
+	//    **未传 / 其它 = OFFLINE**（default 与 case 1 相同）
+	// ⚠️ app_uid 会去查 AppAuth；**查不到时不追加任何条件**（静默放宽）。
+	// ⚠️ images 是 JSON 字符串 -> 逐行 json_decode 成数组。
+	// 🔴 count() 只有 hasWhere('archive') **一个 JOIN**（lists 有三个）—— 又一处不一致。
+	GetUserGoodsList(context.Context, *GetUserGoodsListRequest) (*RawData, error)
 }
 
 func RegisterOpenAppServiceHTTPServer(s *http.Server, srv OpenAppServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/v1/open/appList", _OpenAppService_GetAppList0_HTTP_Handler(srv))
+	r.GET("/v1/open/userGoodsList", _OpenAppService_GetUserGoodsList0_HTTP_Handler(srv))
 	r.GET("/v1/open/appArchiveList", _OpenAppService_GetAppArchiveList0_HTTP_Handler(srv))
 	r.GET("/v1/open/authUserDetail", _OpenAppService_GetAuthUserDetail0_HTTP_Handler(srv))
 	r.GET("/v1/open/authUserList", _OpenAppService_GetAuthUserList0_HTTP_Handler(srv))
@@ -140,6 +158,25 @@ func _OpenAppService_GetAppList0_HTTP_Handler(srv OpenAppServiceHTTPServer) func
 		http.SetOperation(ctx, OperationOpenAppServiceGetAppList)
 		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
 			return srv.GetAppList(ctx, req.(*GetAppListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _OpenAppService_GetUserGoodsList0_HTTP_Handler(srv OpenAppServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetUserGoodsListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationOpenAppServiceGetUserGoodsList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetUserGoodsList(ctx, req.(*GetUserGoodsListRequest))
 		})
 		out, err := h(ctx, &in)
 		if err != nil {
@@ -265,19 +302,7 @@ func _OpenAppService_GetAppDetail0_HTTP_Handler(srv OpenAppServiceHTTPServer) fu
 }
 
 type OpenAppServiceHTTPClient interface {
-	// GetAppArchiveList 三方平台详情
-	//
-	// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
-	//
-	//	App::where('id', $app_id ?: $this->params['app_id'])
-	//	    ->field('id, name, logo, type, fee_rate, flag')
-	//	    ->findOrEmpty()->toArray();
-	//
-	// ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
-	//    原项目的不一致，照搬。
-	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
-	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
-	// 一级平台艺术品档案列表（分页）
+	// GetAppArchiveList 一级平台艺术品档案列表（分页）
 	//
 	// 原实现 OpenAppController::appArchiveList -> `$this->dataLists(new AppArchiveLists())`
 	// 校验 AppArchiveListValidate: app_id => require
@@ -355,6 +380,34 @@ type OpenAppServiceHTTPClient interface {
 	// ⚠️ app_info 查不到时输出 **null**（PHP Undefined array key）。
 	// 🔴 count() **没有任何 JOIN**（lists 有）—— 又一处 lists/count 不一致。
 	GetAuthUserList(ctx context.Context, req *GetAuthUserListRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// GetUserGoodsList 三方平台详情
+	//
+	// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
+	//
+	//	App::where('id', $app_id ?: $this->params['app_id'])
+	//	    ->field('id, name, logo, type, fee_rate, flag')
+	//	    ->findOrEmpty()->toArray();
+	//
+	// ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
+	//    原项目的不一致，照搬。
+	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
+	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 一级平台用户商品列表（分页）
+	//
+	// 原实现 OpenAppController::userGoodsList -> `$this->dataLists(new AppUserGoodsLists())`
+	//
+	// **四张表**：MarketSales
+	//	INNER JOIN x_app_archive AppArchive ON AppArchive.id = MarketSales.archive_id
+	//	INNER JOIN x_app        app        ON MarketSales.app_id = app.id
+	//	INNER JOIN x_app_auth   app_auth   ON MarketSales.app_auth_id = app_auth.id
+	// order: MarketSales.id desc   12 个字段
+	//
+	// ⚠️ scene: 1=待上架(OFFLINE) 2=销售中(ON_SALE+sale_lock<>LOCK) 3=兑换中(ON_SALE+LOCK)
+	//    **未传 / 其它 = OFFLINE**（default 与 case 1 相同）
+	// ⚠️ app_uid 会去查 AppAuth；**查不到时不追加任何条件**（静默放宽）。
+	// ⚠️ images 是 JSON 字符串 -> 逐行 json_decode 成数组。
+	// 🔴 count() 只有 hasWhere('archive') **一个 JOIN**（lists 有三个）—— 又一处不一致。
+	GetUserGoodsList(ctx context.Context, req *GetUserGoodsListRequest, opts ...http.CallOption) (rsp *RawData, err error)
 }
 
 type OpenAppServiceHTTPClientImpl struct {
@@ -365,21 +418,7 @@ func NewOpenAppServiceHTTPClient(client *http.Client) OpenAppServiceHTTPClient {
 	return &OpenAppServiceHTTPClientImpl{client}
 }
 
-// GetAppArchiveList 三方平台详情
-//
-// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
-//
-//	App::where('id', $app_id ?: $this->params['app_id'])
-//	    ->field('id, name, logo, type, fee_rate, flag')
-//	    ->findOrEmpty()->toArray();
-//
-// ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
-//
-//	原项目的不一致，照搬。
-//
-// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
-// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
-// 一级平台艺术品档案列表（分页）
+// GetAppArchiveList 一级平台艺术品档案列表（分页）
 //
 // 原实现 OpenAppController::appArchiveList -> `$this->dataLists(new AppArchiveLists())`
 // 校验 AppArchiveListValidate: app_id => require
@@ -539,6 +578,52 @@ func (c *OpenAppServiceHTTPClientImpl) GetAuthUserList(ctx context.Context, in *
 	pattern := "/v1/open/authUserList"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationOpenAppServiceGetAuthUserList))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetUserGoodsList 三方平台详情
+//
+// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
+//
+//	App::where('id', $app_id ?: $this->params['app_id'])
+//	    ->field('id, name, logo, type, fee_rate, flag')
+//	    ->findOrEmpty()->toArray();
+//
+// ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
+//
+//	原项目的不一致，照搬。
+//
+// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
+// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+// 一级平台用户商品列表（分页）
+//
+// 原实现 OpenAppController::userGoodsList -> `$this->dataLists(new AppUserGoodsLists())`
+//
+// **四张表**：MarketSales
+//
+//	INNER JOIN x_app_archive AppArchive ON AppArchive.id = MarketSales.archive_id
+//	INNER JOIN x_app        app        ON MarketSales.app_id = app.id
+//	INNER JOIN x_app_auth   app_auth   ON MarketSales.app_auth_id = app_auth.id
+//
+// order: MarketSales.id desc   12 个字段
+//
+// ⚠️ scene: 1=待上架(OFFLINE) 2=销售中(ON_SALE+sale_lock<>LOCK) 3=兑换中(ON_SALE+LOCK)
+//
+//	**未传 / 其它 = OFFLINE**（default 与 case 1 相同）
+//
+// ⚠️ app_uid 会去查 AppAuth；**查不到时不追加任何条件**（静默放宽）。
+// ⚠️ images 是 JSON 字符串 -> 逐行 json_decode 成数组。
+// 🔴 count() 只有 hasWhere('archive') **一个 JOIN**（lists 有三个）—— 又一处不一致。
+func (c *OpenAppServiceHTTPClientImpl) GetUserGoodsList(ctx context.Context, in *GetUserGoodsListRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/open/userGoodsList"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationOpenAppServiceGetUserGoodsList))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

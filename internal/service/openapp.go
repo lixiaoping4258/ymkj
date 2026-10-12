@@ -16,10 +16,11 @@ type OpenAppService struct {
 	authU  *biz.AuthUserUsecase
 	authUD *biz.AuthUserDetailUsecase
 	arch   *biz.AppArchiveUsecase
+	goods  *biz.AppUserGoodsUsecase
 }
 
-func NewOpenAppService(app *biz.OpenAppUsecase, authMy *biz.AuthMyUserUsecase, authU *biz.AuthUserUsecase, authUD *biz.AuthUserDetailUsecase, arch *biz.AppArchiveUsecase) *OpenAppService {
-	return &OpenAppService{app: app, authMy: authMy, authU: authU, authUD: authUD, arch: arch}
+func NewOpenAppService(app *biz.OpenAppUsecase, authMy *biz.AuthMyUserUsecase, authU *biz.AuthUserUsecase, authUD *biz.AuthUserDetailUsecase, arch *biz.AppArchiveUsecase, goods *biz.AppUserGoodsUsecase) *OpenAppService {
+	return &OpenAppService{app: app, authMy: authMy, authU: authU, authUD: authUD, arch: arch, goods: goods}
 }
 
 // GetAppList 对应 OpenAppController::appList（GET /v1/open/appList）。
@@ -321,6 +322,43 @@ func (s *OpenAppService) GetAppArchiveList(
 		row["app_info"] = x.AppInfo // `?? []` -> 查不到时也是 []
 		rows = append(rows, row)
 	}
+	body, merr := biz.MarshalNoHTMLEscape(map[string]any{
+		"lists":     rows,
+		"count":     ld.Count,
+		"page_no":   ld.PageNo,
+		"page_size": ld.PageSize,
+		"extend":    ld.Extend,
+	})
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
+}
+
+// GetUserGoodsList 对应 OpenAppController::userGoodsList（GET /v1/open/userGoodsList）。
+//
+// 原实现：`return $this->dataLists(new AppUserGoodsLists());`
+func (s *OpenAppService) GetUserGoodsList(
+	ctx context.Context, req *v1.GetUserGoodsListRequest,
+) (*v1.RawData, error) {
+	q := biz.AppUserGoodsQuery{
+		UserID: uint32(biz.UserIDFromContext(ctx)),
+		AppUID: req.GetAppUid(),
+	}
+	if req.Scene != nil {
+		q.Scene = req.Scene.Value
+	}
+	if req.AppId != nil {
+		q.AppID = req.AppId.Value
+	}
+	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
+	ld, err := s.goods.List(ctx, q, p)
+	if err != nil {
+		return nil, err
+	}
+	items, _ := ld.Lists.([]map[string]any)
+	rows := make([]map[string]any, 0, len(items))
+	rows = append(rows, items...)
 	body, merr := biz.MarshalNoHTMLEscape(map[string]any{
 		"lists":     rows,
 		"count":     ld.Count,
