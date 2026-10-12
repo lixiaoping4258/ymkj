@@ -1397,6 +1397,44 @@ Go 会把 `<` `>` `&` 转义成 `\u003c` 等，**PHP 的 `json_encode` 不转义
 `PayWay` 声明了 `protected $name = 'dev_pay_way'` → 真实表是 **`x_dev_pay_way`**，
 按类名猜成 `x_pay_way` 会报 `Table doesn't exist`。
 
+### 8.5 🔴 `fetchSql` 探测必须用**与原代码相同的入口**
+
+**本轮我差点因此改错代码**：用真实 PHP 的 `fetchSql(true)` 探测 `AppAuth` 的 SQL 时，
+我写的是 **`Db::name('app_auth')`**（查询构造器），得到：
+
+```sql
+SELECT COUNT(*) FROM `x_app_auth` WHERE ( `uid` = 1 AND `app_id` = ... )
+```
+
+**没有 `delete_time IS NULL`！** 而表里明明有 `delete_time` 列 ——
+我据此以为"`AppAuth` 没开软删除"，准备**删掉**已实现代码里的软删除过滤。
+
+改之前又核对了一次 `AppAuth` 模型，发现它**确实有**：
+
+```php
+use SoftDelete;
+protected $deleteTime = 'delete_time';
+```
+
+问题出在**入口不同**：原文用的是 `AppAuth::where(...)`（**模型**），
+而我探测时用的是 `Db::name(...)`（**查询构造器**）。
+
+**查询构造器不应用任何模型行为** —— 软删除、获取器（`getXxxAttr`）、
+自动时间戳、字段类型转换**全都没有**。
+
+换成模型重新探测，SQL 正确了：
+
+```sql
+SELECT COUNT(*) FROM `x_app_auth` WHERE ( ... ) AND `x_app_auth`.`delete_time` IS NULL
+```
+
+**规则**：
+- 原文写 `Model::where(...)` → 探测时必须写 `Model::where(...)`
+- 原文写 `Db::name(...)` / `Db::table(...)` → 才可以写查询构造器
+- **模型的软删除、获取器会显著改变 SQL 与输出**，这两者不能混用
+
+> 这条与第 2 条（join 前缀）是同一类：**探测脚本必须忠实还原原文的调用方式**，
+> 否则会得出错误结论、进而改错代码。第 9 条的软删除判断也应以**模型的 SQL** 为准。
 ### 9. 软删除列必须**逐个表核实**
 
 ThinkPHP 模型会自动加 `delete_time IS NULL`，Go 侧必须显式加。但**不是每张表都有**：
@@ -1410,6 +1448,10 @@ ThinkPHP 模型会自动加 `delete_time IS NULL`，Go 侧必须显式加。但*
 | `x_messages`（用 `is_del` 而非软删除） | `x_app` |
 
 **加了不存在的列会直接报 SQL 错误；不加已有的列会多返回数据。**
+
+> ⚠️ 判断某张表"有没有软删除"，**要以模型的 SQL 为准**（见第 8.5 条）——
+> 表里有 `delete_time` 列**不代表**模型开了软删除，反之模型开了就一定会有该列。
+> 本轮 `x_app_auth` 就是"表有列 + 模型也开了"的例子。
 
 ### 10. 跨语言函数语义**必须实跑对拍，不能手算**
 
