@@ -824,6 +824,92 @@ func (x *GetMessageDetailRequest) GetId() *wrapperspb.Int64Value {
 	return nil
 }
 
+type DeleteAddressRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 对应 `$params['id']`；规则 require|number
+	Id            *wrapperspb.Int64Value `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteAddressRequest) Reset() {
+	*x = DeleteAddressRequest{}
+	mi := &file_api_xtravel_v1_user_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteAddressRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteAddressRequest) ProtoMessage() {}
+
+func (x *DeleteAddressRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_user_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteAddressRequest.ProtoReflect.Descriptor instead.
+func (*DeleteAddressRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_user_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *DeleteAddressRequest) GetId() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.Id
+	}
+	return nil
+}
+
+// DeleteAddressReply 空消息 —— 响应体完全由 RawBody() 自定义。
+//
+// 为什么不用 RawData：`success(”删除成功”)` 的 **msg 是 "删除成功"**，
+// 而 RawData 的 Envelope 固定 msg=""（它是给普通 data() 接口用的）。
+// 这里复用为 index/test 建的 httpx.RawResponder 机制，直接给完整响应体。
+type DeleteAddressReply struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteAddressReply) Reset() {
+	*x = DeleteAddressReply{}
+	mi := &file_api_xtravel_v1_user_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteAddressReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteAddressReply) ProtoMessage() {}
+
+func (x *DeleteAddressReply) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_user_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteAddressReply.ProtoReflect.Descriptor instead.
+func (*DeleteAddressReply) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_user_proto_rawDescGZIP(), []int{15}
+}
+
 var File_api_xtravel_v1_user_proto protoreflect.FileDescriptor
 
 const file_api_xtravel_v1_user_proto_rawDesc = "" +
@@ -879,7 +965,10 @@ const file_api_xtravel_v1_user_proto_rawDesc = "" +
 	"\x18SetMessageOneReadRequest\x12+\n" +
 	"\x02id\x18\x01 \x01(\v2\x1b.google.protobuf.Int64ValueR\x02id\"F\n" +
 	"\x17GetMessageDetailRequest\x12+\n" +
-	"\x02id\x18\x01 \x01(\v2\x1b.google.protobuf.Int64ValueR\x02id2\x90\b\n" +
+	"\x02id\x18\x01 \x01(\v2\x1b.google.protobuf.Int64ValueR\x02id\"C\n" +
+	"\x14DeleteAddressRequest\x12+\n" +
+	"\x02id\x18\x01 \x01(\v2\x1b.google.protobuf.Int64ValueR\x02id\"\x14\n" +
+	"\x12DeleteAddressReply2\x84\t\n" +
 	"\vUserService\x12b\n" +
 	"\vGetUserInfo\x12\x1e.xtravel.v1.GetUserInfoRequest\x1a\x1c.xtravel.v1.GetUserInfoReply\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/user/info\x12l\n" +
 	"\x10GetUserNoticeNew\x12#.xtravel.v1.GetUserNoticeNewRequest\x1a\x13.xtravel.v1.RawData\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/user/notice/getNew\x12\x7f\n" +
@@ -889,7 +978,8 @@ const file_api_xtravel_v1_user_proto_rawDesc = "" +
 	"\x12GetUnregisterCheck\x12%.xtravel.v1.GetUnregisterCheckRequest\x1a#.xtravel.v1.GetUnregisterCheckReply\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/user/unregisr/check\x12v\n" +
 	"\x11SetMessageAllRead\x12$.xtravel.v1.SetMessageAllReadRequest\x1a\x13.xtravel.v1.RawData\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/user/message/setAllRead\x12v\n" +
 	"\x11SetMessageOneRead\x12$.xtravel.v1.SetMessageOneReadRequest\x1a\x13.xtravel.v1.RawData\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/user/message/setOneRead\x12m\n" +
-	"\x10GetMessageDetail\x12#.xtravel.v1.GetMessageDetailRequest\x1a\x13.xtravel.v1.RawData\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/user/message/detailB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
+	"\x10GetMessageDetail\x12#.xtravel.v1.GetMessageDetailRequest\x1a\x13.xtravel.v1.RawData\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/user/message/detail\x12r\n" +
+	"\rDeleteAddress\x12 .xtravel.v1.DeleteAddressRequest\x1a\x1e.xtravel.v1.DeleteAddressReply\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/user/address/deleteB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
 
 var (
 	file_api_xtravel_v1_user_proto_rawDescOnce sync.Once
@@ -903,7 +993,7 @@ func file_api_xtravel_v1_user_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_user_proto_rawDescData
 }
 
-var file_api_xtravel_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_api_xtravel_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_api_xtravel_v1_user_proto_goTypes = []any{
 	(*GetUserInfoRequest)(nil),        // 0: xtravel.v1.GetUserInfoRequest
 	(*GetUserInfoReply)(nil),          // 1: xtravel.v1.GetUserInfoReply
@@ -919,43 +1009,48 @@ var file_api_xtravel_v1_user_proto_goTypes = []any{
 	(*SetMessageAllReadRequest)(nil),  // 11: xtravel.v1.SetMessageAllReadRequest
 	(*SetMessageOneReadRequest)(nil),  // 12: xtravel.v1.SetMessageOneReadRequest
 	(*GetMessageDetailRequest)(nil),   // 13: xtravel.v1.GetMessageDetailRequest
-	(*wrapperspb.StringValue)(nil),    // 14: google.protobuf.StringValue
-	(*wrapperspb.Int32Value)(nil),     // 15: google.protobuf.Int32Value
-	(*wrapperspb.Int64Value)(nil),     // 16: google.protobuf.Int64Value
-	(*RawData)(nil),                   // 17: xtravel.v1.RawData
+	(*DeleteAddressRequest)(nil),      // 14: xtravel.v1.DeleteAddressRequest
+	(*DeleteAddressReply)(nil),        // 15: xtravel.v1.DeleteAddressReply
+	(*wrapperspb.StringValue)(nil),    // 16: google.protobuf.StringValue
+	(*wrapperspb.Int32Value)(nil),     // 17: google.protobuf.Int32Value
+	(*wrapperspb.Int64Value)(nil),     // 18: google.protobuf.Int64Value
+	(*RawData)(nil),                   // 19: xtravel.v1.RawData
 }
 var file_api_xtravel_v1_user_proto_depIdxs = []int32{
-	14, // 0: xtravel.v1.GetUserInfoReply.user_money:type_name -> google.protobuf.StringValue
-	14, // 1: xtravel.v1.GetUserInfoReply.opt_pwd:type_name -> google.protobuf.StringValue
+	16, // 0: xtravel.v1.GetUserInfoReply.user_money:type_name -> google.protobuf.StringValue
+	16, // 1: xtravel.v1.GetUserInfoReply.opt_pwd:type_name -> google.protobuf.StringValue
 	2,  // 2: xtravel.v1.GetUserInfoReply.user_code_auth:type_name -> xtravel.v1.UserCodeAuth
-	14, // 3: xtravel.v1.GetRealInfoReply.birthday:type_name -> google.protobuf.StringValue
-	15, // 4: xtravel.v1.GetRealInfoReply.gender:type_name -> google.protobuf.Int32Value
-	14, // 5: xtravel.v1.GetRealInfoReply.address:type_name -> google.protobuf.StringValue
-	16, // 6: xtravel.v1.SetMessageOneReadRequest.id:type_name -> google.protobuf.Int64Value
-	16, // 7: xtravel.v1.GetMessageDetailRequest.id:type_name -> google.protobuf.Int64Value
-	0,  // 8: xtravel.v1.UserService.GetUserInfo:input_type -> xtravel.v1.GetUserInfoRequest
-	3,  // 9: xtravel.v1.UserService.GetUserNoticeNew:input_type -> xtravel.v1.GetUserNoticeNewRequest
-	4,  // 10: xtravel.v1.UserService.GetAddressDefault:input_type -> xtravel.v1.GetAddressDefaultRequest
-	6,  // 11: xtravel.v1.UserService.GetAddressList:input_type -> xtravel.v1.GetAddressListRequest
-	7,  // 12: xtravel.v1.UserService.GetRealInfo:input_type -> xtravel.v1.GetRealInfoRequest
-	9,  // 13: xtravel.v1.UserService.GetUnregisterCheck:input_type -> xtravel.v1.GetUnregisterCheckRequest
-	11, // 14: xtravel.v1.UserService.SetMessageAllRead:input_type -> xtravel.v1.SetMessageAllReadRequest
-	12, // 15: xtravel.v1.UserService.SetMessageOneRead:input_type -> xtravel.v1.SetMessageOneReadRequest
-	13, // 16: xtravel.v1.UserService.GetMessageDetail:input_type -> xtravel.v1.GetMessageDetailRequest
-	1,  // 17: xtravel.v1.UserService.GetUserInfo:output_type -> xtravel.v1.GetUserInfoReply
-	17, // 18: xtravel.v1.UserService.GetUserNoticeNew:output_type -> xtravel.v1.RawData
-	5,  // 19: xtravel.v1.UserService.GetAddressDefault:output_type -> xtravel.v1.GetAddressDefaultReply
-	17, // 20: xtravel.v1.UserService.GetAddressList:output_type -> xtravel.v1.RawData
-	8,  // 21: xtravel.v1.UserService.GetRealInfo:output_type -> xtravel.v1.GetRealInfoReply
-	10, // 22: xtravel.v1.UserService.GetUnregisterCheck:output_type -> xtravel.v1.GetUnregisterCheckReply
-	17, // 23: xtravel.v1.UserService.SetMessageAllRead:output_type -> xtravel.v1.RawData
-	17, // 24: xtravel.v1.UserService.SetMessageOneRead:output_type -> xtravel.v1.RawData
-	17, // 25: xtravel.v1.UserService.GetMessageDetail:output_type -> xtravel.v1.RawData
-	17, // [17:26] is the sub-list for method output_type
-	8,  // [8:17] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	16, // 3: xtravel.v1.GetRealInfoReply.birthday:type_name -> google.protobuf.StringValue
+	17, // 4: xtravel.v1.GetRealInfoReply.gender:type_name -> google.protobuf.Int32Value
+	16, // 5: xtravel.v1.GetRealInfoReply.address:type_name -> google.protobuf.StringValue
+	18, // 6: xtravel.v1.SetMessageOneReadRequest.id:type_name -> google.protobuf.Int64Value
+	18, // 7: xtravel.v1.GetMessageDetailRequest.id:type_name -> google.protobuf.Int64Value
+	18, // 8: xtravel.v1.DeleteAddressRequest.id:type_name -> google.protobuf.Int64Value
+	0,  // 9: xtravel.v1.UserService.GetUserInfo:input_type -> xtravel.v1.GetUserInfoRequest
+	3,  // 10: xtravel.v1.UserService.GetUserNoticeNew:input_type -> xtravel.v1.GetUserNoticeNewRequest
+	4,  // 11: xtravel.v1.UserService.GetAddressDefault:input_type -> xtravel.v1.GetAddressDefaultRequest
+	6,  // 12: xtravel.v1.UserService.GetAddressList:input_type -> xtravel.v1.GetAddressListRequest
+	7,  // 13: xtravel.v1.UserService.GetRealInfo:input_type -> xtravel.v1.GetRealInfoRequest
+	9,  // 14: xtravel.v1.UserService.GetUnregisterCheck:input_type -> xtravel.v1.GetUnregisterCheckRequest
+	11, // 15: xtravel.v1.UserService.SetMessageAllRead:input_type -> xtravel.v1.SetMessageAllReadRequest
+	12, // 16: xtravel.v1.UserService.SetMessageOneRead:input_type -> xtravel.v1.SetMessageOneReadRequest
+	13, // 17: xtravel.v1.UserService.GetMessageDetail:input_type -> xtravel.v1.GetMessageDetailRequest
+	14, // 18: xtravel.v1.UserService.DeleteAddress:input_type -> xtravel.v1.DeleteAddressRequest
+	1,  // 19: xtravel.v1.UserService.GetUserInfo:output_type -> xtravel.v1.GetUserInfoReply
+	19, // 20: xtravel.v1.UserService.GetUserNoticeNew:output_type -> xtravel.v1.RawData
+	5,  // 21: xtravel.v1.UserService.GetAddressDefault:output_type -> xtravel.v1.GetAddressDefaultReply
+	19, // 22: xtravel.v1.UserService.GetAddressList:output_type -> xtravel.v1.RawData
+	8,  // 23: xtravel.v1.UserService.GetRealInfo:output_type -> xtravel.v1.GetRealInfoReply
+	10, // 24: xtravel.v1.UserService.GetUnregisterCheck:output_type -> xtravel.v1.GetUnregisterCheckReply
+	19, // 25: xtravel.v1.UserService.SetMessageAllRead:output_type -> xtravel.v1.RawData
+	19, // 26: xtravel.v1.UserService.SetMessageOneRead:output_type -> xtravel.v1.RawData
+	19, // 27: xtravel.v1.UserService.GetMessageDetail:output_type -> xtravel.v1.RawData
+	15, // 28: xtravel.v1.UserService.DeleteAddress:output_type -> xtravel.v1.DeleteAddressReply
+	19, // [19:29] is the sub-list for method output_type
+	9,  // [9:19] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_api_xtravel_v1_user_proto_init() }
@@ -970,7 +1065,7 @@ func file_api_xtravel_v1_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_user_proto_rawDesc), len(file_api_xtravel_v1_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

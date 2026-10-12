@@ -28,6 +28,7 @@ const (
 	UserService_SetMessageAllRead_FullMethodName  = "/xtravel.v1.UserService/SetMessageAllRead"
 	UserService_SetMessageOneRead_FullMethodName  = "/xtravel.v1.UserService/SetMessageOneRead"
 	UserService_GetMessageDetail_FullMethodName   = "/xtravel.v1.UserService/GetMessageDetail"
+	UserService_DeleteAddress_FullMethodName      = "/xtravel.v1.UserService/DeleteAddress"
 )
 
 // UserServiceClient is the client API for UserService service.
@@ -167,6 +168,26 @@ type UserServiceClient interface {
 	//
 	// 用 RawData：11 个键混来自两张表，且 create_time 未重新格式化。
 	GetMessageDetail(ctx context.Context, in *GetMessageDetailRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 删除地址
+	//
+	// 原实现 AddressController::delete -> AddressLogic::delete($id, $userId)
+	//
+	//	$address = UserAddress::where(['id'=>$id, 'user_id'=>$userId])->find();
+	//	if (!$address) { self::setError('未找到地址记录'); return false; }
+	//	$address->delete();        // ⚠️ **硬删除**（表没有 delete_time 列）
+	//
+	// 控制器：`return $this->success('删除成功');` -> msg 是 "删除成功"，data 是空数组
+	// 校验 UserAddressDeleteValidate:
+	//
+	//	'id.require' => '地址记录ID不能为空'
+	//	'id.number'  => '地址记录ID不正确'
+	//
+	// 🔴🔴 **这是用 GET 做删除**（Route::get('address/delete', ...)）。
+	//
+	//	迁移时必须按写操作对待：写权限、幂等、以及被预取/爬虫误触发的风险。
+	//
+	// 需登录。
+	DeleteAddress(ctx context.Context, in *DeleteAddressRequest, opts ...grpc.CallOption) (*DeleteAddressReply, error)
 }
 
 type userServiceClient struct {
@@ -261,6 +282,16 @@ func (c *userServiceClient) GetMessageDetail(ctx context.Context, in *GetMessage
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, UserService_GetMessageDetail_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) DeleteAddress(ctx context.Context, in *DeleteAddressRequest, opts ...grpc.CallOption) (*DeleteAddressReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteAddressReply)
+	err := c.cc.Invoke(ctx, UserService_DeleteAddress_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -404,6 +435,26 @@ type UserServiceServer interface {
 	//
 	// 用 RawData：11 个键混来自两张表，且 create_time 未重新格式化。
 	GetMessageDetail(context.Context, *GetMessageDetailRequest) (*RawData, error)
+	// 删除地址
+	//
+	// 原实现 AddressController::delete -> AddressLogic::delete($id, $userId)
+	//
+	//	$address = UserAddress::where(['id'=>$id, 'user_id'=>$userId])->find();
+	//	if (!$address) { self::setError('未找到地址记录'); return false; }
+	//	$address->delete();        // ⚠️ **硬删除**（表没有 delete_time 列）
+	//
+	// 控制器：`return $this->success('删除成功');` -> msg 是 "删除成功"，data 是空数组
+	// 校验 UserAddressDeleteValidate:
+	//
+	//	'id.require' => '地址记录ID不能为空'
+	//	'id.number'  => '地址记录ID不正确'
+	//
+	// 🔴🔴 **这是用 GET 做删除**（Route::get('address/delete', ...)）。
+	//
+	//	迁移时必须按写操作对待：写权限、幂等、以及被预取/爬虫误触发的风险。
+	//
+	// 需登录。
+	DeleteAddress(context.Context, *DeleteAddressRequest) (*DeleteAddressReply, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -440,6 +491,9 @@ func (UnimplementedUserServiceServer) SetMessageOneRead(context.Context, *SetMes
 }
 func (UnimplementedUserServiceServer) GetMessageDetail(context.Context, *GetMessageDetailRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetMessageDetail not implemented")
+}
+func (UnimplementedUserServiceServer) DeleteAddress(context.Context, *DeleteAddressRequest) (*DeleteAddressReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteAddress not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -624,6 +678,24 @@ func _UserService_GetMessageDetail_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_DeleteAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteAddressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).DeleteAddress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_DeleteAddress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).DeleteAddress(ctx, req.(*DeleteAddressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -666,6 +738,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMessageDetail",
 			Handler:    _UserService_GetMessageDetail_Handler,
+		},
+		{
+			MethodName: "DeleteAddress",
+			Handler:    _UserService_DeleteAddress_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

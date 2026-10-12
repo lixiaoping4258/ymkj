@@ -19,6 +19,7 @@ var _ = binding.EncodeURL
 
 const _ = http.SupportPackageIsVersion1
 
+const OperationUserServiceDeleteAddress = "/xtravel.v1.UserService/DeleteAddress"
 const OperationUserServiceGetAddressDefault = "/xtravel.v1.UserService/GetAddressDefault"
 const OperationUserServiceGetAddressList = "/xtravel.v1.UserService/GetAddressList"
 const OperationUserServiceGetMessageDetail = "/xtravel.v1.UserService/GetMessageDetail"
@@ -30,6 +31,23 @@ const OperationUserServiceSetMessageAllRead = "/xtravel.v1.UserService/SetMessag
 const OperationUserServiceSetMessageOneRead = "/xtravel.v1.UserService/SetMessageOneRead"
 
 type UserServiceHTTPServer interface {
+	// DeleteAddress 删除地址
+	//
+	// 原实现 AddressController::delete -> AddressLogic::delete($id, $userId)
+	//
+	//	$address = UserAddress::where(['id'=>$id, 'user_id'=>$userId])->find();
+	//	if (!$address) { self::setError('未找到地址记录'); return false; }
+	//	$address->delete();        // ⚠️ **硬删除**（表没有 delete_time 列）
+	//
+	// 控制器：`return $this->success('删除成功');` -> msg 是 "删除成功"，data 是空数组
+	// 校验 UserAddressDeleteValidate:
+	//	'id.require' => '地址记录ID不能为空'
+	//	'id.number'  => '地址记录ID不正确'
+	//
+	// 🔴🔴 **这是用 GET 做删除**（Route::get('address/delete', ...)）。
+	//    迁移时必须按写操作对待：写权限、幂等、以及被预取/爬虫误触发的风险。
+	// 需登录。
+	DeleteAddress(context.Context, *DeleteAddressRequest) (*DeleteAddressReply, error)
 	// GetAddressDefault 用户默认地址
 	//
 	// 原实现 v1/user/AddressController::addressDefault -> AddressLogic::addressDefault($params,$userId)
@@ -170,6 +188,7 @@ func RegisterUserServiceHTTPServer(s *http.Server, srv UserServiceHTTPServer) {
 	r.POST("/v1/user/message/setAllRead", _UserService_SetMessageAllRead0_HTTP_Handler(srv))
 	r.POST("/v1/user/message/setOneRead", _UserService_SetMessageOneRead0_HTTP_Handler(srv))
 	r.GET("/v1/user/message/detail", _UserService_GetMessageDetail0_HTTP_Handler(srv))
+	r.GET("/v1/user/address/delete", _UserService_DeleteAddress0_HTTP_Handler(srv))
 }
 
 func _UserService_GetUserInfo0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
@@ -349,7 +368,43 @@ func _UserService_GetMessageDetail0_HTTP_Handler(srv UserServiceHTTPServer) func
 	}
 }
 
+func _UserService_DeleteAddress0_HTTP_Handler(srv UserServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in DeleteAddressRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserServiceDeleteAddress)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.DeleteAddress(ctx, req.(*DeleteAddressRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*DeleteAddressReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type UserServiceHTTPClient interface {
+	// DeleteAddress 删除地址
+	//
+	// 原实现 AddressController::delete -> AddressLogic::delete($id, $userId)
+	//
+	//	$address = UserAddress::where(['id'=>$id, 'user_id'=>$userId])->find();
+	//	if (!$address) { self::setError('未找到地址记录'); return false; }
+	//	$address->delete();        // ⚠️ **硬删除**（表没有 delete_time 列）
+	//
+	// 控制器：`return $this->success('删除成功');` -> msg 是 "删除成功"，data 是空数组
+	// 校验 UserAddressDeleteValidate:
+	//	'id.require' => '地址记录ID不能为空'
+	//	'id.number'  => '地址记录ID不正确'
+	//
+	// 🔴🔴 **这是用 GET 做删除**（Route::get('address/delete', ...)）。
+	//    迁移时必须按写操作对待：写权限、幂等、以及被预取/爬虫误触发的风险。
+	// 需登录。
+	DeleteAddress(ctx context.Context, req *DeleteAddressRequest, opts ...http.CallOption) (rsp *DeleteAddressReply, err error)
 	// GetAddressDefault 用户默认地址
 	//
 	// 原实现 v1/user/AddressController::addressDefault -> AddressLogic::addressDefault($params,$userId)
@@ -485,6 +540,38 @@ type UserServiceHTTPClientImpl struct {
 
 func NewUserServiceHTTPClient(client *http.Client) UserServiceHTTPClient {
 	return &UserServiceHTTPClientImpl{client}
+}
+
+// DeleteAddress 删除地址
+//
+// 原实现 AddressController::delete -> AddressLogic::delete($id, $userId)
+//
+//	$address = UserAddress::where(['id'=>$id, 'user_id'=>$userId])->find();
+//	if (!$address) { self::setError('未找到地址记录'); return false; }
+//	$address->delete();        // ⚠️ **硬删除**（表没有 delete_time 列）
+//
+// 控制器：`return $this->success('删除成功');` -> msg 是 "删除成功"，data 是空数组
+// 校验 UserAddressDeleteValidate:
+//
+//	'id.require' => '地址记录ID不能为空'
+//	'id.number'  => '地址记录ID不正确'
+//
+// 🔴🔴 **这是用 GET 做删除**（Route::get('address/delete', ...)）。
+//
+//	迁移时必须按写操作对待：写权限、幂等、以及被预取/爬虫误触发的风险。
+//
+// 需登录。
+func (c *UserServiceHTTPClientImpl) DeleteAddress(ctx context.Context, in *DeleteAddressRequest, opts ...http.CallOption) (*DeleteAddressReply, error) {
+	var out DeleteAddressReply
+	pattern := "/v1/user/address/delete"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationUserServiceDeleteAddress))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // GetAddressDefault 用户默认地址

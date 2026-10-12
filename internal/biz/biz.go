@@ -37,4 +37,5 @@ var ProviderSet = wire.NewSet(
 	NewUnregisterCheckUsecase,
 	NewMessageReadUsecase,
 	NewMessageDetailUsecase,
+	NewAddressDeleteUsecase,
 )

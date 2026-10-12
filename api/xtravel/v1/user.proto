@@ -170,6 +170,26 @@ service UserService {
   rpc GetMessageDetail(GetMessageDetailRequest) returns (RawData) {
     option (google.api.http) = {get: "/v1/user/message/detail"};
   }
+
+  // 删除地址
+  //
+  // 原实现 AddressController::delete -> AddressLogic::delete($id, $userId)
+  //
+  //	$address = UserAddress::where(['id'=>$id, 'user_id'=>$userId])->find();
+  //	if (!$address) { self::setError('未找到地址记录'); return false; }
+  //	$address->delete();        // ⚠️ **硬删除**（表没有 delete_time 列）
+  //
+  // 控制器：`return $this->success('删除成功');` -> msg 是 "删除成功"，data 是空数组
+  // 校验 UserAddressDeleteValidate:
+  //	'id.require' => '地址记录ID不能为空'
+  //	'id.number'  => '地址记录ID不正确'
+  //
+  // 🔴🔴 **这是用 GET 做删除**（Route::get('address/delete', ...)）。
+  //    迁移时必须按写操作对待：写权限、幂等、以及被预取/爬虫误触发的风险。
+  // 需登录。
+  rpc DeleteAddress(DeleteAddressRequest) returns (DeleteAddressReply) {
+    option (google.api.http) = {get: "/v1/user/address/delete"};
+  }
 }
 
 message GetUserInfoRequest {}
@@ -284,3 +304,15 @@ message GetMessageDetailRequest {
   // 同 setOneRead：用 Int64Value 区分"没传"与"0"
   google.protobuf.Int64Value id = 1 [json_name = "id"];
 }
+
+message DeleteAddressRequest {
+  // 对应 `$params['id']`；规则 require|number
+  google.protobuf.Int64Value id = 1 [json_name = "id"];
+}
+
+// DeleteAddressReply 空消息 —— 响应体完全由 RawBody() 自定义。
+//
+// 为什么不用 RawData：`success(''删除成功'')` 的 **msg 是 "删除成功"**，
+// 而 RawData 的 Envelope 固定 msg=""（它是给普通 data() 接口用的）。
+// 这里复用为 index/test 建的 httpx.RawResponder 机制，直接给完整响应体。
+message DeleteAddressReply {}

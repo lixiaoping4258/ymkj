@@ -134,3 +134,15 @@ func (r *GetAddressDefaultReply) Envelope() (int, int, string, any) {
 func (r *GetUnregisterCheckReply) Envelope() (int, int, string, any) {
 	return 1, 0, "请求成功", r
 }
+
+// RawBody 让删除地址返回 `{"code":1,"show":0,"msg":"删除成功","data":[]}`。
+//
+// 原实现 `$this->success(”删除成功”)` —— success() 而不是 data()，
+// 所以 msg 是 "删除成功"，且未传 data 时默认是空数组。
+//
+// ⚠️ 用 RawBody（完全自定义响应体）而不是 Envelope，是因为行内的 code/show/msg/data
+//
+//	四件套里 msg 是非空值；Envelope 也能表达，但这里顺便复用 RawResponder 机制。
+func (r *DeleteAddressReply) RawBody() []byte {
+	return []byte(`{"code":1,"show":0,"msg":"删除成功","data":[]}`)
+}

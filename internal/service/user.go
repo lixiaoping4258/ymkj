@@ -22,10 +22,11 @@ type UserService struct {
 	unreg       *biz.UnregisterCheckUsecase
 	msgRead     *biz.MessageReadUsecase
 	msgDetail   *biz.MessageDetailUsecase
+	addrDel     *biz.AddressDeleteUsecase
 }
 
-func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase, addressList *biz.AddressListUsecase, realInfo *biz.RealInfoUsecase, unreg *biz.UnregisterCheckUsecase, msgRead *biz.MessageReadUsecase, msgDetail *biz.MessageDetailUsecase) *UserService {
-	return &UserService{users: users, noticeNew: noticeNew, address: address, addressList: addressList, realInfo: realInfo, unreg: unreg, msgRead: msgRead, msgDetail: msgDetail}
+func NewUserService(users *biz.UserUsecase, noticeNew *biz.NoticeNewUsecase, address *biz.AddressUsecase, addressList *biz.AddressListUsecase, realInfo *biz.RealInfoUsecase, unreg *biz.UnregisterCheckUsecase, msgRead *biz.MessageReadUsecase, msgDetail *biz.MessageDetailUsecase, addrDel *biz.AddressDeleteUsecase) *UserService {
+	return &UserService{users: users, noticeNew: noticeNew, address: address, addressList: addressList, realInfo: realInfo, unreg: unreg, msgRead: msgRead, msgDetail: msgDetail, addrDel: addrDel}
 }
 
 // GetUserInfo 对应 UserController::info。
@@ -313,4 +314,37 @@ func derefI64Any(v *int64) any {
 		return nil
 	}
 	return *v
+}
+
+// DeleteAddress 对应 AddressController::delete（GET /v1/user/address/delete?id=N）。
+//
+// ⚠️⚠️ **这是一个用 GET 实现的删除接口**，而且删除是**硬删除**（表无 delete_time）。
+//
+//	迁移后要确保：
+//	  - 网关/浏览器不要预取这个 URL（否则会被提前删掉）
+//	  - 前端不要把它当成可缓存的 GET
+//
+// 原实现：
+//
+//	$params = (new UserAddressDeleteValidate())->get()->goCheck();
+//	$result = AddressLogic::delete($params['id'], $this->userId);
+//	if ($result) { return $this->success('删除成功'); }      // ⚠️ 不是 data()
+//	else { return $this->fail(AddressLogic::getError()); }
+func (s *UserService) DeleteAddress(
+	ctx context.Context, req *v1.DeleteAddressRequest,
+) (*v1.DeleteAddressReply, error) {
+	// 校验文案逐字对应 UserAddressDeleteValidate：
+	//   'id.require' => '地址记录ID不能为空'
+	//   'id.number'  => '地址记录ID不正确'
+	// ⚠️ 规则是 require|number（不是 integer|gt:0）—— 所以 **0 是合法的**，
+	//    会走到"未找到地址记录"。这里不能像 setOneRead 那样判 <=0。
+	if req.Id == nil {
+		return nil, bizFail(biz.NewBizError("地址记录ID不能为空"))
+	}
+	userID := biz.UserIDFromContext(ctx)
+	if err := s.addrDel.Delete(ctx, req.Id.Value, uint32(userID)); err != nil {
+		return nil, bizFail(biz.NewBizError(err.Error()))
+	}
+	// 响应体由 DeleteAddressReply.RawBody() 给出（msg="删除成功"）
+	return &v1.DeleteAddressReply{}, nil
 }
