@@ -20,6 +20,7 @@ var _ = binding.EncodeURL
 const _ = http.SupportPackageIsVersion1
 
 const OperationCommonServiceGetConfig = "/xtravel.v1.CommonService/GetConfig"
+const OperationCommonServiceGetNotice = "/xtravel.v1.CommonService/GetNotice"
 const OperationCommonServiceGetPlatformLists = "/xtravel.v1.CommonService/GetPlatformLists"
 const OperationCommonServiceGetProtocol = "/xtravel.v1.CommonService/GetProtocol"
 const OperationCommonServiceGetTradeConfig = "/xtravel.v1.CommonService/GetTradeConfig"
@@ -28,6 +29,21 @@ type CommonServiceHTTPServer interface {
 	// GetConfig 手续费/交易开关等基础配置
 	// 原: ConfigController::index  (免登录)
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigReply, error)
+	// GetNotice 公告列表（分页）
+	//
+	// 原实现 NoticeController::index -> $this->dataLists(new PlatformNoticeLists())
+	//   PlatformNoticeLists::lists(): Notices::field('id,title,content,create_time')
+	//       ->where('state','=',1)->orderRaw('create_time DESC')
+	//       ->limit($this->limitOffset, $this->limitLength)->select()->toArray();
+	//   PlatformNoticeLists::count(): Notices::where('state','=',1)->count();
+	//
+	// ⚠️ Notices 模型 extends Model（不是 BaseModel）-> **无软删除**。
+	// ⚠️ create_time 是 datetime -> 输出 'Y-m-d H:i:s' 字符串。
+	// ⚠️ 用 RawData 返回（列表行的形状是 DB 列名，与 protojson 的字段约定无关）。
+	//
+	// 路由在 common.php（group 'v1/common/'）。NoticeController::$notNeedLogin = ['getNew']
+	// —— ⚠️ **不含 index**，所以这条**需登录**。
+	GetNotice(context.Context, *GetNoticeRequest) (*RawData, error)
 	// GetPlatformLists 第三方平台列表
 	//
 	// 原实现 OpenAppLogic::getThirdAppsList($state = 1)：
@@ -54,6 +70,7 @@ func RegisterCommonServiceHTTPServer(s *http.Server, srv CommonServiceHTTPServer
 	r := s.Route("/")
 	r.GET("/v1/common/config", _CommonService_GetConfig0_HTTP_Handler(srv))
 	r.GET("/v1/common/trade/config", _CommonService_GetTradeConfig0_HTTP_Handler(srv))
+	r.GET("/v1/common/notice", _CommonService_GetNotice0_HTTP_Handler(srv))
 	r.GET("/v1/common/protocol", _CommonService_GetProtocol0_HTTP_Handler(srv))
 	r.GET("/v1/common/platform/lists", _CommonService_GetPlatformLists0_HTTP_Handler(srv))
 }
@@ -92,6 +109,25 @@ func _CommonService_GetTradeConfig0_HTTP_Handler(srv CommonServiceHTTPServer) fu
 			return err
 		}
 		reply := out.(*GetTradeConfigReply)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _CommonService_GetNotice0_HTTP_Handler(srv CommonServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetNoticeRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationCommonServiceGetNotice)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetNotice(ctx, req.(*GetNoticeRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
 		return ctx.Result(200, reply)
 	}
 }
@@ -138,6 +174,21 @@ type CommonServiceHTTPClient interface {
 	// GetConfig 手续费/交易开关等基础配置
 	// 原: ConfigController::index  (免登录)
 	GetConfig(ctx context.Context, req *GetConfigRequest, opts ...http.CallOption) (rsp *GetConfigReply, err error)
+	// GetNotice 公告列表（分页）
+	//
+	// 原实现 NoticeController::index -> $this->dataLists(new PlatformNoticeLists())
+	//   PlatformNoticeLists::lists(): Notices::field('id,title,content,create_time')
+	//       ->where('state','=',1)->orderRaw('create_time DESC')
+	//       ->limit($this->limitOffset, $this->limitLength)->select()->toArray();
+	//   PlatformNoticeLists::count(): Notices::where('state','=',1)->count();
+	//
+	// ⚠️ Notices 模型 extends Model（不是 BaseModel）-> **无软删除**。
+	// ⚠️ create_time 是 datetime -> 输出 'Y-m-d H:i:s' 字符串。
+	// ⚠️ 用 RawData 返回（列表行的形状是 DB 列名，与 protojson 的字段约定无关）。
+	//
+	// 路由在 common.php（group 'v1/common/'）。NoticeController::$notNeedLogin = ['getNew']
+	// —— ⚠️ **不含 index**，所以这条**需登录**。
+	GetNotice(ctx context.Context, req *GetNoticeRequest, opts ...http.CallOption) (rsp *RawData, err error)
 	// GetPlatformLists 第三方平台列表
 	//
 	// 原实现 OpenAppLogic::getThirdAppsList($state = 1)：
@@ -175,6 +226,34 @@ func (c *CommonServiceHTTPClientImpl) GetConfig(ctx context.Context, in *GetConf
 	pattern := "/v1/common/config"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationCommonServiceGetConfig))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetNotice 公告列表（分页）
+//
+// 原实现 NoticeController::index -> $this->dataLists(new PlatformNoticeLists())
+//
+//	PlatformNoticeLists::lists(): Notices::field('id,title,content,create_time')
+//	    ->where('state','=',1)->orderRaw('create_time DESC')
+//	    ->limit($this->limitOffset, $this->limitLength)->select()->toArray();
+//	PlatformNoticeLists::count(): Notices::where('state','=',1)->count();
+//
+// ⚠️ Notices 模型 extends Model（不是 BaseModel）-> **无软删除**。
+// ⚠️ create_time 是 datetime -> 输出 'Y-m-d H:i:s' 字符串。
+// ⚠️ 用 RawData 返回（列表行的形状是 DB 列名，与 protojson 的字段约定无关）。
+//
+// 路由在 common.php（group 'v1/common/'）。NoticeController::$notNeedLogin = ['getNew']
+// —— ⚠️ **不含 index**，所以这条**需登录**。
+func (c *CommonServiceHTTPClientImpl) GetNotice(ctx context.Context, in *GetNoticeRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/common/notice"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationCommonServiceGetNotice))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

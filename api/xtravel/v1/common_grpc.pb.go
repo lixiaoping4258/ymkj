@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	CommonService_GetConfig_FullMethodName        = "/xtravel.v1.CommonService/GetConfig"
 	CommonService_GetTradeConfig_FullMethodName   = "/xtravel.v1.CommonService/GetTradeConfig"
+	CommonService_GetNotice_FullMethodName        = "/xtravel.v1.CommonService/GetNotice"
 	CommonService_GetProtocol_FullMethodName      = "/xtravel.v1.CommonService/GetProtocol"
 	CommonService_GetPlatformLists_FullMethodName = "/xtravel.v1.CommonService/GetPlatformLists"
 )
@@ -45,6 +46,22 @@ type CommonServiceClient interface {
 	// 交易配置（开关 + 限制时段）
 	// 原: IndexController::tradeConfig  (免登录)
 	GetTradeConfig(ctx context.Context, in *GetTradeConfigRequest, opts ...grpc.CallOption) (*GetTradeConfigReply, error)
+	// 公告列表（分页）
+	//
+	// 原实现 NoticeController::index -> $this->dataLists(new PlatformNoticeLists())
+	//
+	//	PlatformNoticeLists::lists(): Notices::field('id,title,content,create_time')
+	//	    ->where('state','=',1)->orderRaw('create_time DESC')
+	//	    ->limit($this->limitOffset, $this->limitLength)->select()->toArray();
+	//	PlatformNoticeLists::count(): Notices::where('state','=',1)->count();
+	//
+	// ⚠️ Notices 模型 extends Model（不是 BaseModel）-> **无软删除**。
+	// ⚠️ create_time 是 datetime -> 输出 'Y-m-d H:i:s' 字符串。
+	// ⚠️ 用 RawData 返回（列表行的形状是 DB 列名，与 protojson 的字段约定无关）。
+	//
+	// 路由在 common.php（group 'v1/common/'）。NoticeController::$notNeedLogin = ['getNew']
+	// —— ⚠️ **不含 index**，所以这条**需登录**。
+	GetNotice(ctx context.Context, in *GetNoticeRequest, opts ...grpc.CallOption) (*RawData, error)
 	// 服务协议
 	//
 	// 原实现 IndexLogic::getPolicyByType($type)：
@@ -94,6 +111,16 @@ func (c *commonServiceClient) GetTradeConfig(ctx context.Context, in *GetTradeCo
 	return out, nil
 }
 
+func (c *commonServiceClient) GetNotice(ctx context.Context, in *GetNoticeRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, CommonService_GetNotice_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *commonServiceClient) GetProtocol(ctx context.Context, in *GetProtocolRequest, opts ...grpc.CallOption) (*GetProtocolReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetProtocolReply)
@@ -134,6 +161,22 @@ type CommonServiceServer interface {
 	// 交易配置（开关 + 限制时段）
 	// 原: IndexController::tradeConfig  (免登录)
 	GetTradeConfig(context.Context, *GetTradeConfigRequest) (*GetTradeConfigReply, error)
+	// 公告列表（分页）
+	//
+	// 原实现 NoticeController::index -> $this->dataLists(new PlatformNoticeLists())
+	//
+	//	PlatformNoticeLists::lists(): Notices::field('id,title,content,create_time')
+	//	    ->where('state','=',1)->orderRaw('create_time DESC')
+	//	    ->limit($this->limitOffset, $this->limitLength)->select()->toArray();
+	//	PlatformNoticeLists::count(): Notices::where('state','=',1)->count();
+	//
+	// ⚠️ Notices 模型 extends Model（不是 BaseModel）-> **无软删除**。
+	// ⚠️ create_time 是 datetime -> 输出 'Y-m-d H:i:s' 字符串。
+	// ⚠️ 用 RawData 返回（列表行的形状是 DB 列名，与 protojson 的字段约定无关）。
+	//
+	// 路由在 common.php（group 'v1/common/'）。NoticeController::$notNeedLogin = ['getNew']
+	// —— ⚠️ **不含 index**，所以这条**需登录**。
+	GetNotice(context.Context, *GetNoticeRequest) (*RawData, error)
 	// 服务协议
 	//
 	// 原实现 IndexLogic::getPolicyByType($type)：
@@ -168,6 +211,9 @@ func (UnimplementedCommonServiceServer) GetConfig(context.Context, *GetConfigReq
 }
 func (UnimplementedCommonServiceServer) GetTradeConfig(context.Context, *GetTradeConfigRequest) (*GetTradeConfigReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTradeConfig not implemented")
+}
+func (UnimplementedCommonServiceServer) GetNotice(context.Context, *GetNoticeRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNotice not implemented")
 }
 func (UnimplementedCommonServiceServer) GetProtocol(context.Context, *GetProtocolRequest) (*GetProtocolReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetProtocol not implemented")
@@ -232,6 +278,24 @@ func _CommonService_GetTradeConfig_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CommonService_GetNotice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNoticeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommonServiceServer).GetNotice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CommonService_GetNotice_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommonServiceServer).GetNotice(ctx, req.(*GetNoticeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CommonService_GetProtocol_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetProtocolRequest)
 	if err := dec(in); err != nil {
@@ -282,6 +346,10 @@ var CommonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTradeConfig",
 			Handler:    _CommonService_GetTradeConfig_Handler,
+		},
+		{
+			MethodName: "GetNotice",
+			Handler:    _CommonService_GetNotice_Handler,
 		},
 		{
 			MethodName: "GetProtocol",

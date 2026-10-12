@@ -29,6 +29,23 @@ service CommonService {
     option (google.api.http) = {get: "/v1/common/trade/config"};
   }
 
+  // 公告列表（分页）
+  //
+  // 原实现 NoticeController::index -> $this->dataLists(new PlatformNoticeLists())
+  //   PlatformNoticeLists::lists(): Notices::field('id,title,content,create_time')
+  //       ->where('state','=',1)->orderRaw('create_time DESC')
+  //       ->limit($this->limitOffset, $this->limitLength)->select()->toArray();
+  //   PlatformNoticeLists::count(): Notices::where('state','=',1)->count();
+  //
+  // ⚠️ Notices 模型 extends Model（不是 BaseModel）-> **无软删除**。
+  // ⚠️ create_time 是 datetime -> 输出 'Y-m-d H:i:s' 字符串。
+  // ⚠️ 用 RawData 返回（列表行的形状是 DB 列名，与 protojson 的字段约定无关）。
+  //
+  // 路由在 common.php（group 'v1/common/'）。NoticeController::$notNeedLogin = ['getNew']
+  // —— ⚠️ **不含 index**，所以这条**需登录**。
+  rpc GetNotice(GetNoticeRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/common/notice"};
+  }
   // 服务协议
   //
   // 原实现 IndexLogic::getPolicyByType($type)：
@@ -146,3 +163,5 @@ message PlatformItem {
   string name = 1 [json_name = "name"];
   string flag = 2 [json_name = "flag"];
 }
+
+message GetNoticeRequest {}

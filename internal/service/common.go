@@ -4,6 +4,8 @@ import (
 	"context"
 	"github.com/go-kratos/kratos/v2/log"
 
+	"github.com/lixiaoping4258/ymkj/internal/pkg/httpx"
+
 	v1 "github.com/lixiaoping4258/ymkj/api/xtravel/v1"
 	"github.com/lixiaoping4258/ymkj/internal/biz"
 	"github.com/lixiaoping4258/ymkj/internal/pkg/pbconv"
@@ -19,14 +21,15 @@ type CommonService struct {
 	config   *biz.ConfigUsecase
 	trade    *biz.TradeConfigUsecase
 	platform *biz.PlatformUsecase
+	notice   *biz.NoticeUsecase
 	log      *log.Helper
 }
 
 func NewCommonService(
 	config *biz.ConfigUsecase, trade *biz.TradeConfigUsecase,
-	platform *biz.PlatformUsecase, logger log.Logger,
+	platform *biz.PlatformUsecase, notice *biz.NoticeUsecase, logger log.Logger,
 ) *CommonService {
-	return &CommonService{config: config, trade: trade, platform: platform, log: log.NewHelper(logger)}
+	return &CommonService{config: config, trade: trade, platform: platform, notice: notice, log: log.NewHelper(logger)}
 }
 
 // GetConfig 对应 ConfigController::index。
@@ -181,4 +184,29 @@ func toStr(v any) string {
 		return s
 	}
 	return ""
+}
+
+// GetNotice 对应 NoticeController::index（GET /v1/common/notice）。
+//
+// 原实现：`return $this->dataLists(new PlatformNoticeLists());`
+//
+// ⚠️ 这条**需登录**：NoticeController::$notNeedLogin = ['getNew']，**不含 index**。
+// ⚠️ 用 RawData 返回 —— 列表行是 DB 列名（id/title/content/create_time），
+//
+//	与 protojson 的字段命名约定无关；而且 content 可空要输出 null。
+func (s *CommonService) GetNotice(
+	ctx context.Context, _ *v1.GetNoticeRequest,
+) (*v1.RawData, error) {
+	// 与 BaseDataLists::initPage 一致地解析分页参数
+	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
+
+	ld, err := s.notice.List(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := ld.ToJSON()
+	if err != nil {
+		return nil, err
+	}
+	return &v1.RawData{Json: raw}, nil
 }

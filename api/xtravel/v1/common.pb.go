@@ -649,6 +649,42 @@ func (x *PlatformItem) GetFlag() string {
 	return ""
 }
 
+type GetNoticeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNoticeRequest) Reset() {
+	*x = GetNoticeRequest{}
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNoticeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNoticeRequest) ProtoMessage() {}
+
+func (x *GetNoticeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_common_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNoticeRequest.ProtoReflect.Descriptor instead.
+func (*GetNoticeRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_common_proto_rawDescGZIP(), []int{12}
+}
+
 var File_api_xtravel_v1_common_proto protoreflect.FileDescriptor
 
 const file_api_xtravel_v1_common_proto_rawDesc = "" +
@@ -688,10 +724,12 @@ const file_api_xtravel_v1_common_proto_rawDesc = "" +
 	"\x05items\x18\x01 \x03(\v2\x18.xtravel.v1.PlatformItemR\x05items\"6\n" +
 	"\fPlatformItem\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
-	"\x04flag\x18\x02 \x01(\tR\x04flag2\xd1\x03\n" +
+	"\x04flag\x18\x02 \x01(\tR\x04flag\"\x12\n" +
+	"\x10GetNoticeRequest2\xac\x04\n" +
 	"\rCommonService\x12`\n" +
 	"\tGetConfig\x12\x1c.xtravel.v1.GetConfigRequest\x1a\x1a.xtravel.v1.GetConfigReply\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/common/config\x12u\n" +
-	"\x0eGetTradeConfig\x12!.xtravel.v1.GetTradeConfigRequest\x1a\x1f.xtravel.v1.GetTradeConfigReply\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/common/trade/config\x12h\n" +
+	"\x0eGetTradeConfig\x12!.xtravel.v1.GetTradeConfigRequest\x1a\x1f.xtravel.v1.GetTradeConfigReply\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/common/trade/config\x12Y\n" +
+	"\tGetNotice\x12\x1c.xtravel.v1.GetNoticeRequest\x1a\x13.xtravel.v1.RawData\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/common/notice\x12h\n" +
 	"\vGetProtocol\x12\x1e.xtravel.v1.GetProtocolRequest\x1a\x1c.xtravel.v1.GetProtocolReply\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/common/protocol\x12}\n" +
 	"\x10GetPlatformLists\x12#.xtravel.v1.GetPlatformListsRequest\x1a!.xtravel.v1.GetPlatformListsReply\"!\x82\xd3\xe4\x93\x02\x1b\x12\x19/v1/common/platform/listsB2Z0github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1b\x06proto3"
 
@@ -707,7 +745,7 @@ func file_api_xtravel_v1_common_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_common_proto_rawDescData
 }
 
-var file_api_xtravel_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_api_xtravel_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_api_xtravel_v1_common_proto_goTypes = []any{
 	(*GetConfigRequest)(nil),        // 0: xtravel.v1.GetConfigRequest
 	(*GetConfigReply)(nil),          // 1: xtravel.v1.GetConfigReply
@@ -721,27 +759,30 @@ var file_api_xtravel_v1_common_proto_goTypes = []any{
 	(*GetPlatformListsRequest)(nil), // 9: xtravel.v1.GetPlatformListsRequest
 	(*GetPlatformListsReply)(nil),   // 10: xtravel.v1.GetPlatformListsReply
 	(*PlatformItem)(nil),            // 11: xtravel.v1.PlatformItem
-	(*structpb.Value)(nil),          // 12: google.protobuf.Value
+	(*GetNoticeRequest)(nil),        // 12: xtravel.v1.GetNoticeRequest
+	(*structpb.Value)(nil),          // 13: google.protobuf.Value
 }
 var file_api_xtravel_v1_common_proto_depIdxs = []int32{
-	12, // 0: xtravel.v1.GetConfigReply.out_fee:type_name -> google.protobuf.Value
+	13, // 0: xtravel.v1.GetConfigReply.out_fee:type_name -> google.protobuf.Value
 	2,  // 1: xtravel.v1.GetConfigReply.trade_switch:type_name -> xtravel.v1.TradeTimeStatus
-	12, // 2: xtravel.v1.GetConfigReply.buy_or_sale_config:type_name -> google.protobuf.Value
-	12, // 3: xtravel.v1.TradeTimeStatus.trade_switch:type_name -> google.protobuf.Value
+	13, // 2: xtravel.v1.GetConfigReply.buy_or_sale_config:type_name -> google.protobuf.Value
+	13, // 3: xtravel.v1.TradeTimeStatus.trade_switch:type_name -> google.protobuf.Value
 	3,  // 4: xtravel.v1.TradeTimeStatus.periods:type_name -> xtravel.v1.TradePeriod
-	12, // 5: xtravel.v1.GetTradeConfigReply.switch:type_name -> google.protobuf.Value
-	12, // 6: xtravel.v1.GetTradeConfigReply.limit_time:type_name -> google.protobuf.Value
+	13, // 5: xtravel.v1.GetTradeConfigReply.switch:type_name -> google.protobuf.Value
+	13, // 6: xtravel.v1.GetTradeConfigReply.limit_time:type_name -> google.protobuf.Value
 	11, // 7: xtravel.v1.GetPlatformListsReply.items:type_name -> xtravel.v1.PlatformItem
 	0,  // 8: xtravel.v1.CommonService.GetConfig:input_type -> xtravel.v1.GetConfigRequest
 	4,  // 9: xtravel.v1.CommonService.GetTradeConfig:input_type -> xtravel.v1.GetTradeConfigRequest
-	7,  // 10: xtravel.v1.CommonService.GetProtocol:input_type -> xtravel.v1.GetProtocolRequest
-	9,  // 11: xtravel.v1.CommonService.GetPlatformLists:input_type -> xtravel.v1.GetPlatformListsRequest
-	1,  // 12: xtravel.v1.CommonService.GetConfig:output_type -> xtravel.v1.GetConfigReply
-	5,  // 13: xtravel.v1.CommonService.GetTradeConfig:output_type -> xtravel.v1.GetTradeConfigReply
-	8,  // 14: xtravel.v1.CommonService.GetProtocol:output_type -> xtravel.v1.GetProtocolReply
-	10, // 15: xtravel.v1.CommonService.GetPlatformLists:output_type -> xtravel.v1.GetPlatformListsReply
-	12, // [12:16] is the sub-list for method output_type
-	8,  // [8:12] is the sub-list for method input_type
+	12, // 10: xtravel.v1.CommonService.GetNotice:input_type -> xtravel.v1.GetNoticeRequest
+	7,  // 11: xtravel.v1.CommonService.GetProtocol:input_type -> xtravel.v1.GetProtocolRequest
+	9,  // 12: xtravel.v1.CommonService.GetPlatformLists:input_type -> xtravel.v1.GetPlatformListsRequest
+	1,  // 13: xtravel.v1.CommonService.GetConfig:output_type -> xtravel.v1.GetConfigReply
+	5,  // 14: xtravel.v1.CommonService.GetTradeConfig:output_type -> xtravel.v1.GetTradeConfigReply
+	6,  // 15: xtravel.v1.CommonService.GetNotice:output_type -> xtravel.v1.RawData
+	8,  // 16: xtravel.v1.CommonService.GetProtocol:output_type -> xtravel.v1.GetProtocolReply
+	10, // 17: xtravel.v1.CommonService.GetPlatformLists:output_type -> xtravel.v1.GetPlatformListsReply
+	13, // [13:18] is the sub-list for method output_type
+	8,  // [8:13] is the sub-list for method input_type
 	8,  // [8:8] is the sub-list for extension type_name
 	8,  // [8:8] is the sub-list for extension extendee
 	0,  // [0:8] is the sub-list for field type_name
@@ -758,7 +799,7 @@ func file_api_xtravel_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_common_proto_rawDesc), len(file_api_xtravel_v1_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
