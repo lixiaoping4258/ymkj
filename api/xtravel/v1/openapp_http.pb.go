@@ -23,6 +23,7 @@ const OperationOpenAppServiceGetAppDetail = "/xtravel.v1.OpenAppService/GetAppDe
 const OperationOpenAppServiceGetAppList = "/xtravel.v1.OpenAppService/GetAppList"
 const OperationOpenAppServiceGetAuthMyUserList = "/xtravel.v1.OpenAppService/GetAuthMyUserList"
 const OperationOpenAppServiceGetAuthUrl = "/xtravel.v1.OpenAppService/GetAuthUrl"
+const OperationOpenAppServiceGetAuthUserList = "/xtravel.v1.OpenAppService/GetAuthUserList"
 
 type OpenAppServiceHTTPServer interface {
 	GetAppDetail(context.Context, *GetAppDetailRequest) (*RawData, error)
@@ -37,19 +38,7 @@ type OpenAppServiceHTTPServer interface {
 	//
 	// ⚠️ logo 的**空值会被换成空串**（不是 null），非空则拼域名。
 	GetAppList(context.Context, *GetAppListRequest) (*RawData, error)
-	// GetAuthMyUserList 三方平台详情
-	//
-	// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
-	//
-	//	App::where('id', $app_id ?: $this->params['app_id'])
-	//	    ->field('id, name, logo, type, fee_rate, flag')
-	//	    ->findOrEmpty()->toArray();
-	//
-	// ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
-	//    原项目的不一致，照搬。
-	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
-	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
-	// 我授权的三方用户列表（分页）
+	// GetAuthMyUserList 我授权的三方用户列表（分页）
 	//
 	// 原实现 OpenAppController::authMyUserList -> `$this->dataLists(new AuthMyUserLists())`
 	//
@@ -72,11 +61,38 @@ type OpenAppServiceHTTPServer interface {
 	// ⚠️ **state=111 是硬编码的**；auth_url 原样拼接；**redirectUrl 不做 URL 编码**。
 	// ⚠️ 只筛 state=1，**不筛 type**（与 appList 不同）。
 	GetAuthUrl(context.Context, *GetAuthUrlRequest) (*RawData, error)
+	// GetAuthUserList 三方平台详情
+	//
+	// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
+	//
+	//	App::where('id', $app_id ?: $this->params['app_id'])
+	//	    ->field('id, name, logo, type, fee_rate, flag')
+	//	    ->findOrEmpty()->toArray();
+	//
+	// ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
+	//    原项目的不一致，照搬。
+	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
+	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 一级平台授权用户列表（分页）
+	//
+	// 原实现 OpenAppController::authUserList -> `$this->dataLists(new AppUserLists())`
+	// 校验 AuthUserListValidate: app_id => require（'一级平台ID不能为空'）
+	//
+	//	x_app_auth app_auth INNER JOIN x_user u ON app_auth.uid = u.id
+	//	where uid=当前用户 AND app_id=入参  (+ delete_time IS NULL，来自模型 SoftDelete)
+	//	order app_auth.id desc   7 字段 + 嵌套 app_info
+	//
+	// ⚠️ **"授权未过期"的过滤被注释掉了** -> 过期的授权也会返回。
+	// ⚠️ mobile 掩码 length=**4**（与 authMyUserList 的 6 不同，输出等长）。
+	// ⚠️ app_info 查不到时输出 **null**（PHP Undefined array key）。
+	// 🔴 count() **没有任何 JOIN**（lists 有）—— 又一处 lists/count 不一致。
+	GetAuthUserList(context.Context, *GetAuthUserListRequest) (*RawData, error)
 }
 
 func RegisterOpenAppServiceHTTPServer(s *http.Server, srv OpenAppServiceHTTPServer) {
 	r := s.Route("/")
 	r.GET("/v1/open/appList", _OpenAppService_GetAppList0_HTTP_Handler(srv))
+	r.GET("/v1/open/authUserList", _OpenAppService_GetAuthUserList0_HTTP_Handler(srv))
 	r.GET("/v1/open/authMyUserList", _OpenAppService_GetAuthMyUserList0_HTTP_Handler(srv))
 	r.GET("/v1/open/authUrl", _OpenAppService_GetAuthUrl0_HTTP_Handler(srv))
 	r.GET("/v1/open/appDetail", _OpenAppService_GetAppDetail0_HTTP_Handler(srv))
@@ -91,6 +107,25 @@ func _OpenAppService_GetAppList0_HTTP_Handler(srv OpenAppServiceHTTPServer) func
 		http.SetOperation(ctx, OperationOpenAppServiceGetAppList)
 		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
 			return srv.GetAppList(ctx, req.(*GetAppListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _OpenAppService_GetAuthUserList0_HTTP_Handler(srv OpenAppServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetAuthUserListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationOpenAppServiceGetAuthUserList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetAuthUserList(ctx, req.(*GetAuthUserListRequest))
 		})
 		out, err := h(ctx, &in)
 		if err != nil {
@@ -171,19 +206,7 @@ type OpenAppServiceHTTPClient interface {
 	//
 	// ⚠️ logo 的**空值会被换成空串**（不是 null），非空则拼域名。
 	GetAppList(ctx context.Context, req *GetAppListRequest, opts ...http.CallOption) (rsp *RawData, err error)
-	// GetAuthMyUserList 三方平台详情
-	//
-	// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
-	//
-	//	App::where('id', $app_id ?: $this->params['app_id'])
-	//	    ->field('id, name, logo, type, fee_rate, flag')
-	//	    ->findOrEmpty()->toArray();
-	//
-	// ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
-	//    原项目的不一致，照搬。
-	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
-	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
-	// 我授权的三方用户列表（分页）
+	// GetAuthMyUserList 我授权的三方用户列表（分页）
 	//
 	// 原实现 OpenAppController::authMyUserList -> `$this->dataLists(new AuthMyUserLists())`
 	//
@@ -206,6 +229,32 @@ type OpenAppServiceHTTPClient interface {
 	// ⚠️ **state=111 是硬编码的**；auth_url 原样拼接；**redirectUrl 不做 URL 编码**。
 	// ⚠️ 只筛 state=1，**不筛 type**（与 appList 不同）。
 	GetAuthUrl(ctx context.Context, req *GetAuthUrlRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// GetAuthUserList 三方平台详情
+	//
+	// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
+	//
+	//	App::where('id', $app_id ?: $this->params['app_id'])
+	//	    ->field('id, name, logo, type, fee_rate, flag')
+	//	    ->findOrEmpty()->toArray();
+	//
+	// ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
+	//    原项目的不一致，照搬。
+	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
+	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 一级平台授权用户列表（分页）
+	//
+	// 原实现 OpenAppController::authUserList -> `$this->dataLists(new AppUserLists())`
+	// 校验 AuthUserListValidate: app_id => require（'一级平台ID不能为空'）
+	//
+	//	x_app_auth app_auth INNER JOIN x_user u ON app_auth.uid = u.id
+	//	where uid=当前用户 AND app_id=入参  (+ delete_time IS NULL，来自模型 SoftDelete)
+	//	order app_auth.id desc   7 字段 + 嵌套 app_info
+	//
+	// ⚠️ **"授权未过期"的过滤被注释掉了** -> 过期的授权也会返回。
+	// ⚠️ mobile 掩码 length=**4**（与 authMyUserList 的 6 不同，输出等长）。
+	// ⚠️ app_info 查不到时输出 **null**（PHP Undefined array key）。
+	// 🔴 count() **没有任何 JOIN**（lists 有）—— 又一处 lists/count 不一致。
+	GetAuthUserList(ctx context.Context, req *GetAuthUserListRequest, opts ...http.CallOption) (rsp *RawData, err error)
 }
 
 type OpenAppServiceHTTPClientImpl struct {
@@ -252,21 +301,7 @@ func (c *OpenAppServiceHTTPClientImpl) GetAppList(ctx context.Context, in *GetAp
 	return &out, nil
 }
 
-// GetAuthMyUserList 三方平台详情
-//
-// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
-//
-//	App::where('id', $app_id ?: $this->params['app_id'])
-//	    ->field('id, name, logo, type, fee_rate, flag')
-//	    ->findOrEmpty()->toArray();
-//
-// ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
-//
-//	原项目的不一致，照搬。
-//
-// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
-// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
-// 我授权的三方用户列表（分页）
+// GetAuthMyUserList 我授权的三方用户列表（分页）
 //
 // 原实现 OpenAppController::authMyUserList -> `$this->dataLists(new AuthMyUserLists())`
 //
@@ -305,6 +340,46 @@ func (c *OpenAppServiceHTTPClientImpl) GetAuthUrl(ctx context.Context, in *GetAu
 	pattern := "/v1/open/authUrl"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationOpenAppServiceGetAuthUrl))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetAuthUserList 三方平台详情
+//
+// 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
+//
+//	App::where('id', $app_id ?: $this->params['app_id'])
+//	    ->field('id, name, logo, type, fee_rate, flag')
+//	    ->findOrEmpty()->toArray();
+//
+// ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
+//
+//	原项目的不一致，照搬。
+//
+// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
+// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+// 一级平台授权用户列表（分页）
+//
+// 原实现 OpenAppController::authUserList -> `$this->dataLists(new AppUserLists())`
+// 校验 AuthUserListValidate: app_id => require（'一级平台ID不能为空'）
+//
+//	x_app_auth app_auth INNER JOIN x_user u ON app_auth.uid = u.id
+//	where uid=当前用户 AND app_id=入参  (+ delete_time IS NULL，来自模型 SoftDelete)
+//	order app_auth.id desc   7 字段 + 嵌套 app_info
+//
+// ⚠️ **"授权未过期"的过滤被注释掉了** -> 过期的授权也会返回。
+// ⚠️ mobile 掩码 length=**4**（与 authMyUserList 的 6 不同，输出等长）。
+// ⚠️ app_info 查不到时输出 **null**（PHP Undefined array key）。
+// 🔴 count() **没有任何 JOIN**（lists 有）—— 又一处 lists/count 不一致。
+func (c *OpenAppServiceHTTPClientImpl) GetAuthUserList(ctx context.Context, in *GetAuthUserListRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/open/authUserList"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationOpenAppServiceGetAuthUserList))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

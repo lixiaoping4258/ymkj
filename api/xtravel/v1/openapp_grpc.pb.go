@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	OpenAppService_GetAppList_FullMethodName        = "/xtravel.v1.OpenAppService/GetAppList"
+	OpenAppService_GetAuthUserList_FullMethodName   = "/xtravel.v1.OpenAppService/GetAuthUserList"
 	OpenAppService_GetAuthMyUserList_FullMethodName = "/xtravel.v1.OpenAppService/GetAuthMyUserList"
 	OpenAppService_GetAuthUrl_FullMethodName        = "/xtravel.v1.OpenAppService/GetAuthUrl"
 	OpenAppService_GetAppDetail_FullMethodName      = "/xtravel.v1.OpenAppService/GetAppDetail"
@@ -59,6 +60,20 @@ type OpenAppServiceClient interface {
 	//
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 一级平台授权用户列表（分页）
+	//
+	// 原实现 OpenAppController::authUserList -> `$this->dataLists(new AppUserLists())`
+	// 校验 AuthUserListValidate: app_id => require（'一级平台ID不能为空'）
+	//
+	//	x_app_auth app_auth INNER JOIN x_user u ON app_auth.uid = u.id
+	//	where uid=当前用户 AND app_id=入参  (+ delete_time IS NULL，来自模型 SoftDelete)
+	//	order app_auth.id desc   7 字段 + 嵌套 app_info
+	//
+	// ⚠️ **"授权未过期"的过滤被注释掉了** -> 过期的授权也会返回。
+	// ⚠️ mobile 掩码 length=**4**（与 authMyUserList 的 6 不同，输出等长）。
+	// ⚠️ app_info 查不到时输出 **null**（PHP Undefined array key）。
+	// 🔴 count() **没有任何 JOIN**（lists 有）—— 又一处 lists/count 不一致。
+	GetAuthUserList(ctx context.Context, in *GetAuthUserListRequest, opts ...grpc.CallOption) (*RawData, error)
 	// 我授权的三方用户列表（分页）
 	//
 	// 原实现 OpenAppController::authMyUserList -> `$this->dataLists(new AuthMyUserLists())`
@@ -97,6 +112,16 @@ func (c *openAppServiceClient) GetAppList(ctx context.Context, in *GetAppListReq
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, OpenAppService_GetAppList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openAppServiceClient) GetAuthUserList(ctx context.Context, in *GetAuthUserListRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, OpenAppService_GetAuthUserList_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -167,6 +192,20 @@ type OpenAppServiceServer interface {
 	//
 	// ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
 	// ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+	// 一级平台授权用户列表（分页）
+	//
+	// 原实现 OpenAppController::authUserList -> `$this->dataLists(new AppUserLists())`
+	// 校验 AuthUserListValidate: app_id => require（'一级平台ID不能为空'）
+	//
+	//	x_app_auth app_auth INNER JOIN x_user u ON app_auth.uid = u.id
+	//	where uid=当前用户 AND app_id=入参  (+ delete_time IS NULL，来自模型 SoftDelete)
+	//	order app_auth.id desc   7 字段 + 嵌套 app_info
+	//
+	// ⚠️ **"授权未过期"的过滤被注释掉了** -> 过期的授权也会返回。
+	// ⚠️ mobile 掩码 length=**4**（与 authMyUserList 的 6 不同，输出等长）。
+	// ⚠️ app_info 查不到时输出 **null**（PHP Undefined array key）。
+	// 🔴 count() **没有任何 JOIN**（lists 有）—— 又一处 lists/count 不一致。
+	GetAuthUserList(context.Context, *GetAuthUserListRequest) (*RawData, error)
 	// 我授权的三方用户列表（分页）
 	//
 	// 原实现 OpenAppController::authMyUserList -> `$this->dataLists(new AuthMyUserLists())`
@@ -203,6 +242,9 @@ type UnimplementedOpenAppServiceServer struct{}
 
 func (UnimplementedOpenAppServiceServer) GetAppList(context.Context, *GetAppListRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAppList not implemented")
+}
+func (UnimplementedOpenAppServiceServer) GetAuthUserList(context.Context, *GetAuthUserListRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAuthUserList not implemented")
 }
 func (UnimplementedOpenAppServiceServer) GetAuthMyUserList(context.Context, *GetAuthMyUserListRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAuthMyUserList not implemented")
@@ -248,6 +290,24 @@ func _OpenAppService_GetAppList_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OpenAppServiceServer).GetAppList(ctx, req.(*GetAppListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenAppService_GetAuthUserList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAuthUserListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenAppServiceServer).GetAuthUserList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OpenAppService_GetAuthUserList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenAppServiceServer).GetAuthUserList(ctx, req.(*GetAuthUserListRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -316,6 +376,10 @@ var OpenAppService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAppList",
 			Handler:    _OpenAppService_GetAppList_Handler,
+		},
+		{
+			MethodName: "GetAuthUserList",
+			Handler:    _OpenAppService_GetAuthUserList_Handler,
 		},
 		{
 			MethodName: "GetAuthMyUserList",

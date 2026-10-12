@@ -195,6 +195,51 @@ func (*GetAuthMyUserListRequest) Descriptor() ([]byte, []int) {
 	return file_api_xtravel_v1_openapp_proto_rawDescGZIP(), []int{3}
 }
 
+type GetAuthUserListRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 对应 `$this->params['app_id']`；规则 require（文案 '一级平台ID不能为空'）
+	AppId         *wrapperspb.Int64Value `protobuf:"bytes,1,opt,name=app_id,proto3" json:"app_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAuthUserListRequest) Reset() {
+	*x = GetAuthUserListRequest{}
+	mi := &file_api_xtravel_v1_openapp_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAuthUserListRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAuthUserListRequest) ProtoMessage() {}
+
+func (x *GetAuthUserListRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_xtravel_v1_openapp_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAuthUserListRequest.ProtoReflect.Descriptor instead.
+func (*GetAuthUserListRequest) Descriptor() ([]byte, []int) {
+	return file_api_xtravel_v1_openapp_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetAuthUserListRequest) GetAppId() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.AppId
+	}
+	return nil
+}
+
 var File_api_xtravel_v1_openapp_proto protoreflect.FileDescriptor
 
 const file_api_xtravel_v1_openapp_proto_rawDesc = "" +
@@ -207,10 +252,13 @@ const file_api_xtravel_v1_openapp_proto_rawDesc = "" +
 	"\x11GetAuthUrlRequest\x123\n" +
 	"\x06app_id\x18\x01 \x01(\v2\x1b.google.protobuf.Int64ValueR\x06app_id\x12\"\n" +
 	"\fredirect_url\x18\x02 \x01(\tR\fredirect_url\"\x1a\n" +
-	"\x18GetAuthMyUserListRequest2\x9b\x03\n" +
+	"\x18GetAuthMyUserListRequest\"M\n" +
+	"\x16GetAuthUserListRequest\x123\n" +
+	"\x06app_id\x18\x01 \x01(\v2\x1b.google.protobuf.Int64ValueR\x06app_id2\x86\x04\n" +
 	"\x0eOpenAppService\x12Z\n" +
 	"\n" +
-	"GetAppList\x12\x1d.xtravel.v1.GetAppListRequest\x1a\x13.xtravel.v1.RawData\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/open/appList\x12o\n" +
+	"GetAppList\x12\x1d.xtravel.v1.GetAppListRequest\x1a\x13.xtravel.v1.RawData\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/open/appList\x12i\n" +
+	"\x0fGetAuthUserList\x12\".xtravel.v1.GetAuthUserListRequest\x1a\x13.xtravel.v1.RawData\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/v1/open/authUserList\x12o\n" +
 	"\x11GetAuthMyUserList\x12$.xtravel.v1.GetAuthMyUserListRequest\x1a\x13.xtravel.v1.RawData\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/open/authMyUserList\x12Z\n" +
 	"\n" +
 	"GetAuthUrl\x12\x1d.xtravel.v1.GetAuthUrlRequest\x1a\x13.xtravel.v1.RawData\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/open/authUrl\x12`\n" +
@@ -228,31 +276,35 @@ func file_api_xtravel_v1_openapp_proto_rawDescGZIP() []byte {
 	return file_api_xtravel_v1_openapp_proto_rawDescData
 }
 
-var file_api_xtravel_v1_openapp_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_api_xtravel_v1_openapp_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_api_xtravel_v1_openapp_proto_goTypes = []any{
 	(*GetAppListRequest)(nil),        // 0: xtravel.v1.GetAppListRequest
 	(*GetAppDetailRequest)(nil),      // 1: xtravel.v1.GetAppDetailRequest
 	(*GetAuthUrlRequest)(nil),        // 2: xtravel.v1.GetAuthUrlRequest
 	(*GetAuthMyUserListRequest)(nil), // 3: xtravel.v1.GetAuthMyUserListRequest
-	(*wrapperspb.Int64Value)(nil),    // 4: google.protobuf.Int64Value
-	(*RawData)(nil),                  // 5: xtravel.v1.RawData
+	(*GetAuthUserListRequest)(nil),   // 4: xtravel.v1.GetAuthUserListRequest
+	(*wrapperspb.Int64Value)(nil),    // 5: google.protobuf.Int64Value
+	(*RawData)(nil),                  // 6: xtravel.v1.RawData
 }
 var file_api_xtravel_v1_openapp_proto_depIdxs = []int32{
-	4, // 0: xtravel.v1.GetAppDetailRequest.app_id:type_name -> google.protobuf.Int64Value
-	4, // 1: xtravel.v1.GetAuthUrlRequest.app_id:type_name -> google.protobuf.Int64Value
-	0, // 2: xtravel.v1.OpenAppService.GetAppList:input_type -> xtravel.v1.GetAppListRequest
-	3, // 3: xtravel.v1.OpenAppService.GetAuthMyUserList:input_type -> xtravel.v1.GetAuthMyUserListRequest
-	2, // 4: xtravel.v1.OpenAppService.GetAuthUrl:input_type -> xtravel.v1.GetAuthUrlRequest
-	1, // 5: xtravel.v1.OpenAppService.GetAppDetail:input_type -> xtravel.v1.GetAppDetailRequest
-	5, // 6: xtravel.v1.OpenAppService.GetAppList:output_type -> xtravel.v1.RawData
-	5, // 7: xtravel.v1.OpenAppService.GetAuthMyUserList:output_type -> xtravel.v1.RawData
-	5, // 8: xtravel.v1.OpenAppService.GetAuthUrl:output_type -> xtravel.v1.RawData
-	5, // 9: xtravel.v1.OpenAppService.GetAppDetail:output_type -> xtravel.v1.RawData
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	5, // 0: xtravel.v1.GetAppDetailRequest.app_id:type_name -> google.protobuf.Int64Value
+	5, // 1: xtravel.v1.GetAuthUrlRequest.app_id:type_name -> google.protobuf.Int64Value
+	5, // 2: xtravel.v1.GetAuthUserListRequest.app_id:type_name -> google.protobuf.Int64Value
+	0, // 3: xtravel.v1.OpenAppService.GetAppList:input_type -> xtravel.v1.GetAppListRequest
+	4, // 4: xtravel.v1.OpenAppService.GetAuthUserList:input_type -> xtravel.v1.GetAuthUserListRequest
+	3, // 5: xtravel.v1.OpenAppService.GetAuthMyUserList:input_type -> xtravel.v1.GetAuthMyUserListRequest
+	2, // 6: xtravel.v1.OpenAppService.GetAuthUrl:input_type -> xtravel.v1.GetAuthUrlRequest
+	1, // 7: xtravel.v1.OpenAppService.GetAppDetail:input_type -> xtravel.v1.GetAppDetailRequest
+	6, // 8: xtravel.v1.OpenAppService.GetAppList:output_type -> xtravel.v1.RawData
+	6, // 9: xtravel.v1.OpenAppService.GetAuthUserList:output_type -> xtravel.v1.RawData
+	6, // 10: xtravel.v1.OpenAppService.GetAuthMyUserList:output_type -> xtravel.v1.RawData
+	6, // 11: xtravel.v1.OpenAppService.GetAuthUrl:output_type -> xtravel.v1.RawData
+	6, // 12: xtravel.v1.OpenAppService.GetAppDetail:output_type -> xtravel.v1.RawData
+	8, // [8:13] is the sub-list for method output_type
+	3, // [3:8] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_api_xtravel_v1_openapp_proto_init() }
@@ -267,7 +319,7 @@ func file_api_xtravel_v1_openapp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_xtravel_v1_openapp_proto_rawDesc), len(file_api_xtravel_v1_openapp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -43,4 +43,5 @@ var ProviderSet = wire.NewSet(
 	NewBalanceQueryUsecase,
 	NewOpenAppUsecase,
 	NewAuthMyUserUsecase,
+	NewAuthUserUsecase,
 )

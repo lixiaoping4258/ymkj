@@ -13,10 +13,11 @@ type OpenAppService struct {
 	v1.UnimplementedOpenAppServiceServer
 	app    *biz.OpenAppUsecase
 	authMy *biz.AuthMyUserUsecase
+	authU  *biz.AuthUserUsecase
 }
 
-func NewOpenAppService(app *biz.OpenAppUsecase, authMy *biz.AuthMyUserUsecase) *OpenAppService {
-	return &OpenAppService{app: app, authMy: authMy}
+func NewOpenAppService(app *biz.OpenAppUsecase, authMy *biz.AuthMyUserUsecase, authU *biz.AuthUserUsecase) *OpenAppService {
+	return &OpenAppService{app: app, authMy: authMy, authU: authU}
 }
 
 // GetAppList 对应 OpenAppController::appList（GET /v1/open/appList）。
@@ -167,4 +168,69 @@ func (s *OpenAppService) GetAuthMyUserList(
 		return nil, merr
 	}
 	return &v1.RawData{Json: body}, nil
+}
+
+// GetAuthUserList 对应 OpenAppController::authUserList（GET /v1/open/authUserList?app_id=N）。
+//
+// 原实现：
+//
+//	(new AuthUserListValidate())->get()->goCheck();      // app_id => require
+//	return $this->dataLists(new AppUserLists());
+func (s *OpenAppService) GetAuthUserList(
+	ctx context.Context, req *v1.GetAuthUserListRequest,
+) (*v1.RawData, error) {
+	if req.AppId == nil {
+		return nil, bizFail(biz.NewBizError("一级平台ID不能为空"))
+	}
+	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
+	userID := biz.UserIDFromContext(ctx)
+	ld, err := s.authU.List(ctx, uint32(userID), req.AppId.Value, p)
+	if err != nil {
+		return nil, err
+	}
+	items, _ := ld.Lists.([]biz.AuthUserItem)
+	rows := make([]map[string]any, 0, len(items))
+	for _, x := range items {
+		row := map[string]any{
+			"id":           x.ID,
+			"app_id":       x.AppID,
+			"app_nickname": x.AppNickname,
+			"app_avatar":   x.AppAvatar,
+			"start":        x.Start,
+			"expire":       x.Expire,
+			"mobile":       x.Mobile,
+			// ⚠️ 查不到时是 **null**（PHP 的 Undefined array key 结果）
+			"app_info": appInfoAny(x.AppInfo),
+		}
+		rows = append(rows, row)
+	}
+	body, merr := biz.MarshalNoHTMLEscape(map[string]any{
+		"lists":     rows,
+		"count":     ld.Count,
+		"page_no":   ld.PageNo,
+		"page_size": ld.PageSize,
+		"extend":    ld.Extend,
+	})
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
+}
+
+// appInfoAny 把嵌套的 app_info 转成 map；nil -> nil（序列化成 JSON null）。
+//
+// ⚠️ 这里**不处理 logo**（AppLists::listsWithQuery 不处理，只有 lists() 处理）。
+func appInfoAny(a *biz.AppInfoRow) any {
+	if a == nil {
+		return nil
+	}
+	return map[string]any{
+		"id":       a.ID,
+		"name":     a.Name,
+		"state":    a.State,
+		"logo":     a.Logo,
+		"type":     a.Type,
+		"fee_rate": a.FeeRate,
+		"flag":     a.Flag,
+	}
 }

@@ -39,6 +39,23 @@ service OpenAppService {
   //    原项目的不一致，照搬。
   // ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
   // ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+  // 一级平台授权用户列表（分页）
+  //
+  // 原实现 OpenAppController::authUserList -> `$this->dataLists(new AppUserLists())`
+  // 校验 AuthUserListValidate: app_id => require（'一级平台ID不能为空'）
+  //
+  //	x_app_auth app_auth INNER JOIN x_user u ON app_auth.uid = u.id
+  //	where uid=当前用户 AND app_id=入参  (+ delete_time IS NULL，来自模型 SoftDelete)
+  //	order app_auth.id desc   7 字段 + 嵌套 app_info
+  //
+  // ⚠️ **"授权未过期"的过滤被注释掉了** -> 过期的授权也会返回。
+  // ⚠️ mobile 掩码 length=**4**（与 authMyUserList 的 6 不同，输出等长）。
+  // ⚠️ app_info 查不到时输出 **null**（PHP Undefined array key）。
+  // 🔴 count() **没有任何 JOIN**（lists 有）—— 又一处 lists/count 不一致。
+  rpc GetAuthUserList(GetAuthUserListRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/open/authUserList"};
+  }
+
   // 我授权的三方用户列表（分页）
   //
   // 原实现 OpenAppController::authMyUserList -> `$this->dataLists(new AuthMyUserLists())`
@@ -88,3 +105,7 @@ message GetAuthUrlRequest {
   string redirect_url = 2 [json_name = "redirect_url"];
 }
 message GetAuthMyUserListRequest {}
+message GetAuthUserListRequest {
+  // 对应 `$this->params['app_id']`；规则 require（文案 '一级平台ID不能为空'）
+  google.protobuf.Int64Value app_id = 1 [json_name = "app_id"];
+}
