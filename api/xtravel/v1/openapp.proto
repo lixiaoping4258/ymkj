@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package xtravel.v1;
+
+import "api/xtravel/v1/common.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "github.com/lixiaoping4258/ymkj/api/xtravel/v1;v1";
+
+// OpenAppService 三方平台相关。
+// 对应原项目 app/api/route/open.php 的 v1/open 组。
+//
+//	OpenAppController::$notNeedLogin = []   -> **全部需登录**
+service OpenAppService {
+  // 三方平台列表（分页）
+  //
+  // 原实现 OpenAppController::appList -> `$this->dataLists(new AppLists())`
+  //
+  //	App::where([['state','=',1],['type','=',2]])
+  //	    ->field('id,name,logo,type,flag')->order('id','desc')
+  //	    ->limit(...)->select()->toArray();
+  //	// 逐行：$list['logo'] = !empty($list['logo']) ? get_image_url($list['logo']) : '';
+  //
+  // ⚠️ logo 的**空值会被换成空串**（不是 null），非空则拼域名。
+  rpc GetAppList(GetAppListRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/open/appList"};
+  }
+
+  // 三方平台详情
+  //
+  // 原实现 OpenAppController::appDetail -> `$this->data((new AppLists())->detail())`
+  //
+  //	App::where('id', $app_id ?: $this->params['app_id'])
+  //	    ->field('id, name, logo, type, fee_rate, flag')
+  //	    ->findOrEmpty()->toArray();
+  //
+  // ⚠️⚠️ **detail 不处理 logo**（lists 会）—— 返回库里的**相对路径**。
+  //    原项目的不一致，照搬。
+  // ⚠️ 不筛 state/type，能查到已下架或非三方的 app。
+  // ⚠️ 查不到时 `findOrEmpty()->toArray()` 返回**空数组 []**，不是 null。
+  rpc GetAppDetail(GetAppDetailRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/open/appDetail"};
+  }
+}
+
+message GetAppListRequest {}
+
+message GetAppDetailRequest {
+  // 对应 `$this->params['app_id']`
+  google.protobuf.Int64Value app_id = 1 [json_name = "app_id"];
+}
