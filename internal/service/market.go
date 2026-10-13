@@ -40,6 +40,7 @@ type MarketService struct {
 	saleOut    *biz.SaleOutUsecase
 	stockList  *biz.StockListUsecase
 	goodsLook  *biz.GoodsLookUsecase
+	saleOrders *biz.SaleOrderListUsecase
 	log        *log.Helper
 }
 
@@ -58,6 +59,7 @@ func NewMarketService(
 	saleOut *biz.SaleOutUsecase,
 	stockList *biz.StockListUsecase,
 	goodsLook *biz.GoodsLookUsecase,
+	saleOrders *biz.SaleOrderListUsecase,
 	logger log.Logger,
 ) *MarketService {
 	return &MarketService{
@@ -65,7 +67,7 @@ func NewMarketService(
 		stock: stock, archive: archive, fee: fee,
 		purchaseState: purchaseState, rawCache: rawCache, stale: stale,
 		saleDetail: saleDetail, saleOn: saleOn, saleOut: saleOut,
-		stockList: stockList, goodsLook: goodsLook,
+		stockList: stockList, goodsLook: goodsLook, saleOrders: saleOrders,
 		log: log.NewHelper(logger),
 	}
 }
@@ -643,6 +645,55 @@ func (s *MarketService) GetGoodsLook(
 	body, err := s.goodsLook.Get(ctx, userID, archiveID, has)
 	if err != nil {
 		return nil, err
+	}
+	return &v1.RawData{Json: body}, nil
+}
+
+// GetSaleOrderList 对应 SaleOrdersController::orderLists（GET /v1/market/orders/sale/lists）。
+//
+// 原实现：`return $this->dataLists(new SaleOrderLists());`（**无校验**）
+//
+// 🔴 照搬了两处原项目缺陷：`order_state` 列不存在、时间过滤失效（见 proto 注释）。
+func (s *MarketService) GetSaleOrderList(
+	ctx context.Context, in *v1.GetSaleOrderListRequest,
+) (*v1.RawData, error) {
+	q := biz.SaleOrderQuery{
+		UserID:     uint32(biz.UserIDFromContext(ctx)),
+		PayState:   strings.TrimSpace(in.GetPayState()),
+		OrderState: strings.TrimSpace(in.GetOrderState()),
+		Keyword:    in.GetKeyword(),
+	}
+	// 时间参数：原文用 strtotime() 转整数再比较（**已知失效**）。
+	// 这里保持"只有传了非空值才加条件"，并用同样的整数语义，行为与 PHP 一致。
+	if v := strings.TrimSpace(in.GetTimeStart()); v != "" {
+		if ts, err := biz.ParseDateToUnix(v); err == nil {
+			q.TimeStart = ts
+			q.HasTimeStart = true
+		}
+	}
+	if v := strings.TrimSpace(in.GetTimeEnd()); v != "" {
+		if ts, err := biz.ParseDateToUnix(v); err == nil {
+			q.TimeEnd = ts
+			q.HasTimeEnd = true
+		}
+	}
+	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
+	ld, err := s.saleOrders.List(ctx, q, in.GetSort(), p)
+	if err != nil {
+		return nil, err
+	}
+	items, _ := ld.Lists.([]map[string]any)
+	rows := make([]map[string]any, 0, len(items))
+	rows = append(rows, items...)
+	body, merr := biz.MarshalNoHTMLEscape(map[string]any{
+		"lists":     rows,
+		"count":     ld.Count,
+		"page_no":   ld.PageNo,
+		"page_size": ld.PageSize,
+		"extend":    ld.Extend,
+	})
+	if merr != nil {
+		return nil, merr
 	}
 	return &v1.RawData{Json: body}, nil
 }

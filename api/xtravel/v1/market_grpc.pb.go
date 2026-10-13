@@ -35,6 +35,7 @@ const (
 	MarketService_GetSaleOut_FullMethodName        = "/xtravel.v1.MarketService/GetSaleOut"
 	MarketService_GetStockList_FullMethodName      = "/xtravel.v1.MarketService/GetStockList"
 	MarketService_GetGoodsLook_FullMethodName      = "/xtravel.v1.MarketService/GetGoodsLook"
+	MarketService_GetSaleOrderList_FullMethodName  = "/xtravel.v1.MarketService/GetSaleOrderList"
 )
 
 // MarketServiceClient is the client API for MarketService service.
@@ -210,6 +211,24 @@ type MarketServiceClient interface {
 	// ⚠️ archive_id 用 isset 语义：传了空串也会当条件（查不到行）
 	// 需登录（PurchaseController::$notNeedLogin = ['index']）。
 	GetGoodsLook(ctx context.Context, in *GetGoodsLookRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 秒转订单列表（我购买的，分页）
+	//
+	// 原实现 SaleOrdersController::orderLists -> `$this->dataLists(new SaleOrderLists())`
+	// **无校验**
+	//
+	//	三张表 INNER JOIN：SalesOrders + sales_orders_detail + app_archive
+	//	where: SalesOrders.user_id = 当前用户
+	//	       [+ pay_state] [+ order_state] [+ keyword(order_no LIKE)] [+ time_start] [+ time_end]
+	//	sort: price_asc / price_desc / time_asc / time_desc（其它值走 default = time_desc）
+	//	8 个字段；archive_images 逐行 json_decode（仅 is_string 时）
+	//
+	// 🔴 **两处原项目缺陷，刻意照搬**：
+	//  1. `order_state` 列**不存在**（实际是 state）-> 传该参数会 SQL 报错 ERROR 1054
+	//  2. `time_start`/`time_end` 用 strtotime() 整数与 **datetime 列**比较
+	//     -> time_start 恒为真、time_end 恒为假（时间过滤实际失效）
+	//
+	// ⚠️ 一单多条详情行时列表会出现重复行（JOIN 放大）；count() 用同样的 JOIN，两者一致。
+	GetSaleOrderList(ctx context.Context, in *GetSaleOrderListRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type marketServiceClient struct {
@@ -374,6 +393,16 @@ func (c *marketServiceClient) GetGoodsLook(ctx context.Context, in *GetGoodsLook
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, MarketService_GetGoodsLook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *marketServiceClient) GetSaleOrderList(ctx context.Context, in *GetSaleOrderListRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, MarketService_GetSaleOrderList_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -553,6 +582,24 @@ type MarketServiceServer interface {
 	// ⚠️ archive_id 用 isset 语义：传了空串也会当条件（查不到行）
 	// 需登录（PurchaseController::$notNeedLogin = ['index']）。
 	GetGoodsLook(context.Context, *GetGoodsLookRequest) (*RawData, error)
+	// 秒转订单列表（我购买的，分页）
+	//
+	// 原实现 SaleOrdersController::orderLists -> `$this->dataLists(new SaleOrderLists())`
+	// **无校验**
+	//
+	//	三张表 INNER JOIN：SalesOrders + sales_orders_detail + app_archive
+	//	where: SalesOrders.user_id = 当前用户
+	//	       [+ pay_state] [+ order_state] [+ keyword(order_no LIKE)] [+ time_start] [+ time_end]
+	//	sort: price_asc / price_desc / time_asc / time_desc（其它值走 default = time_desc）
+	//	8 个字段；archive_images 逐行 json_decode（仅 is_string 时）
+	//
+	// 🔴 **两处原项目缺陷，刻意照搬**：
+	//  1. `order_state` 列**不存在**（实际是 state）-> 传该参数会 SQL 报错 ERROR 1054
+	//  2. `time_start`/`time_end` 用 strtotime() 整数与 **datetime 列**比较
+	//     -> time_start 恒为真、time_end 恒为假（时间过滤实际失效）
+	//
+	// ⚠️ 一单多条详情行时列表会出现重复行（JOIN 放大）；count() 用同样的 JOIN，两者一致。
+	GetSaleOrderList(context.Context, *GetSaleOrderListRequest) (*RawData, error)
 	mustEmbedUnimplementedMarketServiceServer()
 }
 
@@ -610,6 +657,9 @@ func (UnimplementedMarketServiceServer) GetStockList(context.Context, *GetStockL
 }
 func (UnimplementedMarketServiceServer) GetGoodsLook(context.Context, *GetGoodsLookRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetGoodsLook not implemented")
+}
+func (UnimplementedMarketServiceServer) GetSaleOrderList(context.Context, *GetSaleOrderListRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSaleOrderList not implemented")
 }
 func (UnimplementedMarketServiceServer) mustEmbedUnimplementedMarketServiceServer() {}
 func (UnimplementedMarketServiceServer) testEmbeddedByValue()                       {}
@@ -920,6 +970,24 @@ func _MarketService_GetGoodsLook_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketService_GetSaleOrderList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSaleOrderListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).GetSaleOrderList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_GetSaleOrderList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).GetSaleOrderList(ctx, req.(*GetSaleOrderListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketService_ServiceDesc is the grpc.ServiceDesc for MarketService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -990,6 +1058,10 @@ var MarketService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetGoodsLook",
 			Handler:    _MarketService_GetGoodsLook_Handler,
+		},
+		{
+			MethodName: "GetSaleOrderList",
+			Handler:    _MarketService_GetSaleOrderList_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

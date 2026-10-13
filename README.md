@@ -1227,6 +1227,35 @@ AppLists::detail(null)     ->  $app_id ?: $this->params['app_id']  -> 回退到�
 
 于是响应退化成 **`{"app_info": {...}}`**（没有其它键）。已实测确认。**照搬。**
 
+
+### 🔴 `SaleOrderLists` 一个列表类里有**三个** `Unknown column`（**全部刻意照搬**）
+
+`app/api/lists/market/sales/SaleOrderLists.php` —— 已用真机逐条实测：
+
+| # | 缺陷 | 触发方式 | 实测响应 |
+|---|---|---|---|
+| 1 | 过滤用了 **`SalesOrders.order_state`**，而该表只有 `state` | 传 `order_state=X` | `Error 1054: Unknown column 'SalesOrders.order_state' in 'where clause'` |
+| 2 | 排序用了 **`SalesOrders.total_price`**，该列**根本不存在**（实际是 `price`） | 传 `sort=price_asc` 或 `price_desc` | `Error 1054: Unknown column 'SalesOrders.total_price' in 'order clause'` |
+| 3 | 时间过滤用 `strtotime()`（**整数**）与 **datetime 列**比较 | `time_start=2020-01-01` | count=**2**（订单是 2026 年的，却通过了 2020 的过滤 —— **恒为真**） |
+|   |  | `time_end=2030-01-01` | count=**0**（订单在 2026 年 < 2030 年，却被排除 —— **恒为假**） |
+
+第 3 条的机理：MySQL 比较 DATETIME 与整数时，会把 datetime 转成 `YYYYMMDDHHMMSS`
+形式的数字（如 `20260527143024`）。它与 unix 时间戳 `1780000000` 相比：
+
+```
+20260527143024 >= 1780000000   ->  真（永远）
+20260527143024 <= 1780086400   ->  假（永远）
+```
+
+**所以 `sort=price_asc` / `price_desc` 两个排序值、`order_state` 一个过滤项
+实际都是"一用就报错"，而时间过滤是"看起来在过滤、其实没有"。**
+
+**Go 版按"不改动原项目逻辑"全部照搬**，实测响应与 PHP 保持一致（相同的错误文案）。
+若要修，需业务确认 —— 尤其第 3 条：修好之后**历史时间筛选的结果会变**。
+
+对应实现：`internal/biz/saleorderlist.go`（注释里逐条写明）、
+`internal/data/saleorderlist.go`。
+
 ## 九、待迁接口的侦察记录（省下一次重新读源码）
 
 这一节记录已经读过、但**还没到能动手实现**的接口。目的是让下一次接手的人

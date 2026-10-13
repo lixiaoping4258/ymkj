@@ -25,6 +25,7 @@ const OperationMarketServiceGetPayWay = "/xtravel.v1.MarketService/GetPayWay"
 const OperationMarketServiceGetSaleCategories = "/xtravel.v1.MarketService/GetSaleCategories"
 const OperationMarketServiceGetSaleDetail = "/xtravel.v1.MarketService/GetSaleDetail"
 const OperationMarketServiceGetSaleOn = "/xtravel.v1.MarketService/GetSaleOn"
+const OperationMarketServiceGetSaleOrderList = "/xtravel.v1.MarketService/GetSaleOrderList"
 const OperationMarketServiceGetSaleOut = "/xtravel.v1.MarketService/GetSaleOut"
 const OperationMarketServiceGetStockList = "/xtravel.v1.MarketService/GetStockList"
 const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseIndex"
@@ -91,6 +92,24 @@ type MarketServiceHTTPServer interface {
 	//
 	// 🔴 lists 两个 JOIN、count 只有一个 —— 又一处不一致（清单第 3 条）
 	GetSaleOn(context.Context, *GetSaleOnRequest) (*RawData, error)
+	// GetSaleOrderList 秒转订单列表（我购买的，分页）
+	//
+	// 原实现 SaleOrdersController::orderLists -> `$this->dataLists(new SaleOrderLists())`
+	// **无校验**
+	//
+	//  三张表 INNER JOIN：SalesOrders + sales_orders_detail + app_archive
+	//  where: SalesOrders.user_id = 当前用户
+	//         [+ pay_state] [+ order_state] [+ keyword(order_no LIKE)] [+ time_start] [+ time_end]
+	//  sort: price_asc / price_desc / time_asc / time_desc（其它值走 default = time_desc）
+	//  8 个字段；archive_images 逐行 json_decode（仅 is_string 时）
+	//
+	// 🔴 **两处原项目缺陷，刻意照搬**：
+	//  1. `order_state` 列**不存在**（实际是 state）-> 传该参数会 SQL 报错 ERROR 1054
+	//  2. `time_start`/`time_end` 用 strtotime() 整数与 **datetime 列**比较
+	//     -> time_start 恒为真、time_end 恒为假（时间过滤实际失效）
+	//
+	// ⚠️ 一单多条详情行时列表会出现重复行（JOIN 放大）；count() 用同样的 JOIN，两者一致。
+	GetSaleOrderList(context.Context, *GetSaleOrderListRequest) (*RawData, error)
 	// GetSaleOut 秒转已兑出的藏品（分页）
 	//
 	// 原实现 SaleController::salesOut -> `$this->dataLists(new SaleOutCollectionLists())`
@@ -205,6 +224,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/sales/out", _MarketService_GetSaleOut0_HTTP_Handler(srv))
 	r.GET("/v1/market/stock/list", _MarketService_GetStockList0_HTTP_Handler(srv))
 	r.GET("/v1/market/stock/goodsLook", _MarketService_GetGoodsLook0_HTTP_Handler(srv))
+	r.GET("/v1/market/orders/sale/lists", _MarketService_GetSaleOrderList0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -511,6 +531,25 @@ func _MarketService_GetGoodsLook0_HTTP_Handler(srv MarketServiceHTTPServer) func
 	}
 }
 
+func _MarketService_GetSaleOrderList0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetSaleOrderListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServiceGetSaleOrderList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetSaleOrderList(ctx, req.(*GetSaleOrderListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -566,6 +605,24 @@ type MarketServiceHTTPClient interface {
 	//
 	// 🔴 lists 两个 JOIN、count 只有一个 —— 又一处不一致（清单第 3 条）
 	GetSaleOn(ctx context.Context, req *GetSaleOnRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// GetSaleOrderList 秒转订单列表（我购买的，分页）
+	//
+	// 原实现 SaleOrdersController::orderLists -> `$this->dataLists(new SaleOrderLists())`
+	// **无校验**
+	//
+	//  三张表 INNER JOIN：SalesOrders + sales_orders_detail + app_archive
+	//  where: SalesOrders.user_id = 当前用户
+	//         [+ pay_state] [+ order_state] [+ keyword(order_no LIKE)] [+ time_start] [+ time_end]
+	//  sort: price_asc / price_desc / time_asc / time_desc（其它值走 default = time_desc）
+	//  8 个字段；archive_images 逐行 json_decode（仅 is_string 时）
+	//
+	// 🔴 **两处原项目缺陷，刻意照搬**：
+	//  1. `order_state` 列**不存在**（实际是 state）-> 传该参数会 SQL 报错 ERROR 1054
+	//  2. `time_start`/`time_end` 用 strtotime() 整数与 **datetime 列**比较
+	//     -> time_start 恒为真、time_end 恒为假（时间过滤实际失效）
+	//
+	// ⚠️ 一单多条详情行时列表会出现重复行（JOIN 放大）；count() 用同样的 JOIN，两者一致。
+	GetSaleOrderList(ctx context.Context, req *GetSaleOrderListRequest, opts ...http.CallOption) (rsp *RawData, err error)
 	// GetSaleOut 秒转已兑出的藏品（分页）
 	//
 	// 原实现 SaleController::salesOut -> `$this->dataLists(new SaleOutCollectionLists())`
@@ -790,6 +847,36 @@ func (c *MarketServiceHTTPClientImpl) GetSaleOn(ctx context.Context, in *GetSale
 	pattern := "/v1/market/sales/on"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServiceGetSaleOn))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetSaleOrderList 秒转订单列表（我购买的，分页）
+//
+// 原实现 SaleOrdersController::orderLists -> `$this->dataLists(new SaleOrderLists())`
+// **无校验**
+//
+//	三张表 INNER JOIN：SalesOrders + sales_orders_detail + app_archive
+//	where: SalesOrders.user_id = 当前用户
+//	       [+ pay_state] [+ order_state] [+ keyword(order_no LIKE)] [+ time_start] [+ time_end]
+//	sort: price_asc / price_desc / time_asc / time_desc（其它值走 default = time_desc）
+//	8 个字段；archive_images 逐行 json_decode（仅 is_string 时）
+//
+// 🔴 **两处原项目缺陷，刻意照搬**：
+//  1. `order_state` 列**不存在**（实际是 state）-> 传该参数会 SQL 报错 ERROR 1054
+//  2. `time_start`/`time_end` 用 strtotime() 整数与 **datetime 列**比较
+//     -> time_start 恒为真、time_end 恒为假（时间过滤实际失效）
+//
+// ⚠️ 一单多条详情行时列表会出现重复行（JOIN 放大）；count() 用同样的 JOIN，两者一致。
+func (c *MarketServiceHTTPClientImpl) GetSaleOrderList(ctx context.Context, in *GetSaleOrderListRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/market/orders/sale/lists"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServiceGetSaleOrderList))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {
