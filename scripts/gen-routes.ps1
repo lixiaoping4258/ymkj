@@ -19,7 +19,7 @@ Set-Location $root
 
 # --- 1. 从 proto 提取已实现路由 ---
 $impl = @()
-Get-ChildItem 'api\xtravel\v1\*.proto' | ForEach-Object {
+Get-ChildItem "$root\api\xtravel\v1\*.proto" | ForEach-Object {
     $svc = ''; $rpc = ''
     foreach ($line in [System.IO.File]::ReadAllLines($_.FullName)) {
         if ($line -match '^\s*service\s+(\w+)') { $svc = $Matches[1] }
@@ -39,7 +39,7 @@ $impl = $impl | Sort-Object Path -Unique
 
 # --- 2. 从 middleware.go 提取免登录白名单 ---
 $pub = @()
-$mw = [System.IO.File]::ReadAllText('internal\server\middleware.go')
+$mw = [System.IO.File]::ReadAllText("$root\internal\server\middleware.go")
 foreach ($m in [regex]::Matches($mw, '"(/xtravel\.v1\.[^"]+)"\s*:\s*\{\}')) {
     $pub += $m.Groups[1].Value
 }
@@ -48,7 +48,7 @@ foreach ($p in $pub) { $pubSet[$p] = $true }
 
 # --- 3. 从 ROUTES-AND-AUTH.md 读原项目全量路由（用于算进度） ---
 $total = 0; $publicTotal = 0
-$ra = 'docs\ROUTES-AND-AUTH.md'
+$ra = "$root\docs\ROUTES-AND-AUTH.md"
 if (Test-Path $ra) {
     $txt = [System.IO.File]::ReadAllText($ra)
     foreach ($m in [regex]::Matches($txt, '(?m)^\|\s*(GET|POST|PUT|DELETE)\s*\|\s*`([^`]+)`\s*\|[^|]*\|\s*(\*\*是\*\*|否)\s*\|\s*(✅?)\s*\|')) {
