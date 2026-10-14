@@ -41,6 +41,7 @@ type MarketService struct {
 	stockList  *biz.StockListUsecase
 	goodsLook  *biz.GoodsLookUsecase
 	saleOrders *biz.SaleOrderListUsecase
+	saleGoods  *biz.SaleGoodsUsecase
 	log        *log.Helper
 }
 
@@ -60,6 +61,7 @@ func NewMarketService(
 	stockList *biz.StockListUsecase,
 	goodsLook *biz.GoodsLookUsecase,
 	saleOrders *biz.SaleOrderListUsecase,
+	saleGoods *biz.SaleGoodsUsecase,
 	logger log.Logger,
 ) *MarketService {
 	return &MarketService{
@@ -68,7 +70,8 @@ func NewMarketService(
 		purchaseState: purchaseState, rawCache: rawCache, stale: stale,
 		saleDetail: saleDetail, saleOn: saleOn, saleOut: saleOut,
 		stockList: stockList, goodsLook: goodsLook, saleOrders: saleOrders,
-		log: log.NewHelper(logger),
+		saleGoods: saleGoods,
+		log:       log.NewHelper(logger),
 	}
 }
 
@@ -679,6 +682,37 @@ func (s *MarketService) GetSaleOrderList(
 	}
 	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
 	ld, err := s.saleOrders.List(ctx, q, in.GetSort(), p)
+	if err != nil {
+		return nil, err
+	}
+	items, _ := ld.Lists.([]map[string]any)
+	rows := make([]map[string]any, 0, len(items))
+	rows = append(rows, items...)
+	body, merr := biz.MarshalNoHTMLEscape(map[string]any{
+		"lists":     rows,
+		"count":     ld.Count,
+		"page_no":   ld.PageNo,
+		"page_size": ld.PageSize,
+		"extend":    ld.Extend,
+	})
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
+}
+
+// GetSaleGoodsList 对应 SaleOrdersController::goodsList（GET /v1/market/orders/sale/goodslist）。
+//
+// 原实现：`return $this->dataLists(new SaleGoodsLists());`（**无校验**）
+func (s *MarketService) GetSaleGoodsList(
+	ctx context.Context, in *v1.GetSaleGoodsListRequest,
+) (*v1.RawData, error) {
+	q := biz.SaleGoodsQuery{
+		UserID:  uint32(biz.UserIDFromContext(ctx)),
+		Keyword: in.GetKeyword(),
+	}
+	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
+	ld, err := s.saleGoods.List(ctx, q, in.GetSort(), p)
 	if err != nil {
 		return nil, err
 	}

@@ -238,6 +238,23 @@ service MarketService {
   rpc GetSaleOrderList(GetSaleOrderListRequest) returns (RawData) {
     option (google.api.http) = {get: "/v1/market/orders/sale/lists"};
   }
+
+  // 秒转「我的兑出」商品列表（分页）
+  //
+  // 原实现 SaleOrdersController::goodsList -> `$this->dataLists(new SaleGoodsLists())`
+  // **无校验**
+  //
+  //  两张表 INNER JOIN：MarketSales + app_archive
+  //  where: MarketSales.user_id = 当前用户  [+ AppArchive.name LIKE '%kw%']
+  //  sort: price_asc / price_desc / time_asc / time_desc（其它值走 default = time_desc）
+  //  5 个字段；archive_images 逐行 json_decode（仅 is_string 时）
+  //
+  // 🔴 `sort=price_asc/price_desc` 排序用的 `MarketSales.total_price` **列不存在**
+  //    -> `Error 1054: Unknown column 'MarketSales.total_price' in 'order clause'`
+  //    与 /v1/market/orders/sale/lists 是同一个错（那边是 SalesOrders.total_price）。刻意照搬。
+  rpc GetSaleGoodsList(GetSaleGoodsListRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/market/orders/sale/goodslist"};
+  }
 }
 
 message PurchaseOnRequest {
@@ -384,4 +401,11 @@ message GetSaleOrderListRequest {
   string time_end = 5 [json_name = "time_end"];
   // price_asc / price_desc / time_asc / time_desc
   string sort = 6 [json_name = "sort"];
+}
+
+message GetSaleGoodsListRequest {
+  // 对 **AppArchive.name** 做 LIKE '%kw%'
+  string keyword = 1 [json_name = "keyword"];
+  // price_asc / price_desc / time_asc / time_desc
+  string sort = 2 [json_name = "sort"];
 }

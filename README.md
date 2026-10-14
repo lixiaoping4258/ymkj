@@ -1236,6 +1236,7 @@ AppLists::detail(null)     ->  $app_id ?: $this->params['app_id']  -> 回退到�
 |---|---|---|---|
 | 1 | 过滤用了 **`SalesOrders.order_state`**，而该表只有 `state` | 传 `order_state=X` | `Error 1054: Unknown column 'SalesOrders.order_state' in 'where clause'` |
 | 2 | 排序用了 **`SalesOrders.total_price`**，该列**根本不存在**（实际是 `price`） | 传 `sort=price_asc` 或 `price_desc` | `Error 1054: Unknown column 'SalesOrders.total_price' in 'order clause'` |
+| 2b | **同一个 `total_price` 错误在 `SaleGoodsLists` 里也有一份**（`MarketSales.total_price`） | `GET /v1/market/orders/sale/goodslist?sort=price_asc` | `Error 1054: Unknown column 'MarketSales.total_price' in 'order clause'` |
 | 3 | 时间过滤用 `strtotime()`（**整数**）与 **datetime 列**比较 | `time_start=2020-01-01` | count=**2**（订单是 2026 年的，却通过了 2020 的过滤 —— **恒为真**） |
 |   |  | `time_end=2030-01-01` | count=**0**（订单在 2026 年 < 2030 年，却被排除 —— **恒为假**） |
 

@@ -36,6 +36,7 @@ const (
 	MarketService_GetStockList_FullMethodName      = "/xtravel.v1.MarketService/GetStockList"
 	MarketService_GetGoodsLook_FullMethodName      = "/xtravel.v1.MarketService/GetGoodsLook"
 	MarketService_GetSaleOrderList_FullMethodName  = "/xtravel.v1.MarketService/GetSaleOrderList"
+	MarketService_GetSaleGoodsList_FullMethodName  = "/xtravel.v1.MarketService/GetSaleGoodsList"
 )
 
 // MarketServiceClient is the client API for MarketService service.
@@ -229,6 +230,21 @@ type MarketServiceClient interface {
 	//
 	// ⚠️ 一单多条详情行时列表会出现重复行（JOIN 放大）；count() 用同样的 JOIN，两者一致。
 	GetSaleOrderList(ctx context.Context, in *GetSaleOrderListRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 秒转「我的兑出」商品列表（分页）
+	//
+	// 原实现 SaleOrdersController::goodsList -> `$this->dataLists(new SaleGoodsLists())`
+	// **无校验**
+	//
+	//	两张表 INNER JOIN：MarketSales + app_archive
+	//	where: MarketSales.user_id = 当前用户  [+ AppArchive.name LIKE '%kw%']
+	//	sort: price_asc / price_desc / time_asc / time_desc（其它值走 default = time_desc）
+	//	5 个字段；archive_images 逐行 json_decode（仅 is_string 时）
+	//
+	// 🔴 `sort=price_asc/price_desc` 排序用的 `MarketSales.total_price` **列不存在**
+	//
+	//	-> `Error 1054: Unknown column 'MarketSales.total_price' in 'order clause'`
+	//	与 /v1/market/orders/sale/lists 是同一个错（那边是 SalesOrders.total_price）。刻意照搬。
+	GetSaleGoodsList(ctx context.Context, in *GetSaleGoodsListRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type marketServiceClient struct {
@@ -403,6 +419,16 @@ func (c *marketServiceClient) GetSaleOrderList(ctx context.Context, in *GetSaleO
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, MarketService_GetSaleOrderList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *marketServiceClient) GetSaleGoodsList(ctx context.Context, in *GetSaleGoodsListRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, MarketService_GetSaleGoodsList_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -600,6 +626,21 @@ type MarketServiceServer interface {
 	//
 	// ⚠️ 一单多条详情行时列表会出现重复行（JOIN 放大）；count() 用同样的 JOIN，两者一致。
 	GetSaleOrderList(context.Context, *GetSaleOrderListRequest) (*RawData, error)
+	// 秒转「我的兑出」商品列表（分页）
+	//
+	// 原实现 SaleOrdersController::goodsList -> `$this->dataLists(new SaleGoodsLists())`
+	// **无校验**
+	//
+	//	两张表 INNER JOIN：MarketSales + app_archive
+	//	where: MarketSales.user_id = 当前用户  [+ AppArchive.name LIKE '%kw%']
+	//	sort: price_asc / price_desc / time_asc / time_desc（其它值走 default = time_desc）
+	//	5 个字段；archive_images 逐行 json_decode（仅 is_string 时）
+	//
+	// 🔴 `sort=price_asc/price_desc` 排序用的 `MarketSales.total_price` **列不存在**
+	//
+	//	-> `Error 1054: Unknown column 'MarketSales.total_price' in 'order clause'`
+	//	与 /v1/market/orders/sale/lists 是同一个错（那边是 SalesOrders.total_price）。刻意照搬。
+	GetSaleGoodsList(context.Context, *GetSaleGoodsListRequest) (*RawData, error)
 	mustEmbedUnimplementedMarketServiceServer()
 }
 
@@ -660,6 +701,9 @@ func (UnimplementedMarketServiceServer) GetGoodsLook(context.Context, *GetGoodsL
 }
 func (UnimplementedMarketServiceServer) GetSaleOrderList(context.Context, *GetSaleOrderListRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSaleOrderList not implemented")
+}
+func (UnimplementedMarketServiceServer) GetSaleGoodsList(context.Context, *GetSaleGoodsListRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSaleGoodsList not implemented")
 }
 func (UnimplementedMarketServiceServer) mustEmbedUnimplementedMarketServiceServer() {}
 func (UnimplementedMarketServiceServer) testEmbeddedByValue()                       {}
@@ -988,6 +1032,24 @@ func _MarketService_GetSaleOrderList_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketService_GetSaleGoodsList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSaleGoodsListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).GetSaleGoodsList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_GetSaleGoodsList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).GetSaleGoodsList(ctx, req.(*GetSaleGoodsListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketService_ServiceDesc is the grpc.ServiceDesc for MarketService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1062,6 +1124,10 @@ var MarketService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSaleOrderList",
 			Handler:    _MarketService_GetSaleOrderList_Handler,
+		},
+		{
+			MethodName: "GetSaleGoodsList",
+			Handler:    _MarketService_GetSaleGoodsList_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

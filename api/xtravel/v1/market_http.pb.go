@@ -24,6 +24,7 @@ const OperationMarketServiceGetGoodsLook = "/xtravel.v1.MarketService/GetGoodsLo
 const OperationMarketServiceGetPayWay = "/xtravel.v1.MarketService/GetPayWay"
 const OperationMarketServiceGetSaleCategories = "/xtravel.v1.MarketService/GetSaleCategories"
 const OperationMarketServiceGetSaleDetail = "/xtravel.v1.MarketService/GetSaleDetail"
+const OperationMarketServiceGetSaleGoodsList = "/xtravel.v1.MarketService/GetSaleGoodsList"
 const OperationMarketServiceGetSaleOn = "/xtravel.v1.MarketService/GetSaleOn"
 const OperationMarketServiceGetSaleOrderList = "/xtravel.v1.MarketService/GetSaleOrderList"
 const OperationMarketServiceGetSaleOut = "/xtravel.v1.MarketService/GetSaleOut"
@@ -80,6 +81,20 @@ type MarketServiceHTTPServer interface {
 	// ⚠️ trade_notice 来自 ConfigService::get('trade','notice')，**无默认值 -> 可能 null**
 	// 需登录（SaleController::$notNeedLogin = ['categories']）。
 	GetSaleDetail(context.Context, *GetSaleDetailRequest) (*RawData, error)
+	// GetSaleGoodsList 秒转「我的兑出」商品列表（分页）
+	//
+	// 原实现 SaleOrdersController::goodsList -> `$this->dataLists(new SaleGoodsLists())`
+	// **无校验**
+	//
+	//  两张表 INNER JOIN：MarketSales + app_archive
+	//  where: MarketSales.user_id = 当前用户  [+ AppArchive.name LIKE '%kw%']
+	//  sort: price_asc / price_desc / time_asc / time_desc（其它值走 default = time_desc）
+	//  5 个字段；archive_images 逐行 json_decode（仅 is_string 时）
+	//
+	// 🔴 `sort=price_asc/price_desc` 排序用的 `MarketSales.total_price` **列不存在**
+	//    -> `Error 1054: Unknown column 'MarketSales.total_price' in 'order clause'`
+	//    与 /v1/market/orders/sale/lists 是同一个错（那边是 SalesOrders.total_price）。刻意照搬。
+	GetSaleGoodsList(context.Context, *GetSaleGoodsListRequest) (*RawData, error)
 	// GetSaleOn 秒转在售藏品（分页）
 	//
 	// 原实现 SaleController::salesOn -> `$this->dataLists(new SaleOnCollectionLists())`
@@ -225,6 +240,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/stock/list", _MarketService_GetStockList0_HTTP_Handler(srv))
 	r.GET("/v1/market/stock/goodsLook", _MarketService_GetGoodsLook0_HTTP_Handler(srv))
 	r.GET("/v1/market/orders/sale/lists", _MarketService_GetSaleOrderList0_HTTP_Handler(srv))
+	r.GET("/v1/market/orders/sale/goodslist", _MarketService_GetSaleGoodsList0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -550,6 +566,25 @@ func _MarketService_GetSaleOrderList0_HTTP_Handler(srv MarketServiceHTTPServer) 
 	}
 }
 
+func _MarketService_GetSaleGoodsList0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetSaleGoodsListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServiceGetSaleGoodsList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetSaleGoodsList(ctx, req.(*GetSaleGoodsListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -593,6 +628,20 @@ type MarketServiceHTTPClient interface {
 	// ⚠️ trade_notice 来自 ConfigService::get('trade','notice')，**无默认值 -> 可能 null**
 	// 需登录（SaleController::$notNeedLogin = ['categories']）。
 	GetSaleDetail(ctx context.Context, req *GetSaleDetailRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// GetSaleGoodsList 秒转「我的兑出」商品列表（分页）
+	//
+	// 原实现 SaleOrdersController::goodsList -> `$this->dataLists(new SaleGoodsLists())`
+	// **无校验**
+	//
+	//  两张表 INNER JOIN：MarketSales + app_archive
+	//  where: MarketSales.user_id = 当前用户  [+ AppArchive.name LIKE '%kw%']
+	//  sort: price_asc / price_desc / time_asc / time_desc（其它值走 default = time_desc）
+	//  5 个字段；archive_images 逐行 json_decode（仅 is_string 时）
+	//
+	// 🔴 `sort=price_asc/price_desc` 排序用的 `MarketSales.total_price` **列不存在**
+	//    -> `Error 1054: Unknown column 'MarketSales.total_price' in 'order clause'`
+	//    与 /v1/market/orders/sale/lists 是同一个错（那边是 SalesOrders.total_price）。刻意照搬。
+	GetSaleGoodsList(ctx context.Context, req *GetSaleGoodsListRequest, opts ...http.CallOption) (rsp *RawData, err error)
 	// GetSaleOn 秒转在售藏品（分页）
 	//
 	// 原实现 SaleController::salesOn -> `$this->dataLists(new SaleOnCollectionLists())`
@@ -823,6 +872,33 @@ func (c *MarketServiceHTTPClientImpl) GetSaleDetail(ctx context.Context, in *Get
 	pattern := "/v1/market/sales/detail"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServiceGetSaleDetail))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetSaleGoodsList 秒转「我的兑出」商品列表（分页）
+//
+// 原实现 SaleOrdersController::goodsList -> `$this->dataLists(new SaleGoodsLists())`
+// **无校验**
+//
+//	两张表 INNER JOIN：MarketSales + app_archive
+//	where: MarketSales.user_id = 当前用户  [+ AppArchive.name LIKE '%kw%']
+//	sort: price_asc / price_desc / time_asc / time_desc（其它值走 default = time_desc）
+//	5 个字段；archive_images 逐行 json_decode（仅 is_string 时）
+//
+// 🔴 `sort=price_asc/price_desc` 排序用的 `MarketSales.total_price` **列不存在**
+//
+//	-> `Error 1054: Unknown column 'MarketSales.total_price' in 'order clause'`
+//	与 /v1/market/orders/sale/lists 是同一个错（那边是 SalesOrders.total_price）。刻意照搬。
+func (c *MarketServiceHTTPClientImpl) GetSaleGoodsList(ctx context.Context, in *GetSaleGoodsListRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/market/orders/sale/goodslist"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServiceGetSaleGoodsList))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {
