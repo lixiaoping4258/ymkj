@@ -37,6 +37,7 @@ const (
 	MarketService_GetGoodsLook_FullMethodName      = "/xtravel.v1.MarketService/GetGoodsLook"
 	MarketService_GetSaleOrderList_FullMethodName  = "/xtravel.v1.MarketService/GetSaleOrderList"
 	MarketService_GetSaleGoodsList_FullMethodName  = "/xtravel.v1.MarketService/GetSaleGoodsList"
+	MarketService_GetSaleRecordList_FullMethodName = "/xtravel.v1.MarketService/GetSaleRecordList"
 )
 
 // MarketServiceClient is the client API for MarketService service.
@@ -245,6 +246,22 @@ type MarketServiceClient interface {
 	//	-> `Error 1054: Unknown column 'MarketSales.total_price' in 'order clause'`
 	//	与 /v1/market/orders/sale/lists 是同一个错（那边是 SalesOrders.total_price）。刻意照搬。
 	GetSaleGoodsList(ctx context.Context, in *GetSaleGoodsListRequest, opts ...grpc.CallOption) (*RawData, error)
+	// 秒转「我的兑出」兑出记录（分页）
+	//
+	// 原实现 SaleOrdersController::salesList -> `$this->dataLists(new SaleRecordLists())`
+	// **无校验**
+	//
+	//	lists():  4 张表 INNER JOIN —— sales_orders_detail + app_archive + market_sales + sales_orders
+	//	count():  ⚠️ **只有 2 张表** —— sales_orders_detail + app_archive
+	//	where: SalesOrdersDetail.user_id = 当前用户 [+ AppArchive.name LIKE] [+ SalesOrdersDetail.state]
+	//	sort: **只有 time_asc / time_desc**（不像另外两个列表还有 price_*）
+	//	6 个字段（含来自第 4 张表的 SalesOrders.order_no）
+	//
+	// 🔴 **count 与 lists 口径不一致**（清单第 3 条第 4 例）：
+	//
+	//	count 会把被后两个 INNER JOIN 丢掉的行也算进去 -> **count >= 实际行数**。
+	//	实测 uid=13：count 口径 2 行、lists 口径 1 行（1 行的 sale_id 是孤儿）。刻意照搬。
+	GetSaleRecordList(ctx context.Context, in *GetSaleRecordListRequest, opts ...grpc.CallOption) (*RawData, error)
 }
 
 type marketServiceClient struct {
@@ -429,6 +446,16 @@ func (c *marketServiceClient) GetSaleGoodsList(ctx context.Context, in *GetSaleG
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RawData)
 	err := c.cc.Invoke(ctx, MarketService_GetSaleGoodsList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *marketServiceClient) GetSaleRecordList(ctx context.Context, in *GetSaleRecordListRequest, opts ...grpc.CallOption) (*RawData, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RawData)
+	err := c.cc.Invoke(ctx, MarketService_GetSaleRecordList_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -641,6 +668,22 @@ type MarketServiceServer interface {
 	//	-> `Error 1054: Unknown column 'MarketSales.total_price' in 'order clause'`
 	//	与 /v1/market/orders/sale/lists 是同一个错（那边是 SalesOrders.total_price）。刻意照搬。
 	GetSaleGoodsList(context.Context, *GetSaleGoodsListRequest) (*RawData, error)
+	// 秒转「我的兑出」兑出记录（分页）
+	//
+	// 原实现 SaleOrdersController::salesList -> `$this->dataLists(new SaleRecordLists())`
+	// **无校验**
+	//
+	//	lists():  4 张表 INNER JOIN —— sales_orders_detail + app_archive + market_sales + sales_orders
+	//	count():  ⚠️ **只有 2 张表** —— sales_orders_detail + app_archive
+	//	where: SalesOrdersDetail.user_id = 当前用户 [+ AppArchive.name LIKE] [+ SalesOrdersDetail.state]
+	//	sort: **只有 time_asc / time_desc**（不像另外两个列表还有 price_*）
+	//	6 个字段（含来自第 4 张表的 SalesOrders.order_no）
+	//
+	// 🔴 **count 与 lists 口径不一致**（清单第 3 条第 4 例）：
+	//
+	//	count 会把被后两个 INNER JOIN 丢掉的行也算进去 -> **count >= 实际行数**。
+	//	实测 uid=13：count 口径 2 行、lists 口径 1 行（1 行的 sale_id 是孤儿）。刻意照搬。
+	GetSaleRecordList(context.Context, *GetSaleRecordListRequest) (*RawData, error)
 	mustEmbedUnimplementedMarketServiceServer()
 }
 
@@ -704,6 +747,9 @@ func (UnimplementedMarketServiceServer) GetSaleOrderList(context.Context, *GetSa
 }
 func (UnimplementedMarketServiceServer) GetSaleGoodsList(context.Context, *GetSaleGoodsListRequest) (*RawData, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSaleGoodsList not implemented")
+}
+func (UnimplementedMarketServiceServer) GetSaleRecordList(context.Context, *GetSaleRecordListRequest) (*RawData, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSaleRecordList not implemented")
 }
 func (UnimplementedMarketServiceServer) mustEmbedUnimplementedMarketServiceServer() {}
 func (UnimplementedMarketServiceServer) testEmbeddedByValue()                       {}
@@ -1050,6 +1096,24 @@ func _MarketService_GetSaleGoodsList_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MarketService_GetSaleRecordList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSaleRecordListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServiceServer).GetSaleRecordList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MarketService_GetSaleRecordList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServiceServer).GetSaleRecordList(ctx, req.(*GetSaleRecordListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MarketService_ServiceDesc is the grpc.ServiceDesc for MarketService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1128,6 +1192,10 @@ var MarketService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSaleGoodsList",
 			Handler:    _MarketService_GetSaleGoodsList_Handler,
+		},
+		{
+			MethodName: "GetSaleRecordList",
+			Handler:    _MarketService_GetSaleRecordList_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

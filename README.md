@@ -1758,6 +1758,59 @@ switch ($lock['state']) { 'create'->-1; 'process'->-2; 'success'->[...]; 'fail'-
 
 **判断标准**：如果读接口的数据来源是**尚未迁移的写入流程**，那它也做不了 ——
 不是"读接口就简单"。已跳过：`orders/create/query`。
+### 16.5 🔴 锚点要选**结构上稳定**的行 —— gofmt 会重排/对齐，把锚点弄失效（踩了 3 次）
+
+给 `MarketService` 加字段时，连续三次替换"没生效"却**不报错**（`String.Replace` 静默失败），
+每次都要靠 `audit-structs.ps1` 才发现。三次的根因各不相同，都是 **gofmt 改了行的形态**：
+
+| # | 我写的锚点 | gofmt 之后实际的样子 | 结果 |
+|---|---|---|---|
+| 1 | `stockList:  stockList,`（两个空格） | `stockList: stockList,` | 没匹配 |
+| 2 | `saleOrders: saleOrders,`（整行） | `stockList: stockList, goodsLook: goodsLook, **saleOrders: saleOrders**,`（**合并到一行**） | 没匹配 |
+| 3 | `log: log.NewHelper(logger),` | `log:       log.NewHelper(logger),`（**对齐补了空格**） | 没匹配 |
+
+**规律**：gofmt 会
+  - **合并**短的结构体字面量字段到同一行
+  - 对同一块里的键做**冒号对齐**（补空格）
+
+所以"按整行精确匹配"在这种文件里**不可靠**。
+
+**做法**：
+1. 优先用**子串**锚点，而不是整行：
+   ```powershell
+   if ($l.Contains('log.NewHelper(logger)') -and $l.TrimStart().StartsWith('log:')) { 插入 }
+   ```
+2. 或者锚在**结构上必然单独成行**的位置（如 `return &MarketService{` 之后、`}` 之前）
+3. **替换前先打印锚点命中次数**：
+   ```powershell
+   ([regex]::Matches($c, [regex]::Escape($anchor))).Count   # 0 就是没命中
+   ```
+4. 有 `audit-structs.ps1` 兜底 —— 这三次都是它抓到的
+
+### 16.6 ⚠️ `join('CamelCase', ...)` 会被 TP 转成**下划线表名**（我推断错了，实测纠正）
+
+看到 `SaleRecordLists` 里写的是：
+
+```php
+->join('SalesOrders', 'SalesOrders.id=SalesOrdersDetail.order_id')
+```
+
+**我先推断**：TP 会拼成 `x_SalesOrders`，而真实表是 `x_sales_orders` → 该接口在
+大小写敏感的环境（Linux）会挂。**还用裸 MySQL 试了 `x_SalesOrders` → 确实报
+`Table 'xmarket_test.x_salesorders' doesn't exist`**。
+
+**然后用真实 PHP + `fetchSql(true)` 一跑，推断被推翻**：
+
+```sql
+INNER JOIN `x_sales_orders` `SalesOrders` ON `SalesOrders`.`id`=...
+```
+
+**TP 会补前缀，并且把驼峰名转成下划线** —— 生成的表名是对的。
+
+> **这是清单第 13 条（"看着像的代码几乎总是不同"）的又一次实例，
+> 而且这次是我自己"看着像"了。**
+> **教训**：`Db::name()` / `join()` 的表名解析规则**必须用 `fetchSql(true)` 实跑确认**，
+> 不能靠裸 MySQL 试名字来反推。
 ### 17.5 🔴 往 `.proto` / `.yaml` 里插内容，比往 `.go` 里插更容易出错（本轮连踩 3 个）
 
 补 `limit_time_start/end` 到 `conf.App` 时，**三个错误依次出现**，都值得记：

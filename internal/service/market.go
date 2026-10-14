@@ -42,6 +42,7 @@ type MarketService struct {
 	goodsLook  *biz.GoodsLookUsecase
 	saleOrders *biz.SaleOrderListUsecase
 	saleGoods  *biz.SaleGoodsUsecase
+	saleRecord *biz.SaleRecordUsecase
 	log        *log.Helper
 }
 
@@ -62,6 +63,7 @@ func NewMarketService(
 	goodsLook *biz.GoodsLookUsecase,
 	saleOrders *biz.SaleOrderListUsecase,
 	saleGoods *biz.SaleGoodsUsecase,
+	saleRecord *biz.SaleRecordUsecase,
 	logger log.Logger,
 ) *MarketService {
 	return &MarketService{
@@ -70,8 +72,9 @@ func NewMarketService(
 		purchaseState: purchaseState, rawCache: rawCache, stale: stale,
 		saleDetail: saleDetail, saleOn: saleOn, saleOut: saleOut,
 		stockList: stockList, goodsLook: goodsLook, saleOrders: saleOrders,
-		saleGoods: saleGoods,
-		log:       log.NewHelper(logger),
+		saleGoods:  saleGoods,
+		saleRecord: saleRecord,
+		log:        log.NewHelper(logger),
 	}
 }
 
@@ -713,6 +716,40 @@ func (s *MarketService) GetSaleGoodsList(
 	}
 	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
 	ld, err := s.saleGoods.List(ctx, q, in.GetSort(), p)
+	if err != nil {
+		return nil, err
+	}
+	items, _ := ld.Lists.([]map[string]any)
+	rows := make([]map[string]any, 0, len(items))
+	rows = append(rows, items...)
+	body, merr := biz.MarshalNoHTMLEscape(map[string]any{
+		"lists":     rows,
+		"count":     ld.Count,
+		"page_no":   ld.PageNo,
+		"page_size": ld.PageSize,
+		"extend":    ld.Extend,
+	})
+	if merr != nil {
+		return nil, merr
+	}
+	return &v1.RawData{Json: body}, nil
+}
+
+// GetSaleRecordList 对应 SaleOrdersController::salesList（GET /v1/market/orders/sale/saleslist）。
+//
+// 原实现：`return $this->dataLists(new SaleRecordLists());`（**无校验**）
+//
+// ⚠️ `count` 的口径比 `lists` 宽（少两个 INNER JOIN）—— 刻意照搬，见 proto 注释。
+func (s *MarketService) GetSaleRecordList(
+	ctx context.Context, in *v1.GetSaleRecordListRequest,
+) (*v1.RawData, error) {
+	q := biz.SaleRecordQuery{
+		UserID:  uint32(biz.UserIDFromContext(ctx)),
+		Keyword: in.GetKeyword(),
+		State:   in.GetState(),
+	}
+	p := biz.ParsePageParams(httpx.QueryFrom(ctx))
+	ld, err := s.saleRecord.List(ctx, q, in.GetSort(), p)
 	if err != nil {
 		return nil, err
 	}

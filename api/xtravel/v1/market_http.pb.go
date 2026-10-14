@@ -28,6 +28,7 @@ const OperationMarketServiceGetSaleGoodsList = "/xtravel.v1.MarketService/GetSal
 const OperationMarketServiceGetSaleOn = "/xtravel.v1.MarketService/GetSaleOn"
 const OperationMarketServiceGetSaleOrderList = "/xtravel.v1.MarketService/GetSaleOrderList"
 const OperationMarketServiceGetSaleOut = "/xtravel.v1.MarketService/GetSaleOut"
+const OperationMarketServiceGetSaleRecordList = "/xtravel.v1.MarketService/GetSaleRecordList"
 const OperationMarketServiceGetStockList = "/xtravel.v1.MarketService/GetStockList"
 const OperationMarketServicePurchaseIndex = "/xtravel.v1.MarketService/PurchaseIndex"
 const OperationMarketServicePurchaseInfo = "/xtravel.v1.MarketService/PurchaseInfo"
@@ -138,6 +139,21 @@ type MarketServiceHTTPServer interface {
 	//
 	// 其余同 sale/on：7 字段、images json_decode、lists 两个 JOIN / count 一个 JOIN。
 	GetSaleOut(context.Context, *GetSaleOutRequest) (*RawData, error)
+	// GetSaleRecordList 秒转「我的兑出」兑出记录（分页）
+	//
+	// 原实现 SaleOrdersController::salesList -> `$this->dataLists(new SaleRecordLists())`
+	// **无校验**
+	//
+	//  lists():  4 张表 INNER JOIN —— sales_orders_detail + app_archive + market_sales + sales_orders
+	//  count():  ⚠️ **只有 2 张表** —— sales_orders_detail + app_archive
+	//  where: SalesOrdersDetail.user_id = 当前用户 [+ AppArchive.name LIKE] [+ SalesOrdersDetail.state]
+	//  sort: **只有 time_asc / time_desc**（不像另外两个列表还有 price_*）
+	//  6 个字段（含来自第 4 张表的 SalesOrders.order_no）
+	//
+	// 🔴 **count 与 lists 口径不一致**（清单第 3 条第 4 例）：
+	//    count 会把被后两个 INNER JOIN 丢掉的行也算进去 -> **count >= 实际行数**。
+	//    实测 uid=13：count 口径 2 行、lists 口径 1 行（1 行的 sale_id 是孤儿）。刻意照搬。
+	GetSaleRecordList(context.Context, *GetSaleRecordListRequest) (*RawData, error)
 	// GetStockList 库存商品明细（分页）
 	//
 	// 原实现 PurchaseController::stockList -> `$this->dataLists(new StockLists())`
@@ -241,6 +257,7 @@ func RegisterMarketServiceHTTPServer(s *http.Server, srv MarketServiceHTTPServer
 	r.GET("/v1/market/stock/goodsLook", _MarketService_GetGoodsLook0_HTTP_Handler(srv))
 	r.GET("/v1/market/orders/sale/lists", _MarketService_GetSaleOrderList0_HTTP_Handler(srv))
 	r.GET("/v1/market/orders/sale/goodslist", _MarketService_GetSaleGoodsList0_HTTP_Handler(srv))
+	r.GET("/v1/market/orders/sale/saleslist", _MarketService_GetSaleRecordList0_HTTP_Handler(srv))
 }
 
 func _MarketService_GetPayWay0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
@@ -585,6 +602,25 @@ func _MarketService_GetSaleGoodsList0_HTTP_Handler(srv MarketServiceHTTPServer) 
 	}
 }
 
+func _MarketService_GetSaleRecordList0_HTTP_Handler(srv MarketServiceHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetSaleRecordListRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMarketServiceGetSaleRecordList)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetSaleRecordList(ctx, req.(*GetSaleRecordListRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RawData)
+		return ctx.Result(200, reply)
+	}
+}
+
 type MarketServiceHTTPClient interface {
 	// CheckExchange 兑换前置校验
 	// 原: PurchaseController::checkExchange -> GoodsLogic::checkExchange
@@ -685,6 +721,21 @@ type MarketServiceHTTPClient interface {
 	//
 	// 其余同 sale/on：7 字段、images json_decode、lists 两个 JOIN / count 一个 JOIN。
 	GetSaleOut(ctx context.Context, req *GetSaleOutRequest, opts ...http.CallOption) (rsp *RawData, err error)
+	// GetSaleRecordList 秒转「我的兑出」兑出记录（分页）
+	//
+	// 原实现 SaleOrdersController::salesList -> `$this->dataLists(new SaleRecordLists())`
+	// **无校验**
+	//
+	//  lists():  4 张表 INNER JOIN —— sales_orders_detail + app_archive + market_sales + sales_orders
+	//  count():  ⚠️ **只有 2 张表** —— sales_orders_detail + app_archive
+	//  where: SalesOrdersDetail.user_id = 当前用户 [+ AppArchive.name LIKE] [+ SalesOrdersDetail.state]
+	//  sort: **只有 time_asc / time_desc**（不像另外两个列表还有 price_*）
+	//  6 个字段（含来自第 4 张表的 SalesOrders.order_no）
+	//
+	// 🔴 **count 与 lists 口径不一致**（清单第 3 条第 4 例）：
+	//    count 会把被后两个 INNER JOIN 丢掉的行也算进去 -> **count >= 实际行数**。
+	//    实测 uid=13：count 口径 2 行、lists 口径 1 行（1 行的 sale_id 是孤儿）。刻意照搬。
+	GetSaleRecordList(ctx context.Context, req *GetSaleRecordListRequest, opts ...http.CallOption) (rsp *RawData, err error)
 	// GetStockList 库存商品明细（分页）
 	//
 	// 原实现 PurchaseController::stockList -> `$this->dataLists(new StockLists())`
@@ -979,6 +1030,34 @@ func (c *MarketServiceHTTPClientImpl) GetSaleOut(ctx context.Context, in *GetSal
 	pattern := "/v1/market/sales/out"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationMarketServiceGetSaleOut))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetSaleRecordList 秒转「我的兑出」兑出记录（分页）
+//
+// 原实现 SaleOrdersController::salesList -> `$this->dataLists(new SaleRecordLists())`
+// **无校验**
+//
+//	lists():  4 张表 INNER JOIN —— sales_orders_detail + app_archive + market_sales + sales_orders
+//	count():  ⚠️ **只有 2 张表** —— sales_orders_detail + app_archive
+//	where: SalesOrdersDetail.user_id = 当前用户 [+ AppArchive.name LIKE] [+ SalesOrdersDetail.state]
+//	sort: **只有 time_asc / time_desc**（不像另外两个列表还有 price_*）
+//	6 个字段（含来自第 4 张表的 SalesOrders.order_no）
+//
+// 🔴 **count 与 lists 口径不一致**（清单第 3 条第 4 例）：
+//
+//	count 会把被后两个 INNER JOIN 丢掉的行也算进去 -> **count >= 实际行数**。
+//	实测 uid=13：count 口径 2 行、lists 口径 1 行（1 行的 sale_id 是孤儿）。刻意照搬。
+func (c *MarketServiceHTTPClientImpl) GetSaleRecordList(ctx context.Context, in *GetSaleRecordListRequest, opts ...http.CallOption) (*RawData, error) {
+	var out RawData
+	pattern := "/v1/market/orders/sale/saleslist"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationMarketServiceGetSaleRecordList))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

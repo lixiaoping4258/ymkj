@@ -55,4 +55,5 @@ var ProviderSet = wire.NewSet(
 	NewTicketAmountUsecase,
 	NewSaleOrderListUsecase,
 	NewSaleGoodsUsecase,
+	NewSaleRecordUsecase,
 )

@@ -255,6 +255,24 @@ service MarketService {
   rpc GetSaleGoodsList(GetSaleGoodsListRequest) returns (RawData) {
     option (google.api.http) = {get: "/v1/market/orders/sale/goodslist"};
   }
+
+  // 秒转「我的兑出」兑出记录（分页）
+  //
+  // 原实现 SaleOrdersController::salesList -> `$this->dataLists(new SaleRecordLists())`
+  // **无校验**
+  //
+  //  lists():  4 张表 INNER JOIN —— sales_orders_detail + app_archive + market_sales + sales_orders
+  //  count():  ⚠️ **只有 2 张表** —— sales_orders_detail + app_archive
+  //  where: SalesOrdersDetail.user_id = 当前用户 [+ AppArchive.name LIKE] [+ SalesOrdersDetail.state]
+  //  sort: **只有 time_asc / time_desc**（不像另外两个列表还有 price_*）
+  //  6 个字段（含来自第 4 张表的 SalesOrders.order_no）
+  //
+  // 🔴 **count 与 lists 口径不一致**（清单第 3 条第 4 例）：
+  //    count 会把被后两个 INNER JOIN 丢掉的行也算进去 -> **count >= 实际行数**。
+  //    实测 uid=13：count 口径 2 行、lists 口径 1 行（1 行的 sale_id 是孤儿）。刻意照搬。
+  rpc GetSaleRecordList(GetSaleRecordListRequest) returns (RawData) {
+    option (google.api.http) = {get: "/v1/market/orders/sale/saleslist"};
+  }
 }
 
 message PurchaseOnRequest {
@@ -408,4 +426,13 @@ message GetSaleGoodsListRequest {
   string keyword = 1 [json_name = "keyword"];
   // price_asc / price_desc / time_asc / time_desc
   string sort = 2 [json_name = "sort"];
+}
+
+message GetSaleRecordListRequest {
+  // 对 **AppArchive.name** 做 LIKE '%kw%'
+  string keyword = 1 [json_name = "keyword"];
+  // 对 SalesOrdersDetail.state 精确匹配
+  string state = 2 [json_name = "state"];
+  // time_asc / time_desc（其它值走 default = time_desc）
+  string sort = 3 [json_name = "sort"];
 }
